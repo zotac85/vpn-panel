@@ -1,6 +1,32 @@
 #!/bin/bash
 
+# ──────────────────────────────────────────────────────────────
+# Утилита: синхронизация maxlogins в /etc/security/limits.conf
+# Используется при создании / изменении лимита / удалении юзера.
+# ──────────────────────────────────────────────────────────────
+sync_maxlogins() {
+    local u="$1"
+    local limit="$2"
+
+    [ -z "$u" ] && return
+    local f="/etc/security/limits.conf"
+
+    # Удаляем старые записи для этого юзера (любые: hard/soft/maxlogins)
+    sed -i "/^${u}[[:space:]]\+hard[[:space:]]\+maxlogins/d" "$f" 2>/dev/null
+    sed -i "/^${u}[[:space:]]\+soft[[:space:]]\+maxlogins/d" "$f" 2>/dev/null
+
+    # Если limit <= 0 или не число — просто снимаем ограничение (запись удалена)
+    if ! [[ "$limit" =~ ^[0-9]+$ ]] || [ "$limit" -le 0 ]; then
+        return
+    fi
+
+    # Добавляем новую запись
+    echo "${u} hard maxlogins ${limit}" >> "$f"
+}
+
+# ──────────────────────────────────────────────────────────────
 # Персональное меню управления конкретным пользователем
+# ──────────────────────────────────────────────────────────────
 manage_single_user() {
     select_user "⚙️ Выбор пользователя для управления" || return
     while true; do
@@ -125,6 +151,9 @@ general_restrictions_stats() {
     read -p "Нажмите Enter для возврата..."
 }
 
+# ──────────────────────────────────────────────────────────────
+# add_user — создание пользователя + maxlogins (схема A)
+# ──────────────────────────────────────────────────────────────
 add_user() {
     header
     echo -e "${YELLOW}--- 👤 Создание нового пользователя ---${NC}"
@@ -157,6 +186,9 @@ add_user() {
     echo "$username" >> "$DB_USERS"
     sort -u -o "$DB_USERS" "$DB_USERS"
     echo "$max_devices" > "$LIMITS_DIR/$username"
+
+    # ── СХЕМА A: maxlogins в limits.conf ──
+    sync_maxlogins "$username" "$max_devices"
 
     local traffic_bytes=$((traffic_gb * 1073741824))
     mkdir -p "$TRAFFIC_LIMITS_DIR" "$TRAFFIC_DIR" 2>/dev/null
@@ -193,6 +225,9 @@ add_user() {
     read -p "Нажмите Enter для продолжения..."
 }
 
+# ──────────────────────────────────────────────────────────────
+# delete_user — удаление пользователя + чистка maxlogins
+# ──────────────────────────────────────────────────────────────
 delete_user() {
     select_user "🗑️ Удаление пользователя" || return
     echo ""
@@ -201,6 +236,10 @@ delete_user() {
         userdel -f "$SELECTED_USER" 2>/dev/null
         sed -i "/^${SELECTED_USER}$/d" "$DB_USERS" 2>/dev/null
         rm -f "$LIMITS_DIR/$SELECTED_USER" "$TRAFFIC_LIMITS_DIR/$SELECTED_USER" "$TRAFFIC_DIR/$SELECTED_USER" 2>/dev/null
+
+        # ── СХЕМА A: убираем maxlogins ──
+        sync_maxlogins "$SELECTED_USER" 0
+
         if declare -f remove_traffic_rule &>/dev/null; then
             remove_traffic_rule "$SELECTED_USER"
         fi
@@ -220,6 +259,9 @@ change_password() {
     read -p "Нажмите Enter для продолжения..."
 }
 
+# ──────────────────────────────────────────────────────────────
+# change_user_limit — обновление лимита + maxlogins (схема A)
+# ──────────────────────────────────────────────────────────────
 change_user_limit() {
     echo ""
     local current_limit=3
@@ -228,7 +270,12 @@ change_user_limit() {
     read -p "Введите новый лимит (1-99): " new_limit
     if [[ "$new_limit" =~ ^[0-9]+$ ]] && [ "$new_limit" -ge 1 ]; then
         echo "$new_limit" > "$LIMITS_DIR/$SELECTED_USER"
+
+        # ── СХЕМА A: обновляем maxlogins ──
+        sync_maxlogins "$SELECTED_USER" "$new_limit"
+
         echo -e "${GREEN}Лимит устройств для '$SELECTED_USER' изменен на $new_limit!${NC}"
+        echo -e "${CYAN}PAM-лимит (maxlogins) обновлён — новые подключения сверх лимита будут отклоняться.${NC}"
     else
         echo -e "${RED}Неверный формат числа.${NC}"
     fi
