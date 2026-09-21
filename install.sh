@@ -21,7 +21,7 @@ if [ -d "$PANEL_DIR" ] || [ -f "/usr/local/bin/vpn" ]; then
     echo " 0) 🚪 Отмена"
     echo ""
     read -p "Выберите действие [0-2]: " choice
-    
+
     case $choice in
         1)
             echo -e "\n🔄 Обновление компонентов панели..."
@@ -39,7 +39,7 @@ if [ -d "$PANEL_DIR" ] || [ -f "/usr/local/bin/vpn" ]; then
 fi
 
 # Создаем необходимые папки и файлы, если их нет
-mkdir -p "$PANEL_DIR/modules" /etc/UDPCustom/limits
+mkdir -p "$PANEL_DIR/modules" /etc/UDPCustom/limits /etc/UDPCustom/traffic /etc/UDPCustom/traffic_limits
 touch /etc/UDPCustom/users.db
 
 # Скачивание ядра и модулей с GitHub
@@ -50,6 +50,7 @@ curl -s -o "$PANEL_DIR/modules/masterdns.sh" "$REPO_URL/modules/masterdns.sh"
 curl -s -o "$PANEL_DIR/modules/udp.sh" "$REPO_URL/modules/udp.sh"
 curl -s -o "$PANEL_DIR/modules/ws.sh" "$REPO_URL/modules/ws.sh"
 curl -s -o "$PANEL_DIR/modules/security.sh" "$REPO_URL/modules/security.sh"
+curl -s -o "$PANEL_DIR/modules/traffic.sh" "$REPO_URL/modules/traffic.sh"
 
 # Скачивание главного исполняемого файла (точки входа)
 curl -s -o /usr/local/bin/vpn "$REPO_URL/vpn"
