@@ -15,6 +15,7 @@ source "$PANEL_DIR/modules/ws.sh"
 source "$PANEL_DIR/modules/security.sh"
 source "$PANEL_DIR/modules/traffic.sh"
 source "$PANEL_DIR/modules/devicelimit.sh"
+source "$PANEL_DIR/modules/banner.sh"
 
 while true; do
     header
@@ -29,10 +30,11 @@ while true; do
     echo -e " 3) ⚡ UDP Custom (Управление)"
     echo -e " 4) 🌐 MasterDnsVPN"
     echo -e " 5) 🛡️  Безопасность, IPv6 и Оптимизация"
-    echo -e " 6) 🔄 Обновить скрипт ВПН"
+    echo -e " 6) 🎨 Баннер при подключении"
+    echo -e " 7) 🔄 Обновить скрипт ВПН"
     echo -e " 0) 🚪 Выход"
     echo -e "${CYAN}────────────────────────────────────────────${NC}"
-    read -p "Выберите раздел [0-6]: " main_choice
+    read -p "Выберите раздел [0-7]: " main_choice
 
     case $main_choice in
         1) menu_users ;;
@@ -40,7 +42,8 @@ while true; do
         3) menu_service ;;
         4) menu_masterdns ;;
         5) menu_sec ;;
-        6)
+        6) menu_banner ;;
+        7)
            echo -e "\n${YELLOW}🔄 Запуск обновления скрипта ВПН...${NC}"
            bash <(curl -Ls https://raw.githubusercontent.com/zotac85/vpn-panel/main/install.sh)
            read -p "Нажмите Enter для продолжения..."
