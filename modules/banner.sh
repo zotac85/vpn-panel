@@ -38,17 +38,17 @@ banner_add_line() {
     echo ""
     echo -e "${CYAN}Размер шрифта:${NC}"
     echo " 1) Маленький (h6)"
-    echo " 2) Средний (h4)"
-    echo " 3) Крупный (h3)"
-    echo " 4) Огромный (h1)"
+    echo " 2) Средний (h5)"
+    echo " 3) Крупный (h4)"
+    echo " 4) Огромный (h3)"
     read -p "Выбор [1-4]: " sz
 
     case $sz in
         1) _size='6' ;;
-        2) _size='4' ;;
-        3) _size='3' ;;
-        4) _size='1' ;;
-        *) _size='4' ;;
+        2) _size='5' ;;
+        3) _size='4' ;;
+        4) _size='3' ;;
+        *) _size='6' ;;
     esac
 
     echo ""
@@ -109,10 +109,22 @@ banner_show() {
 
 banner_edit_raw() {
     header
-    echo -e "${YELLOW}--- ✏️  Редактирование вручную (nano) ---${NC}"
-    echo -e "${CYAN}Открывается $BANNER_FILE${NC}"
+    echo -e "${YELLOW}--- ✏️  Редактирование вручную ---${NC}"
+    echo -e "${CYAN}Файл: $BANNER_FILE${NC}"
     sleep 1
-    nano "$BANNER_FILE"
+
+    if command -v nano >/dev/null 2>&1; then
+        nano "$BANNER_FILE"
+    elif command -v vim >/dev/null 2>&1; then
+        vim "$BANNER_FILE"
+    elif command -v vi >/dev/null 2>&1; then
+        vi "$BANNER_FILE"
+    else
+        echo -e "${YELLOW}nano не найден. Устанавливаем...${NC}"
+        apt-get update -qq && apt-get install -y nano
+        nano "$BANNER_FILE"
+    fi
+
     banner_restart
     echo -e "${GREEN}✅ Сохранено и применено.${NC}"
     read -p "Нажмите Enter..."
@@ -130,22 +142,28 @@ banner_clear() {
     read -p "Нажмите Enter..."
 }
 
+# ──────────────────────────────────────────────────────────────
+# ШАБЛОНЫ (русский язык, уменьшенный шрифт)
+# ──────────────────────────────────────────────────────────────
+
 banner_template_arsen() {
     header
-    echo -e "${YELLOW}--- 📋 Шаблон «ArsenVipKeys Premium» ---${NC}"
-    read -p "Установить этот шаблон? (y/n): " c
+    echo -e "${YELLOW}--- 📋 Шаблон «ArsenVipKeys Премиум» (рус) ---${NC}"
+    echo ""
+    echo -e "${CYAN}Установить этот шаблон? (y/n):${NC}"
+    read -p "→ " c
     if [[ "$c" =~ ^[Yy]$ ]]; then
         cat > "$BANNER_FILE" << 'EOF'
-<h4><font color='cyan'>🚀 ArsenVipKeys Premium Server 🚀</font></h4>
-<h6><font color='red'>❌ NO DDOS ❌</font></h6>
-<h6><font color='red'>❌ NO HACKING ❌</font></h6>
-<h6><font color='red'>❌ NO TORRENT ❌</font></h6>
-<h6><font color='red'>❌ NO SPAMMING ❌</font></h6>
-<h6><font color='red'>❌ NO CARDING ❌</font></h6>
-<h6><font color='#F535AA'>👥 MAX LOGIN 2 DEVICE 👥</font></h6>
-<h6><font color='yellow'>🚫 VIOLATE AUTO BANNED PERMANENT 🚫</font></h6>
-<h4><font color='green'>💬 Support: t.me/ArsenGuro</font></h4>
-<h4><font color='cyan'>📢 Channel: t.me/ArsenVipKeys</font></h4>
+<h5><font color='cyan'>🚀 ArsenVipKeys — Премиум Сервер 🚀</font></h5>
+<h6><font color='red'>❌ БЕЗ DDOS ❌</font></h6>
+<h6><font color='red'>❌ БЕЗ ВЗЛОМА ❌</font></h6>
+<h6><font color='red'>❌ БЕЗ ТОРРЕНТОВ ❌</font></h6>
+<h6><font color='red'>❌ БЕЗ СПАМА ❌</font></h6>
+<h6><font color='red'>❌ БЕЗ КАРДИНГА ❌</font></h6>
+<h6><font color='#F535AA'>👥 МАКС. 5 УСТРОЙСТВ 👥</font></h6>
+<h6><font color='yellow'>🚫 НАРУШЕНИЕ = БАН НАВСЕГДА 🚫</font></h6>
+<h5><font color='green'>💬 Поддержка: t.me/ArsenGuro</font></h5>
+<h5><font color='cyan'>📢 Канал: t.me/ArsenVipKeys</font></h5>
 EOF
         banner_restart
         echo -e "${GREEN}✅ Шаблон установлен!${NC}"
@@ -155,13 +173,61 @@ EOF
 
 banner_template_minimal() {
     header
-    echo -e "${YELLOW}--- 📋 Шаблон «Минимальный» ---${NC}"
+    echo -e "${YELLOW}--- 📋 Шаблон «Минимальный» (рус) ---${NC}"
+    echo ""
     read -p "Установить этот шаблон? (y/n): " c
     if [[ "$c" =~ ^[Yy]$ ]]; then
         cat > "$BANNER_FILE" << 'EOF'
-<h3><font color='cyan'>⚡ Welcome to ArsenVipKeys ⚡</font></h3>
-<h6><font color='green'>🌐 Fast • Secure • Anonymous</font></h6>
-<h6><font color='yellow'>💬 Support: t.me/ArsenGuro</font></h6>
+<h5><font color='cyan'>⚡ Добро пожаловать в ArsenVipKeys ⚡</font></h5>
+<h6><font color='green'>🌐 Быстро • Безопасно • Анонимно</font></h6>
+<h6><font color='yellow'>💬 Поддержка: t.me/ArsenGuro</font></h6>
+<h6><font color='cyan'>📢 Канал: t.me/ArsenVipKeys</font></h6>
+EOF
+        banner_restart
+        echo -e "${GREEN}✅ Установлено!${NC}"
+    fi
+    read -p "Нажмите Enter..."
+}
+
+banner_template_strict() {
+    header
+    echo -e "${YELLOW}--- 📋 Шаблон «Строгий» (только правила) ---${NC}"
+    echo ""
+    read -p "Установить этот шаблон? (y/n): " c
+    if [[ "$c" =~ ^[Yy]$ ]]; then
+        cat > "$BANNER_FILE" << 'EOF'
+<h5><font color='yellow'>⚠️ ПРАВИЛА ИСПОЛЬЗОВАНИЯ СЕРВЕРА ⚠️</font></h5>
+<h6><font color='red'>❌ Запрещены DDOS-атаки</font></h6>
+<h6><font color='red'>❌ Запрещён взлом и брутфорс</font></h6>
+<h6><font color='red'>❌ Запрещён торрент-трафик</font></h6>
+<h6><font color='red'>❌ Запрещён спам и кардинг</font></h6>
+<h6><font color='#F535AA'>👥 Лимит устройств: 5</font></h6>
+<h6><font color='yellow'>🚫 При нарушении — бан без предупреждения</font></h6>
+<h5><font color='green'>💬 @ArsenGuro</font></h5>
+EOF
+        banner_restart
+        echo -e "${GREEN}✅ Установлено!${NC}"
+    fi
+    read -p "Нажмите Enter..."
+}
+
+banner_template_english() {
+    header
+    echo -e "${YELLOW}--- 📋 Шаблон «English Premium» ---${NC}"
+    echo ""
+    read -p "Установить этот шаблон? (y/n): " c
+    if [[ "$c" =~ ^[Yy]$ ]]; then
+        cat > "$BANNER_FILE" << 'EOF'
+<h5><font color='cyan'>🚀 ArsenVipKeys Premium Server 🚀</font></h5>
+<h6><font color='red'>❌ NO DDOS ❌</font></h6>
+<h6><font color='red'>❌ NO HACKING ❌</font></h6>
+<h6><font color='red'>❌ NO TORRENT ❌</font></h6>
+<h6><font color='red'>❌ NO SPAMMING ❌</font></h6>
+<h6><font color='red'>❌ NO CARDING ❌</font></h6>
+<h6><font color='#F535AA'>👥 MAX LOGIN 5 DEVICE 👥</font></h6>
+<h6><font color='yellow'>🚫 VIOLATE AUTO BANNED PERMANENT 🚫</font></h6>
+<h5><font color='green'>💬 Support: t.me/ArsenGuro</font></h5>
+<h5><font color='cyan'>📢 Channel: t.me/ArsenVipKeys</font></h5>
 EOF
         banner_restart
         echo -e "${GREEN}✅ Установлено!${NC}"
@@ -185,13 +251,17 @@ menu_banner() {
         echo ""
         echo -e " 1) ➕ Добавить строку (текст + размер + цвет)"
         echo -e " 2) 👁️  Показать текущий баннер"
-        echo -e " 3) ✏️  Редактировать вручную (nano)"
-        echo -e " 4) 🎨 Шаблон «ArsenVipKeys Premium»"
-        echo -e " 5) 🎨 Шаблон «Минимальный»"
-        echo -e " 6) 🗑️  Очистить баннер"
+        echo -e " 3) ✏️  Редактировать вручную (nano/vi)"
+        echo -e "${CYAN}── Шаблоны ──${NC}"
+        echo -e " 4) 📋 «ArsenVipKeys Премиум» (рус)"
+        echo -e " 5) 📋 «Минимальный» (рус)"
+        echo -e " 6) 📋 «Строгий» (только правила)"
+        echo -e " 7) 📋 «English Premium»"
+        echo -e "${CYAN}────────────${NC}"
+        echo -e " 8) 🗑️  Очистить баннер"
         echo -e " 0) ↩️  Назад в главное меню"
         echo ""
-        read -p "Выберите действие [0-6]: " bchoice
+        read -p "Выберите действие [0-8]: " bchoice
 
         case $bchoice in
             1) banner_add_line ;;
@@ -199,7 +269,9 @@ menu_banner() {
             3) banner_edit_raw ;;
             4) banner_template_arsen ;;
             5) banner_template_minimal ;;
-            6) banner_clear ;;
+            6) banner_template_strict ;;
+            7) banner_template_english ;;
+            8) banner_clear ;;
             0) break ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
         esac
