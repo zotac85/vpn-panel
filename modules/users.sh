@@ -21,12 +21,26 @@ add_user() {
         max_devices=3
     fi
 
+    read -p "Лимит трафика в ГБ (Enter = без лимита): " traffic_gb
+    if ! [[ "$traffic_gb" =~ ^[0-9]+$ ]]; then
+        traffic_gb=0
+    fi
+
     useradd -M -s /bin/false "$username"
     echo "$username:$password" | chpasswd
 
     echo "$username" >> "$DB_USERS"
     sort -u -o "$DB_USERS" "$DB_USERS"
     echo "$max_devices" > "$LIMITS_DIR/$username"
+
+    # Лимит трафика (модуль traffic.sh)
+    local traffic_bytes=$((traffic_gb * 1073741824))
+    mkdir -p "$TRAFFIC_LIMITS_DIR" "$TRAFFIC_DIR" 2>/dev/null
+    echo "$traffic_bytes" > "$TRAFFIC_LIMITS_DIR/$username" 2>/dev/null
+    echo "0" > "$TRAFFIC_DIR/$username" 2>/dev/null
+    if declare -f add_traffic_rule &>/dev/null; then
+        add_traffic_rule "$username"
+    fi
 
     if [ -n "$days" ] && [ "$days" -gt 0 ] 2>/dev/null; then
         exp_date=$(date -d "+$days days" +%Y-%m-%d)
@@ -37,7 +51,10 @@ add_user() {
     fi
 
     SERVER_IP=$(curl -s4 ifconfig.me || hostname -I | awk '{print $1}')
-    
+
+    local traffic_info="Без лимита"
+    [ "$traffic_gb" -gt 0 ] && traffic_info="${traffic_gb} ГБ"
+
     echo ""
     echo -e "${GREEN}╔════════════════════════════════════════════╗${NC}"
     echo -e "${GREEN}║${NC}         ${YELLOW}🎉 ПОЛЬЗОВАТЕЛЬ СОЗДАН 🎉${NC}          ${GREEN}║${NC}"
@@ -46,7 +63,8 @@ add_user() {
     echo -e "${GREEN}║${NC} Логин  : ${CYAN}$username${NC}"
     echo -e "${GREEN}║${NC} Пароль : ${CYAN}$password${NC}"
     echo -e "${GREEN}║${NC} Срок   : ${CYAN}$exp_info${NC}"
-    echo -e "${GREEN}║${NC} Лимит  : ${CYAN}Макс. $max_devices устройства${NC}"
+    echo -e "${GREEN}║${NC} Устройства : ${CYAN}Макс. $max_devices${NC}"
+    echo -e "${GREEN}║${NC} Трафик : ${CYAN}$traffic_info${NC}"
     echo -e "${GREEN}╚════════════════════════════════════════════╝${NC}"
     echo ""
     read -p "Нажмите Enter для продолжения..."
@@ -60,6 +78,10 @@ delete_user() {
         userdel -f "$SELECTED_USER" 2>/dev/null
         sed -i "/^${SELECTED_USER}$/d" "$DB_USERS" 2>/dev/null
         rm -f "$LIMITS_DIR/$SELECTED_USER" 2>/dev/null
+        rm -f "$TRAFFIC_LIMITS_DIR/$SELECTED_USER" "$TRAFFIC_DIR/$SELECTED_USER" 2>/dev/null
+        if declare -f remove_traffic_rule &>/dev/null; then
+            remove_traffic_rule "$SELECTED_USER"
+        fi
         echo -e "${GREEN}Пользователь '$SELECTED_USER' удален!${NC}"
     else
         echo -e "${YELLOW}Удаление отменено.${NC}"
@@ -130,10 +152,10 @@ client_statistics() {
     header
     echo -e "${YELLOW}--- 📊 Клиент: $SELECTED_USER ---${NC}"
     echo -e "${CYAN}────────────────────────────────────────────${NC}"
-    
+
     local exp=$(chage -l "$SELECTED_USER" 2>/dev/null | grep "Account expires" | cut -d: -f2 | sed 's/^ *//')
     [ "$exp" == "never" ] && exp="Бессрочно"
-    
+
     if passwd -S "$SELECTED_USER" 2>/dev/null | grep -q " L "; then
         status_str="${RED}${USER_LOCK}${NC}"
     else
@@ -143,25 +165,39 @@ client_statistics() {
     local user_limit=3
     [ -f "$LIMITS_DIR/$SELECTED_USER" ] && user_limit=$(cat "$LIMITS_DIR/$SELECTED_USER")
 
-    read count_udp count_ws count_white <<< $(get_user_connections "$SELECTED_USER")
-    local total_count=$((count_udp + count_ws + count_white))
-    
+    read count_ssh count_ws count_white <<< $(get_user_connections "$SELECTED_USER")
+    local total_count=$((count_ssh + count_ws + count_white))
+
     echo -e " 👤 Логин аккаунта : ${GREEN}$SELECTED_USER${NC}"
     echo -e " 📅 Срок действия  : ${CYAN}$exp${NC}"
     echo -e " 🔒 Статус учетки  : $status_str"
     echo -e " ⚙️  Лимит устройств : ${CYAN}$user_limit${NC}"
     echo -e "${CYAN}────────────────────────────────────────────${NC}"
-    echo -e " ⚡ UDP Custom активных : ${GREEN}$count_udp${NC}"
+    echo -e " 🔑 SSH активных       : ${GREEN}$count_ssh${NC}"
     echo -e " 🕸️ SSH WS активных    : ${GREEN}$count_ws${NC}"
     echo -e " 🌐 White активных     : ${GREEN}$count_white${NC}"
     echo -e "${CYAN}────────────────────────────────────────────${NC}"
-    
+
     if [ "$total_count" -gt "$user_limit" ]; then
         echo -e " 📱 Всего устройств: ${RED}$total_count / $user_limit (ПРЕВЫШЕН ЛИМИТ!)${NC}"
     else
         echo -e " 📱 Всего устройств: ${GREEN}$total_count / $user_limit${NC}"
     fi
-    
+
+    if declare -f get_traffic_used &>/dev/null; then
+        local used=$(get_traffic_used "$SELECTED_USER")
+        local cur=0
+        declare -f get_traffic_counter_bytes &>/dev/null && cur=$(get_traffic_counter_bytes "$SELECTED_USER")
+        local total_traffic=$((used + cur))
+        local limit=$(get_traffic_limit "$SELECTED_USER")
+        echo -e "${CYAN}────────────────────────────────────────────${NC}"
+        if [ "$limit" -gt 0 ] 2>/dev/null; then
+            echo -e " 📶 Трафик: ${GREEN}$(human_bytes "$total_traffic")${NC} / $(human_bytes "$limit")"
+        else
+            echo -e " 📶 Трафик: ${GREEN}$(human_bytes "$total_traffic")${NC} / без лимита"
+        fi
+    fi
+
     echo -e "${CYAN}────────────────────────────────────────────${NC}"
     read -p "Нажмите Enter для возврата..."
 }
@@ -177,7 +213,9 @@ list_users() {
         return
     fi
 
-    printf "${BLUE}%-3s %-10s %-11s %-4s %-4s %-4s %-6s %-10s${NC}\n" "№" "Логин" "Срок" "UDP" "WS" "Wh" "Лимит" "Статус"
+    build_session_stats
+
+    printf "${BLUE}%-3s %-10s %-11s %-4s %-4s %-4s %-6s %-10s${NC}\n" "№" "Логин" "Срок" "SSH" "WS" "Wh" "Лимит" "Статус"
     echo -e "${CYAN}────────────────────────────────────────────────────────${NC}"
 
     local i=1
@@ -186,11 +224,11 @@ list_users() {
         if id "$u" &>/dev/null; then
             exp=$(chage -l "$u" 2>/dev/null | grep "Account expires" | cut -d: -f2 | sed 's/^ *//')
             [ "$exp" == "never" ] && exp="Бессрочно"
-            
+
             local user_limit=3
             [ -f "$LIMITS_DIR/$u" ] && user_limit=$(cat "$LIMITS_DIR/$u")
 
-            read c_udp c_ws c_white <<< $(get_user_connections "$u")
+            read c_ssh c_ws c_white <<< $(get_user_connections "$u")
 
             if passwd -S "$u" 2>/dev/null | grep -q " L "; then
                 status_str="${RED}${USER_LOCK}${NC}"
@@ -198,7 +236,7 @@ list_users() {
                 status_str="${GREEN}${USER_ON}${NC}"
             fi
 
-            printf "%-3s %-10s %-11s %-4s %-4s %-4s %-6s %-12b\n" "$i)" "$u" "$exp" "$c_udp" "$c_ws" "$c_white" "$user_limit" "$status_str"
+            printf "%-3s %-10s %-11s %-4s %-4s %-4s %-6s %-12b\n" "$i)" "$u" "$exp" "$c_ssh" "$c_ws" "$c_white" "$user_limit" "$status_str"
             ((i++))
         fi
     done < "$DB_USERS"
