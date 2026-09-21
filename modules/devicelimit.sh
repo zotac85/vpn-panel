@@ -3,19 +3,12 @@
 # ──────────────────────────────────────────────────────────────
 # МОДУЛЬ ПРИНУДИТЕЛЬНОГО КОНТРОЛЯ ЛИМИТА УСТРОЙСТВ
 #
-# Раньше LIMITS_DIR/<user> и колонка "Лимит" были только для
-# отображения — реального обрыва лишних подключений не было.
-#
 # Логика проверки (cron, раз в минуту):
 #  - собираем ESTABLISHED-сессии sshd (те же порты, что в core.sh);
-#  - группируем PID'ы подключений по владельцу (реальному linux-юзеру,
-#    как в build_session_stats — SSH и WS считаются вместе, т.к.
-#    лимит общий на "устройства", а не отдельно на протокол);
+#  - группируем PID'ы подключений по владельцу;
 #  - если у юзера подключений больше, чем LIMITS_DIR/<user> —
-#    сортируем по времени старта процесса и убиваем (kill -9)
-#    САМЫЕ НОВЫЕ подключения сверх лимита. Уже работающие старые
-#    сессии не трогаем — это защищает от разрыва тех, кто уже
-#    легитимно пользуется сервисом, когда лишний заходит новый клиент.
+#    сортируем по времени старта процесса и убиваем САМЫЕ НОВЫЕ
+#    подключения сверх лимита. Старые сессии не трогаем.
 # ──────────────────────────────────────────────────────────────
 
 LIMIT_CHECK_SCRIPT="/usr/local/bin/vpn-limit-check.sh"
@@ -26,10 +19,8 @@ limit_enforcement_active() {
     [ -f "$LIMIT_CRON" ]
 }
 
-install_limit_enforcement() {
-    header
-    echo -e "${YELLOW}--- ⚡ Включение контроля лимита устройств ---${NC}"
-
+# ── ТИХАЯ ВЕРСИЯ (для автовключения из install.sh или панели) ──
+install_limit_enforcement_quiet() {
     cat << 'CHK_EOF' > "$LIMIT_CHECK_SCRIPT"
 #!/bin/bash
 DB_USERS="/etc/UDPCustom/users.db"
@@ -49,39 +40,27 @@ filter="$filter )"
 
 data=$(ss -H -tnp state established "$filter" 2>/dev/null)
 
-declare -A CONN_USER
-declare -A CONN_PIDS
-declare -A CONN_TIME
+declare -A CONN_USER CONN_PIDS CONN_TIME
 idx=0
-
 while IFS= read -r line; do
     [ -z "$line" ] && continue
     head="${line%%users:(*}"
     peer=$(echo "$head" | awk '{print $NF}')
     [[ "$peer" == *:* ]] || continue
-
     pids=$(echo "$line" | grep -oP 'pid=\K[0-9]+')
     [ -z "$pids" ] && continue
-
     u=""
     for p in $pids; do
         owner=$(ps -o user= -p "$p" 2>/dev/null | tr -d ' ')
-        if [ -n "$owner" ] && [ "$owner" != "root" ]; then
-            u="$owner"
-            break
-        fi
+        if [ -n "$owner" ] && [ "$owner" != "root" ]; then u="$owner"; break; fi
     done
     [ -z "$u" ] && continue
-
     reftime=0
     for p in $pids; do
         t=$(stat -c %Y "/proc/$p" 2>/dev/null)
-        if [ -n "$t" ]; then reftime=$t; break; fi
+        [ -n "$t" ] && { reftime=$t; break; }
     done
-
-    CONN_USER[$idx]="$u"
-    CONN_PIDS[$idx]="$pids"
-    CONN_TIME[$idx]="$reftime"
+    CONN_USER[$idx]="$u"; CONN_PIDS[$idx]="$pids"; CONN_TIME[$idx]="$reftime"
     ((idx++))
 done <<< "$data"
 
@@ -96,30 +75,28 @@ for u in "${!USER_INDICES[@]}"; do
     [ -f "$LIMITS_DIR/$u" ] && limit=$(cat "$LIMITS_DIR/$u")
     [[ "$limit" =~ ^[0-9]+$ ]] || limit=3
     [ "$limit" -le 0 ] && continue
-
-    idxs=(${USER_INDICES[$u]})
-    count=${#idxs[@]}
+    idxs=(${USER_INDICES[$u]}); count=${#idxs[@]}
     [ "$count" -le "$limit" ] && continue
-
     sorted_idxs=($(for i in "${idxs[@]}"; do echo "${CONN_TIME[$i]} $i"; done | sort -n | awk '{print $2}'))
-
     to_kill=$(( count - limit ))
     for ((k=count-to_kill; k<count; k++)); do
         conn_i=${sorted_idxs[$k]}
-        for p in ${CONN_PIDS[$conn_i]}; do
-            kill -9 "$p" 2>/dev/null
-        done
+        for p in ${CONN_PIDS[$conn_i]}; do kill -9 "$p" 2>/dev/null; done
         echo "$(date '+%Y-%m-%d %H:%M:%S') Отключён лишний сеанс: user=$u count=$count limit=$limit" >> "$LOG_FILE"
     done
 done
 CHK_EOF
-
     chmod +x "$LIMIT_CHECK_SCRIPT"
-
     echo "* * * * * root $LIMIT_CHECK_SCRIPT" > "$LIMIT_CRON"
     chmod 644 "$LIMIT_CRON"
     systemctl restart cron 2>/dev/null || systemctl restart crond 2>/dev/null
+}
 
+# ── ОБЫЧНАЯ ВЕРСИЯ (с UI, для ручного включения) ──
+install_limit_enforcement() {
+    header
+    echo -e "${YELLOW}--- ⚡ Включение контроля лимита устройств ---${NC}"
+    install_limit_enforcement_quiet
     echo -e "${GREEN}Контроль лимита устройств включен: проверка каждую минуту.${NC}"
     echo -e "${CYAN}Лишние (самые новые) подключения будут автоматически отключаться.${NC}"
     read -p "Нажмите Enter для продолжения..."
@@ -158,7 +135,7 @@ menu_devicelimit() {
         echo -e " 1) ⚡ Включить авто-отключение лишних устройств"
         echo -e " 2) 📜 Журнал отключений"
         echo -e " 3) 🗑️  Отключить контроль"
-        echo -e " 0) ↩️  Назад в главное меню"
+        echo -e " 0) ↩️  Назад"
         echo ""
         read -p "Выберите действие [0-3]: " dchoice
         case $dchoice in
