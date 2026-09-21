@@ -9,4 +9,7 @@
 Запустите панель на вашем сервере одной командой (от имени суперпользователя `root`):
 
 ```bash
-bash <(curl -Ls [https://raw.githubusercontent.com/zotac85/vpn-panel/main/install.sh](https://raw.githubusercontent.com/zotac85/vpn-panel/main/install.sh))
+bash <(curl -Ls [https://raw.githubusercontent.com/zotac85/vpn-panel/main/install.sh]```
+
+
+После установки вызывать панель управления в любой момент можно простой командой:
