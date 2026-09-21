@@ -2,27 +2,7 @@
 
 # ──────────────────────────────────────────────────────────────
 # МОДУЛЬ ЛИМИТА ТРАФИКА
-#
-# Принцип работы:
-#  - создаём отдельную iptables-цепочку VPN_TRAFFIC, подключенную
-#    к OUTPUT;
-#  - для каждого пользователя добавляем правило-счётчик
-#    "-m owner --uid-owner <UID> -j RETURN" — iptables считает
-#    пакеты/байты, попавшие под правило, ДО перехода на RETURN;
-#  - раз в 5 минут cron-скрипт снимает показания счётчика,
-#    прибавляет дельту к накопленному в файле значению (чтобы
-#    не терять данные при перезагрузке/рестарте iptables) и
-#    обнуляет счётчик правила (пересоздаёт его);
-#  - если накопленный трафик >= лимита — аккаунт блокируется
-#    (usermod -L), как и при истечении срока действия.
-#
-# ВАЖНО (честно предупреждаю): owner-match в iptables работает
-# только для ЛОКАЛЬНО СГЕНЕРИРОВАННЫХ пакетов (цепочка OUTPUT),
-# т.е. учитывается трафик СЕРВЕР → КЛИЕНТ (скачивание клиентом).
-# Это стандартный подход для таких панелей и на практике покрывает
-# основной объём (веб-сёрфинг — это в основном download), но
-# исходящий от клиента аплоад в этот счётчик не попадает — это
-# ограничение самого iptables owner-match, а не бага в скрипте.
+# (см. подробное описание в комментариях оригинала)
 # ──────────────────────────────────────────────────────────────
 
 TRAFFIC_DIR="/etc/UDPCustom/traffic"
@@ -70,7 +50,6 @@ get_traffic_counter_bytes() {
     echo "$val"
 }
 
-# Человекочитаемый вид байт (GB/MB)
 human_bytes() {
     local b="$1"
     if [ "$b" -ge 1073741824 ]; then
@@ -92,6 +71,60 @@ get_traffic_limit() {
     local u="$1"
     local f="$TRAFFIC_LIMITS_DIR/$u"
     [ -f "$f" ] && cat "$f" || echo 0
+}
+
+# ── ТИХАЯ ВЕРСИЯ (для автовключения из install.sh или панели) ──
+install_traffic_monitor_quiet() {
+    init_traffic_chain
+    while read -r u; do
+        [ -z "$u" ] && continue
+        id "$u" &>/dev/null && add_traffic_rule "$u"
+    done < "$DB_USERS"
+
+    cat << 'CHK_EOF' > "$TRAFFIC_CHECK_SCRIPT"
+#!/bin/bash
+TRAFFIC_DIR="/etc/UDPCustom/traffic"
+TRAFFIC_LIMITS_DIR="/etc/UDPCustom/traffic_limits"
+TRAFFIC_CHAIN="VPN_TRAFFIC"
+DB_USERS="/etc/UDPCustom/users.db"
+
+mkdir -p "$TRAFFIC_DIR"
+iptables -L "$TRAFFIC_CHAIN" -n &>/dev/null || exit 0
+
+while read -r u; do
+    [ -z "$u" ] && continue
+    uid=$(id -u "$u" 2>/dev/null) || continue
+    cur=$(iptables -L "$TRAFFIC_CHAIN" -v -x -n 2>/dev/null | awk -v pat="UID match $uid\$" '$0 ~ pat {print $2}' | head -1)
+    [ -z "$cur" ] && cur=0
+    total_file="$TRAFFIC_DIR/$u"
+    [ -f "$total_file" ] || echo 0 > "$total_file"
+    prev_total=$(cat "$total_file")
+    new_total=$((prev_total + cur))
+    echo "$new_total" > "$total_file"
+    iptables -D "$TRAFFIC_CHAIN" -m owner --uid-owner "$uid" -j RETURN 2>/dev/null
+    iptables -A "$TRAFFIC_CHAIN" -m owner --uid-owner "$uid" -j RETURN
+    limit_file="$TRAFFIC_LIMITS_DIR/$u"
+    if [ -f "$limit_file" ]; then
+        limit_bytes=$(cat "$limit_file")
+        if [[ "$limit_bytes" =~ ^[0-9]+$ ]] && [ "$limit_bytes" -gt 0 ] && [ "$new_total" -ge "$limit_bytes" ]; then
+            usermod -L "$u" 2>/dev/null
+        fi
+    fi
+done < "$DB_USERS"
+CHK_EOF
+    chmod +x "$TRAFFIC_CHECK_SCRIPT"
+    echo "*/5 * * * * root $TRAFFIC_CHECK_SCRIPT" > "$TRAFFIC_CRON"
+    chmod 644 "$TRAFFIC_CRON"
+    systemctl restart cron 2>/dev/null || systemctl restart crond 2>/dev/null
+}
+
+# ── ОБЫЧНАЯ ВЕРСИЯ (с UI) ──
+install_traffic_monitor() {
+    header
+    echo -e "${YELLOW}--- ⚡ Включение мониторинга трафика ---${NC}"
+    install_traffic_monitor_quiet
+    echo -e "${GREEN}Мониторинг трафика включен: проверка каждые 5 минут.${NC}"
+    read -p "Нажмите Enter для продолжения..."
 }
 
 set_traffic_limit() {
@@ -182,65 +215,6 @@ show_traffic_table() {
     read -p "Нажмите Enter для продолжения..."
 }
 
-install_traffic_monitor() {
-    header
-    echo -e "${YELLOW}--- ⚡ Включение мониторинга трафика ---${NC}"
-
-    init_traffic_chain
-
-    while read -r u; do
-        [ -z "$u" ] && continue
-        id "$u" &>/dev/null && add_traffic_rule "$u"
-    done < "$DB_USERS"
-
-    cat << 'CHK_EOF' > "$TRAFFIC_CHECK_SCRIPT"
-#!/bin/bash
-TRAFFIC_DIR="/etc/UDPCustom/traffic"
-TRAFFIC_LIMITS_DIR="/etc/UDPCustom/traffic_limits"
-TRAFFIC_CHAIN="VPN_TRAFFIC"
-DB_USERS="/etc/UDPCustom/users.db"
-
-mkdir -p "$TRAFFIC_DIR"
-iptables -L "$TRAFFIC_CHAIN" -n &>/dev/null || exit 0
-
-while read -r u; do
-    [ -z "$u" ] && continue
-    uid=$(id -u "$u" 2>/dev/null) || continue
-
-    cur=$(iptables -L "$TRAFFIC_CHAIN" -v -x -n 2>/dev/null | awk -v pat="UID match $uid\$" '$0 ~ pat {print $2}' | head -1)
-    [ -z "$cur" ] && cur=0
-
-    total_file="$TRAFFIC_DIR/$u"
-    [ -f "$total_file" ] || echo 0 > "$total_file"
-    prev_total=$(cat "$total_file")
-    new_total=$((prev_total + cur))
-    echo "$new_total" > "$total_file"
-
-    # Обнуляем счётчик правила (пересоздаём) — иначе на след. проходе
-    # снова прибавим уже учтённые байты
-    iptables -D "$TRAFFIC_CHAIN" -m owner --uid-owner "$uid" -j RETURN 2>/dev/null
-    iptables -A "$TRAFFIC_CHAIN" -m owner --uid-owner "$uid" -j RETURN
-
-    limit_file="$TRAFFIC_LIMITS_DIR/$u"
-    if [ -f "$limit_file" ]; then
-        limit_bytes=$(cat "$limit_file")
-        if [[ "$limit_bytes" =~ ^[0-9]+$ ]] && [ "$limit_bytes" -gt 0 ] && [ "$new_total" -ge "$limit_bytes" ]; then
-            usermod -L "$u" 2>/dev/null
-        fi
-    fi
-done < "$DB_USERS"
-CHK_EOF
-
-    chmod +x "$TRAFFIC_CHECK_SCRIPT"
-
-    echo "*/5 * * * * root $TRAFFIC_CHECK_SCRIPT" > "$TRAFFIC_CRON"
-    chmod 644 "$TRAFFIC_CRON"
-    systemctl restart cron 2>/dev/null || systemctl restart crond 2>/dev/null
-
-    echo -e "${GREEN}Мониторинг трафика включен: проверка каждые 5 минут.${NC}"
-    read -p "Нажмите Enter для продолжения..."
-}
-
 uninstall_traffic_monitor() {
     header
     echo -e "${YELLOW}--- 🗑️ Отключение мониторинга трафика ---${NC}"
@@ -269,7 +243,7 @@ menu_traffic() {
         echo -e " 3) ⚙️  Установить лимит пользователю"
         echo -e " 4) 🔄 Сбросить счётчик пользователя"
         echo -e " 5) 🗑️  Отключить мониторинг"
-        echo -e " 0) ↩️  Назад в главное меню"
+        echo -e " 0) ↩️  Назад"
         echo ""
         read -p "Выберите действие [0-5]: " tchoice
         case $tchoice in
