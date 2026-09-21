@@ -26,14 +26,14 @@ add_user() {
         traffic_gb=0
     fi
 
-    useradd -M -s /bin/false "$username"
+    # Создаем пользователя с защитной оболочкой проверки лимитов
+    useradd -M -s /usr/local/bin/vpn-limit-shell "$username"
     echo "$username:$password" | chpasswd
 
     echo "$username" >> "$DB_USERS"
     sort -u -o "$DB_USERS" "$DB_USERS"
     echo "$max_devices" > "$LIMITS_DIR/$username"
 
-    # Лимит трафика (модуль traffic.sh)
     local traffic_bytes=$((traffic_gb * 1073741824))
     mkdir -p "$TRAFFIC_LIMITS_DIR" "$TRAFFIC_DIR" 2>/dev/null
     echo "$traffic_bytes" > "$TRAFFIC_LIMITS_DIR/$username" 2>/dev/null
@@ -182,20 +182,6 @@ client_statistics() {
         echo -e " 📱 Всего устройств: ${RED}$total_count / $user_limit (ПРЕВЫШЕН ЛИМИТ!)${NC}"
     else
         echo -e " 📱 Всего устройств: ${GREEN}$total_count / $user_limit${NC}"
-    fi
-
-    if declare -f get_traffic_used &>/dev/null; then
-        local used=$(get_traffic_used "$SELECTED_USER")
-        local cur=0
-        declare -f get_traffic_counter_bytes &>/dev/null && cur=$(get_traffic_counter_bytes "$SELECTED_USER")
-        local total_traffic=$((used + cur))
-        local limit=$(get_traffic_limit "$SELECTED_USER")
-        echo -e "${CYAN}────────────────────────────────────────────${NC}"
-        if [ "$limit" -gt 0 ] 2>/dev/null; then
-            echo -e " 📶 Трафик: ${GREEN}$(human_bytes "$total_traffic")${NC} / $(human_bytes "$limit")"
-        else
-            echo -e " 📶 Трафик: ${GREEN}$(human_bytes "$total_traffic")${NC} / без лимита"
-        fi
     fi
 
     echo -e "${CYAN}────────────────────────────────────────────${NC}"
