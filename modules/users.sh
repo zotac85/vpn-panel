@@ -1,17 +1,16 @@
 #!/bin/bash
 
-# Персональное меню управления конкретным пользователем (все настройки в одном окне)
+# Персональное меню управления конкретным пользователем
 manage_single_user() {
     select_user "⚙️ Выбор пользователя для управления" || return
     while true; do
         header
         echo -e "${YELLOW}--- 👤 Настройка клиента: ${GREEN}$SELECTED_USER${YELLOW} ---${NC}"
         echo -e "${CYAN}────────────────────────────────────────────${NC}"
-        
-        # Читаем параметры
+
         local user_limit=3
         [ -f "$LIMITS_DIR/$SELECTED_USER" ] && user_limit=$(cat "$LIMITS_DIR/$SELECTED_USER")
-        
+
         local traffic_info="Без лимита"
         if declare -f get_traffic_limit &>/dev/null; then
             local limit=$(get_traffic_limit "$SELECTED_USER")
@@ -63,7 +62,6 @@ manage_single_user() {
     done
 }
 
-# Вспомогательная функция смены лимита трафика для выбранного пользователя
 change_traffic_limit_menu() {
     echo ""
     read -p "Введите новый лимит трафика в ГБ (0 = без лимита): " new_gb
@@ -82,7 +80,6 @@ change_traffic_limit_menu() {
     read -p "Нажмите Enter для продолжения..."
 }
 
-# Отдельная общая статистика ограничений всех пользователей
 general_restrictions_stats() {
     header
     echo -e "${YELLOW}--- 📊 Общая статистика ограничений и лимитов ---${NC}"
@@ -270,10 +267,10 @@ client_statistics() {
     header
     echo -e "${YELLOW}--- 📊 Статистика клиента: $SELECTED_USER ---${NC}"
     echo -e "${CYAN}────────────────────────────────────────────${NC}"
-    
+
     local exp=$(chage -l "$SELECTED_USER" 2>/dev/null | grep "Account expires" | cut -d: -f2 | sed 's/^ *//')
     [ "$exp" == "never" ] && exp="Бессрочно"
-    
+
     if passwd -S "$SELECTED_USER" 2>/dev/null | grep -q " L "; then
         status_str="${RED}${USER_LOCK}${NC}"
     else
@@ -285,7 +282,7 @@ client_statistics() {
 
     read count_ssh count_ws count_white <<< $(get_user_connections "$SELECTED_USER")
     local total_count=$((count_ssh + count_ws + count_white))
-    
+
     echo -e " 👤 Логин аккаунта : ${GREEN}$SELECTED_USER${NC}"
     echo -e " 📅 Срок действия  : ${CYAN}$exp${NC}"
     echo -e " 🔒 Статус учетки  : $status_str"
@@ -295,13 +292,13 @@ client_statistics() {
     echo -e " 🕸️ SSH WS активных    : ${GREEN}$count_ws${NC}"
     echo -e " 🌐 White активных     : ${GREEN}$count_white${NC}"
     echo -e "${CYAN}────────────────────────────────────────────${NC}"
-    
+
     if [ "$total_count" -gt "$user_limit" ]; then
         echo -e " 📱 Всего устройств: ${RED}$total_count / $user_limit (ПРЕВЫШЕН ЛИМИТ!)${NC}"
     else
         echo -e " 📱 Всего устройств: ${GREEN}$total_count / $user_limit${NC}"
     fi
-    
+
     echo -e "${CYAN}────────────────────────────────────────────${NC}"
     read -p "Нажмите Enter для возврата..."
 }
@@ -328,7 +325,7 @@ list_users() {
         if id "$u" &>/dev/null; then
             exp=$(chage -l "$u" 2>/dev/null | grep "Account expires" | cut -d: -f2 | sed 's/^ *//')
             [ "$exp" == "never" ] && exp="Бессрочно"
-            
+
             local user_limit=3
             [ -f "$LIMITS_DIR/$u" ] && user_limit=$(cat "$LIMITS_DIR/$u")
 
@@ -359,15 +356,19 @@ menu_users() {
         echo -e " 3) 📊 Общая статистика ограничений по всем пользователям"
         echo -e " 4) ➕ Добавить пользователя"
         echo -e " 5) 🗑️ Удалить пользователя"
+        echo -e " 6) 🚦 Контроль лимита устройств"
+        echo -e " 7) 📶 Мониторинг и лимит трафика"
         echo -e " 0) ↩️ Назад в главное меню"
         echo ""
-        read -p "Выберите действие [0-5]: " uchoice
+        read -p "Выберите действие [0-7]: " uchoice
         case $uchoice in
             1) manage_single_user ;;
             2) list_users ;;
             3) general_restrictions_stats ;;
             4) add_user ;;
             5) delete_user ;;
+            6) menu_devicelimit ;;
+            7) menu_traffic ;;
             0) break ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
         esac
