@@ -115,14 +115,31 @@ build_session_stats() {
 
     while IFS= read -r line; do
         [ -z "$line" ] && continue
-        local peer pid u
-        peer=$(echo "$line" | awk '{print $5}')
-        pid=$(echo "$line" | grep -oP 'pid=\K[0-9]+' | head -1)
-        [ -z "$pid" ] && continue
-        u=$(ps -o user= -p "$pid" 2>/dev/null | tr -d ' ')
+
+        # Peer-адрес всегда идёт последним полем ПЕРЕД "users:(...)" —
+        # так надёжнее, чем брать фиксированный номер колонки: в новых
+        # версиях ss колонка State при явном "state established" вообще
+        # не печатается, из-за чего номера колонок съезжают.
+        local head peer
+        head="${line%%users:(*}"
+        peer=$(echo "$head" | awk '{print $NF}')
+        # peer должен выглядеть как адрес:порт (IPv4/IPv6), иначе строка кривая — пропускаем
+        [[ "$peer" == *:* ]] || continue
+
+        # В users:(...) может быть два PID (привилегированный монитор
+        # sshd-session + процесс уже от имени залогинившегося юзера
+        # после дропа прав) — ищем среди них того, кто НЕ root.
+        local pids p owner u
+        pids=$(echo "$line" | grep -oP 'pid=\K[0-9]+')
+        u=""
+        for p in $pids; do
+            owner=$(ps -o user= -p "$p" 2>/dev/null | tr -d ' ')
+            if [ -n "$owner" ] && [ "$owner" != "root" ]; then
+                u="$owner"
+                break
+            fi
+        done
         [ -z "$u" ] && continue
-        # root — это сам мастер-процесс sshd/ws-proxy, не клиентская сессия
-        [ "$u" == "root" ] && continue
 
         if [[ "$peer" == 127.0.0.1:* || "$peer" == \[::1\]:* ]]; then
             SESS_WS_BY_USER["$u"]=$(( ${SESS_WS_BY_USER["$u"]:-0} + 1 ))
