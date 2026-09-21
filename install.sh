@@ -74,6 +74,34 @@ chmod +x /usr/local/bin/vpn
 # АВТОВКЛЮЧЕНИЕ КОНТРОЛЯ ЛИМИТОВ (устройства + трафик)
 # Делаем напрямую, не через функции модулей — installer не source'ит их.
 # ──────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────
+# Подключаем pam_limits к sshd (для maxlogins по схеме A)
+# ──────────────────────────────────────────────────────────────
+if ! grep -q "pam_limits.so" /etc/pam.d/sshd 2>/dev/null; then
+    echo "session required pam_limits.so" >> /etc/pam.d/sshd
+    echo -e "\033[0;32m✅ pam_limits подключён к sshd (maxlogins будет работать).\033[0m"
+fi
+
+# ──────────────────────────────────────────────────────────────
+# Синхронизация maxlogins для УЖЕ существующих пользователей
+# (на случай обновления панели, когда юзеры уже созданы)
+# ──────────────────────────────────────────────────────────────
+if [ -s /etc/UDPCustom/users.db ]; then
+    while read -r u; do
+        [ -z "$u" ] && continue
+        id "$u" &>/dev/null || continue
+
+        limit=3
+        [ -f "/etc/UDPCustom/limits/$u" ] && limit=$(cat "/etc/UDPCustom/limits/$u")
+        [[ "$limit" =~ ^[0-9]+$ ]] || limit=3
+
+        # Чистим старые записи и добавляем новую
+        sed -i "/^${u}[[:space:]]\+hard[[:space:]]\+maxlogins/d" /etc/security/limits.conf 2>/dev/null
+        echo "${u} hard maxlogins ${limit}" >> /etc/security/limits.conf
+    done < /etc/UDPCustom/users.db
+    echo -e "\033[0;32m✅ maxlogins синхронизирован для всех пользователей.\033[0m"
+fi
+
 echo -e "\n🛡️ Автовключение контроля лимитов..."
 
 # 1) Контроль лимита устройств — cron раз в минуту
