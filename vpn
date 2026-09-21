@@ -1,0 +1,45 @@
+#!/bin/bash
+
+if [ "$EUID" -ne 0 ]; then
+  echo "Ошибка: запустите скрипт от root (sudo -i)"
+  exit 1
+fi
+
+PANEL_DIR="/usr/local/share/vpn-panel"
+
+# Подключаем ядро и модули
+source "$PANEL_DIR/core.sh"
+source "$PANEL_DIR/modules/users.sh"
+source "$PANEL_DIR/modules/masterdns.sh"
+source "$PANEL_DIR/modules/udp.sh"
+source "$PANEL_DIR/modules/ws.sh"
+source "$PANEL_DIR/modules/security.sh"
+
+# Главное меню скрипта
+while true; do
+    header
+    echo -e " MasterDnsVPN : $(get_service_status masterdnsvpn)"
+    echo -e " UDP-Custom   : $(get_service_status udp-custom)"
+    echo -e " WS Proxy     : $(get_service_status ws-proxy)"
+    echo -e " Firewall     : $(get_ufw_status)"
+    echo -e " IPv6         : $(get_ipv6_status)"
+    echo -e "${CYAN}────────────────────────────────────────────${NC}"
+    echo -e " 1) 👥 Управление пользователями"
+    echo -e " 2) 🌐 MasterDnsVPN"
+    echo -e " 3) ⚡ UDP Custom (Управление)"
+    echo -e " 4) 🕸️  WebSocket Proxy (Кастомный)"
+    echo -e " 5) 🛡️  Безопасность, IPv6 и Оптимизация"
+    echo -e " 0) 🚪 Выход"
+    echo -e "${CYAN}────────────────────────────────────────────${NC}"
+    read -p "Выберите раздел [0-5]: " main_choice
+
+    case $main_choice in
+        1) menu_users ;;
+        2) menu_masterdns ;;
+        3) menu_service ;;
+        4) menu_ws ;;
+        5) menu_sec ;;
+        0) clear; exit 0 ;;
+        *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
+    esac
+done
