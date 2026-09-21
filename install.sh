@@ -12,7 +12,6 @@ echo -e "\033[0;36m==============================================\033[0m"
 echo -e "        \033[1;33m⚡ VPN PANEL INSTALLER / UPDATER ⚡\033[0m"
 echo -e "\033[0;36m==============================================\033[0m"
 
-# Проверяем, установлена ли панель ранее
 if [ -d "$PANEL_DIR" ] || [ -f "/usr/local/bin/vpn" ]; then
     echo -e "\033[1;33mОбнаружена ранее установленная панель.\033[0m"
     echo ""
@@ -23,26 +22,20 @@ if [ -d "$PANEL_DIR" ] || [ -f "/usr/local/bin/vpn" ]; then
     read -p "Выберите действие [0-2]: " choice
 
     case $choice in
-        1)
-            echo -e "\n🔄 Обновление компонентов панели..."
-            ;;
+        1) echo -e "\n🔄 Обновление компонентов панели..." ;;
         2)
             echo -e "\n⚠️ Полная переустановка..."
             rm -rf "$PANEL_DIR"
             rm -f /usr/local/bin/vpn
             ;;
-        *)
-            echo -e "\n❌ Операция отменена."
-            exit 0
-            ;;
+        *) echo -e "\n❌ Операция отменена."; exit 0 ;;
     esac
 fi
 
-# Создаем необходимые папки и файлы, если их нет
 mkdir -p "$PANEL_DIR/modules" /etc/UDPCustom/limits /etc/UDPCustom/traffic /etc/UDPCustom/traffic_limits
 touch /etc/UDPCustom/users.db
 
-# Откат старого костыля vpn-limit-shell (если остался)
+# Откат старого костыля vpn-limit-shell
 if [ -f "/etc/UDPCustom/users.db" ]; then
     while read -r u; do
         [ -z "$u" ] && continue
@@ -55,7 +48,7 @@ if [ -f "/etc/UDPCustom/users.db" ]; then
     done < "/etc/UDPCustom/users.db"
 fi
 
-# Скачивание ядра и модулей с GitHub
+# Скачивание модулей
 echo -e "\n📥 Скачивание актуальных файлов с GitHub..."
 curl -s -o "$PANEL_DIR/core.sh" "$REPO_URL/core.sh"
 curl -s -o "$PANEL_DIR/modules/users.sh" "$REPO_URL/modules/users.sh"
@@ -66,48 +59,100 @@ curl -s -o "$PANEL_DIR/modules/security.sh" "$REPO_URL/modules/security.sh"
 curl -s -o "$PANEL_DIR/modules/traffic.sh" "$REPO_URL/modules/traffic.sh" 2>/dev/null
 curl -s -o "$PANEL_DIR/modules/devicelimit.sh" "$REPO_URL/modules/devicelimit.sh" 2>/dev/null
 
-# Скачивание главного исполняемого файла (точки входа)
 curl -s -o /usr/local/bin/vpn "$REPO_URL/vpn"
 chmod +x /usr/local/bin/vpn
 
 # ──────────────────────────────────────────────────────────────
-# СХЕМА A: Подключаем pam_limits к sshd (для maxlogins)
+# СХЕМА A: pam_limits (maxlogins для прямого SSH)
 # ──────────────────────────────────────────────────────────────
 if ! grep -q "pam_limits.so" /etc/pam.d/sshd 2>/dev/null; then
     echo "session required pam_limits.so" >> /etc/pam.d/sshd
-    echo -e "\033[0;32m✅ pam_limits подключён к sshd (maxlogins будет работать).\033[0m"
-else
-    echo -e "\033[0;32m✅ pam_limits уже подключён к sshd.\033[0m"
+    echo -e "\033[0;32m✅ pam_limits подключён к sshd.\033[0m"
 fi
 
-# ──────────────────────────────────────────────────────────────
-# СХЕМА A: Синхронизация maxlogins для УЖЕ существующих юзеров
-# (на случай обновления панели, когда юзеры уже созданы)
-# ──────────────────────────────────────────────────────────────
+# Синхронизация maxlogins для существующих юзеров
 if [ -s /etc/UDPCustom/users.db ]; then
     while read -r u; do
         [ -z "$u" ] && continue
         id "$u" &>/dev/null || continue
-
         limit=3
         [ -f "/etc/UDPCustom/limits/$u" ] && limit=$(cat "/etc/UDPCustom/limits/$u")
         [[ "$limit" =~ ^[0-9]+$ ]] || limit=3
-
-        # Чистим старые записи и добавляем новую
         sed -i "/^${u}[[:space:]]\+hard[[:space:]]\+maxlogins/d" /etc/security/limits.conf 2>/dev/null
-        sed -i "/^${u}[[:space:]]\+soft[[:space:]]\+maxlogins/d" /etc/security/limits.conf 2>/dev/null
         echo "${u} hard maxlogins ${limit}" >> /etc/security/limits.conf
     done < /etc/UDPCustom/users.db
-    echo -e "\033[0;32m✅ maxlogins синхронизирован для всех пользователей.\033[0m"
+    echo -e "\033[0;32m✅ maxlogins синхронизирован.\033[0m"
 fi
 
 # ──────────────────────────────────────────────────────────────
-# СХЕМА C: АВТОВКЛЮЧЕНИЕ КОНТРОЛЯ ЛИМИТОВ (устройства + трафик)
-# Делаем напрямую, не через функции модулей — installer не source'ит их.
+# СХЕМА B: pam_exec в AUTH-фазе (для WS-туннелей DarkTunnel)
+# ──────────────────────────────────────────────────────────────
+cat << 'PAM_EOF' > /usr/local/bin/check-device-limit-pam
+#!/bin/bash
+USER="$PAM_USER"
+LIMITS_DIR="/etc/UDPCustom/limits"
+DB_USERS="/etc/UDPCustom/users.db"
+
+[ "$USER" == "root" ] && exit 0
+[ -z "$USER" ] && exit 0
+grep -q "^${USER}$" "$DB_USERS" 2>/dev/null || exit 0
+
+LIMIT=3
+[ -f "$LIMITS_DIR/$USER" ] && LIMIT=$(cat "$LIMITS_DIR/$USER")
+[[ "$LIMIT" =~ ^[0-9]+$ ]] || LIMIT=3
+[ "$LIMIT" -le 0 ] && exit 0
+
+get_ws_port() {
+    if [ -f /usr/local/bin/ws-proxy.py ]; then
+        awk -F'=' '/listen_port/ {print $2}' /usr/local/bin/ws-proxy.py | tr -dc '0-9'
+    fi
+}
+
+WS_P=$(get_ws_port)
+FILTER="( sport = :22 or sport = :36712 or sport = :7300"
+[[ "$WS_P" =~ ^[0-9]+$ ]] && FILTER="$FILTER or sport = :$WS_P"
+FILTER="$FILTER )"
+
+COUNT=0
+while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    pids=$(echo "$line" | grep -oP 'pid=\K[0-9]+')
+    [ -z "$pids" ] && continue
+    for p in $pids; do
+        owner=$(ps -o user= -p "$p" 2>/dev/null | tr -d ' ')
+        if [ -n "$owner" ] && [ "$owner" != "root" ]; then
+            [ "$owner" == "$USER" ] && COUNT=$((COUNT + 1))
+            break
+        fi
+    done
+done <<< "$(ss -H -tnp state established "$FILTER" 2>/dev/null)"
+
+if [ "$COUNT" -ge "$LIMIT" ]; then
+    echo ""
+    echo "╔════════════════════════════════════════════╗"
+    echo "║   ❌ ПРЕВЫШЕН ЛИМИТ УСТРОЙСТВ              ║"
+    echo "╠════════════════════════════════════════════╣"
+    echo "║  Разрешено устройств : $LIMIT"
+    echo "║  Текущих подключений : $COUNT"
+    echo "║  ⚠️  Отключите другое устройство.          ║"
+    echo "╚════════════════════════════════════════════╝"
+    echo ""
+    exit 1
+fi
+exit 0
+PAM_EOF
+chmod +x /usr/local/bin/check-device-limit-pam
+
+# Удаляем старую строку pam_exec (если есть) и вставляем в НАЧАЛО auth-фазы
+sed -i '/check-device-limit-pam/d' /etc/pam.d/sshd 2>/dev/null
+sed -i '1i auth required pam_exec.so stdout /usr/local/bin/check-device-limit-pam' /etc/pam.d/sshd
+echo -e "\033[0;32m✅ pam_exec подключён в auth-фазу sshd (WS-туннели под контролем).\033[0m"
+
+# ──────────────────────────────────────────────────────────────
+# СХЕМА C: Страховочный cron (устройства + трафик)
 # ──────────────────────────────────────────────────────────────
 echo -e "\n🛡️ Автовключение контроля лимитов..."
 
-# 1) Контроль лимита устройств — cron раз в минуту (страховка для схемы A)
 cat << 'CHK_EOF' > /usr/local/bin/vpn-limit-check.sh
 #!/bin/bash
 DB_USERS="/etc/UDPCustom/users.db"
@@ -177,11 +222,9 @@ chmod +x /usr/local/bin/vpn-limit-check.sh
 echo "* * * * * root /usr/local/bin/vpn-limit-check.sh" > /etc/cron.d/vpn-device-limit
 chmod 644 /etc/cron.d/vpn-device-limit
 
-# 2) Мониторинг трафика — iptables-цепочка + cron раз в 5 минут
 iptables -N VPN_TRAFFIC 2>/dev/null
 iptables -C OUTPUT -j VPN_TRAFFIC 2>/dev/null || iptables -I OUTPUT -j VPN_TRAFFIC
 
-# Добавляем правила-счётчики для существующих пользователей
 if [ -s /etc/UDPCustom/users.db ]; then
     while read -r u; do
         [ -z "$u" ] && continue
@@ -228,12 +271,13 @@ chmod +x /usr/local/bin/vpn-traffic-check.sh
 echo "*/5 * * * * root /usr/local/bin/vpn-traffic-check.sh" > /etc/cron.d/vpn-traffic-check
 chmod 644 /etc/cron.d/vpn-traffic-check
 
-# Перезапуск cron, чтобы подхватил новые задания
 systemctl restart cron 2>/dev/null || systemctl restart crond 2>/dev/null
 
-systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+echo -e "\033[0;32m✅ Контроль лимитов включён (pam_exec + maxlogins + cron).\033[0m"
 
-echo -e "\033[0;32m✅ Контроль лимитов включён автоматически (устройства + трафик).\033[0m"
+# Перезапуск SSH (reload может дропнуть текущую сессию — это нормально)
+echo -e "\n🔄 Перезапуск sshd для применения PAM-правил..."
+systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
 
 echo -e "\n\033[0;32m🟢 Операция успешно завершена, Хозяин!\033[0m"
 echo -e "Теперь для запуска панели просто введите в консоли: \033[1;33mvpn\033[0m"
