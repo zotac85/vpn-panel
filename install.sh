@@ -231,6 +231,8 @@ chmod 644 /etc/cron.d/vpn-traffic-check
 # Перезапуск cron, чтобы подхватил новые задания
 systemctl restart cron 2>/dev/null || systemctl restart crond 2>/dev/null
 
+systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+
 echo -e "\033[0;32m✅ Контроль лимитов включён автоматически (устройства + трафик).\033[0m"
 
 echo -e "\n\033[0;32m🟢 Операция успешно завершена, Хозяин!\033[0m"
