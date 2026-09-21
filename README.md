@@ -20,5 +20,5 @@
 ## 🚀 Быстрая установка
 
 ```
-bash <(curl -Ls [https://raw.githubusercontent.com/zotac85/vpn-panel/main/install.sh](https://raw.githubusercontent.com/zotac85/vpn-panel/main/install.sh))```
+bash <(curl -Ls [https://raw.githubusercontent.com/zotac85/vpn-panel/main/install.sh](https://raw.githubusercontent.com/zotac85/vpn-panel/main/install.sh))
 
