@@ -69,20 +69,6 @@ get_ws_port() {
     fi
 }
 
-# ──────────────────────────────────────────────────────────────
-# РЕАЛЬНЫЙ ПОДСЧЁТ SSH / WS СЕССИЙ (по PID → владелец сокета)
-#
-# Логика: WS-proxy принимает клиента и сам открывает новое
-# соединение на 127.0.0.1:22 (см. modules/ws.sh). Значит любая
-# ESTABLISHED-сессия sshd/dropbear, у которой peer-адрес — это
-# 127.0.0.1 (или ::1), пришла ЧЕРЕЗ WebSocket. Все остальные —
-# это прямые SSH/dropbear подключения.
-#
-# Владельца сессии определяем не по "какой сервис вообще запущен",
-# а по реальному UNIX-пользователю процесса-обработчика (sshd/dropbear
-# форкает дочерний процесс от имени залогинившегося пользователя).
-# ──────────────────────────────────────────────────────────────
-
 declare -gA SESS_SSH_BY_USER
 declare -gA SESS_WS_BY_USER
 SESS_SSH_TOTAL=0
@@ -90,8 +76,6 @@ SESS_WS_TOTAL=0
 SESS_BUILT=0
 
 get_ssh_ports_filter() {
-    # Порты, на которых слушают SSH/dropbear в этой сборке (UDPCustom):
-    # 22 — стандартный sshd, 36712 / 7300 — dropbear/доп. порты.
     local ws_p=$(get_ws_port)
     local filter="( sport = :22 or sport = :36712 or sport = :7300"
     if [[ "$ws_p" =~ ^[0-9]+$ ]]; then
@@ -115,20 +99,11 @@ build_session_stats() {
 
     while IFS= read -r line; do
         [ -z "$line" ] && continue
-
-        # Peer-адрес всегда идёт последним полем ПЕРЕД "users:(...)" —
-        # так надёжнее, чем брать фиксированный номер колонки: в новых
-        # версиях ss колонка State при явном "state established" вообще
-        # не печатается, из-за чего номера колонок съезжают.
         local head peer
         head="${line%%users:(*}"
         peer=$(echo "$head" | awk '{print $NF}')
-        # peer должен выглядеть как адрес:порт (IPv4/IPv6), иначе строка кривая — пропускаем
         [[ "$peer" == *:* ]] || continue
 
-        # В users:(...) может быть два PID (привилегированный монитор
-        # sshd-session + процесс уже от имени залогинившегося юзера
-        # после дропа прав) — ищем среди них того, кто НЕ root.
         local pids p owner u
         pids=$(echo "$line" | grep -oP 'pid=\K[0-9]+')
         u=""
@@ -153,9 +128,6 @@ build_session_stats() {
     SESS_BUILT=1
 }
 
-# Возвращает "count_ssh count_ws count_white" для одного пользователя.
-# ВАЖНО: перед массовым вызовом в цикле лучше один раз вызвать
-# build_session_stats, чтобы не гонять ss() на каждого юзера отдельно.
 get_user_connections() {
     local u="$1"
 
