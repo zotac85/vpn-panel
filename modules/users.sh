@@ -71,6 +71,10 @@ change_traffic_limit_menu() {
         local bytes=$((new_gb * 1073741824))
         mkdir -p "$TRAFFIC_LIMITS_DIR" 2>/dev/null
         echo "$bytes" > "$TRAFFIC_LIMITS_DIR/$SELECTED_USER"
+        if declare -f init_traffic_chain &>/dev/null && declare -f add_traffic_rule &>/dev/null; then
+            init_traffic_chain
+            add_traffic_rule "$SELECTED_USER"
+        fi
         echo -e "${GREEN}Лимит трафика для '$SELECTED_USER' успешно изменен на ${new_gb} ГБ!${NC}"
     else
         echo -e "${RED}Неверный формат числа.${NC}"
@@ -150,7 +154,7 @@ add_user() {
         traffic_gb=0
     fi
 
-    useradd -M -s /usr/local/bin/vpn-limit-shell "$username"
+    useradd -M -s /bin/false "$username"
     echo "$username:$password" | chpasswd
 
     echo "$username" >> "$DB_USERS"
@@ -161,6 +165,9 @@ add_user() {
     mkdir -p "$TRAFFIC_LIMITS_DIR" "$TRAFFIC_DIR" 2>/dev/null
     echo "$traffic_bytes" > "$TRAFFIC_LIMITS_DIR/$username" 2>/dev/null
     echo "0" > "$TRAFFIC_DIR/$username" 2>/dev/null
+    if declare -f add_traffic_rule &>/dev/null; then
+        add_traffic_rule "$username"
+    fi
 
     if [ -n "$days" ] && [ "$days" -gt 0 ] 2>/dev/null; then
         exp_date=$(date -d "+$days days" +%Y-%m-%d)
@@ -197,6 +204,9 @@ delete_user() {
         userdel -f "$SELECTED_USER" 2>/dev/null
         sed -i "/^${SELECTED_USER}$/d" "$DB_USERS" 2>/dev/null
         rm -f "$LIMITS_DIR/$SELECTED_USER" "$TRAFFIC_LIMITS_DIR/$SELECTED_USER" "$TRAFFIC_DIR/$SELECTED_USER" 2>/dev/null
+        if declare -f remove_traffic_rule &>/dev/null; then
+            remove_traffic_rule "$SELECTED_USER"
+        fi
         echo -e "${GREEN}Пользователь '$SELECTED_USER' удален!${NC}"
     else
         echo -e "${YELLOW}Удаление отменено.${NC}"
