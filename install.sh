@@ -51,6 +51,7 @@ curl -s -o "$PANEL_DIR/modules/udp.sh" "$REPO_URL/modules/udp.sh"
 curl -s -o "$PANEL_DIR/modules/ws.sh" "$REPO_URL/modules/ws.sh"
 curl -s -o "$PANEL_DIR/modules/security.sh" "$REPO_URL/modules/security.sh"
 curl -s -o "$PANEL_DIR/modules/traffic.sh" "$REPO_URL/modules/traffic.sh"
+curl -s -o "$PANEL_DIR/modules/devicelimit.sh" "$REPO_URL/modules/devicelimit.sh"
 
 # Скачивание главного исполняемого файла (точки входа)
 curl -s -o /usr/local/bin/vpn "$REPO_URL/vpn"
