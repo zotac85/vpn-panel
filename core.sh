@@ -94,37 +94,23 @@ header() {
 
 get_user_connections() {
     local u="$1"
-    local active_ips=$(ss -H -tn state established 2>/dev/null | awk '{print $4}' | cut -d: -f1 | grep -vE "^(127\.|0\.|10\.|192\.168\.|172\.)" | sort -u)
-    
-    if [ -z "$active_ips" ]; then
-        echo "0 0 0"
-        return
-    fi
-
     local count_udp=0
     local count_ws=0
     local count_white=0
 
-    local user_ips_udp=$(journalctl -u udp-custom --no-pager -n 100 2>/dev/null | grep "$u" | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b" | sort -u)
-    for ip in $user_ips_udp; do
-        if echo "$active_ips" | grep -qx "$ip"; then
-            ((count_udp++))
+    # Проверяем активные сетевые процессы/сессии конкретного пользователя в системе через pgrep и w/who
+    if pgrep -u "$u" >/dev/null 2>&1 || who | grep -q "$u"; then
+        local active_conns=$(ss -tn state established 2>/dev/null)
+        if [ -n "$active_conns" ]; then
+            if systemctl is-active --quiet masterdnsvpn; then
+                count_white=1
+            elif [ -f /usr/local/bin/ws-proxy.py ] && systemctl is-active --quiet ws-proxy; then
+                count_ws=1
+            else
+                count_udp=1
+            fi
         fi
-    done
-
-    local user_ips_ws=$(journalctl -u ssh -u ws-proxy --no-pager -n 100 2>/dev/null | grep "$u" | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b" | sort -u)
-    for ip in $user_ips_ws; do
-        if echo "$active_ips" | grep -qx "$ip"; then
-            ((count_ws++))
-        fi
-    done
-
-    local user_ips_white=$(journalctl -u masterdnsvpn --no-pager -n 100 2>/dev/null | grep "$u" | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b" | sort -u)
-    for ip in $user_ips_white; do
-        if echo "$active_ips" | grep -qx "$ip"; then
-            ((count_white++))
-        fi
-    done
+    fi
 
     echo "$count_udp $count_ws $count_white"
 }
