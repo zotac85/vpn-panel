@@ -42,42 +42,26 @@ fi
 mkdir -p "$PANEL_DIR/modules" /etc/UDPCustom/limits /etc/UDPCustom/traffic /etc/UDPCustom/traffic_limits
 touch /etc/UDPCustom/users.db
 
-# Автоматическая установка или обновление защитной оболочки лимита устройств
-echo -e "\n🛡️ Настройка защитной оболочки проверки лимита устройств..."
-cat << 'EOF' > /usr/local/bin/vpn-limit-shell
-#!/bin/bash
-username="$USER"
-limits_dir="/etc/UDPCustom/limits"
-max_limit=3
-[ -f "$limits_dir/$username" ] && max_limit=$(cat "$limits_dir/$username")
+# ПРИМЕЧАНИЕ: механизм лимита устройств через login-shell (vpn-limit-shell)
+# здесь намеренно не используется — sshd вызывает login shell только при
+# открытии интерактивной сессии (PTY/команда). VPN-клиенты (HTTP Injector,
+# KPN Tunnel и т.п.) обычно подключаются в режиме чистого port-forwarding
+# (ssh -N, без PTY) — в этом режиме shell не запускается, и подобная
+# проверка для реального туннельного трафика не срабатывает.
+# Реальный контроль лимита устройств делает modules/devicelimit.sh
+# (детектит установленные TCP-сессии напрямую через ss, а не через shell).
 
-count=$(pgrep -u "$username" -f "vpn-limit-shell" | wc -l)
-
-if [ "$count" -gt "$max_limit" ]; then
-    msg="\n\033[1;31m==============================================\033[0m\n\033[1;31m❌ ОШИБКА: ПРЕВЫШЕН ЛИМИТ УСТРОЙСТВ!\033[0m\n\033[1;33m📱 Разрешено устройств: $max_limit (попытка: $count)\033[0m\n\033[1;37m⚠️  Отключите другое устройство для входа.\033[0m\n\033[1;31m==============================================\033[0m\n"
-    echo -e "$msg"
-    echo -e "$msg" >&2
-    sleep 2
-    exit 1
-fi
-
-trap "kill 0; exit 0" SIGHUP SIGINT SIGTERM
-while true; do
-    sleep 86400 &
-    wait $!
-done
-EOF
-
-chmod +x /usr/local/bin/vpn-limit-shell
-chmod 755 /etc/UDPCustom /etc/UDPCustom/limits 2>/dev/null
-chmod 644 /etc/UDPCustom/limits/* 2>/dev/null
-
-# Обновляем оболочку для существующих пользователей из базы
+# Если у части пользователей ранее уже стоит vpn-limit-shell — откатываем
+# на обычный /bin/false, чтобы не мешал и не путал (сам файл не трогаем,
+# на случай если где-то ещё используется)
 if [ -f "/etc/UDPCustom/users.db" ]; then
     while read -r u; do
         [ -z "$u" ] && continue
         if id "$u" &>/dev/null; then
-            chsh -s /usr/local/bin/vpn-limit-shell "$u" 2>/dev/null
+            current_shell=$(getent passwd "$u" | cut -d: -f7)
+            if [ "$current_shell" == "/usr/local/bin/vpn-limit-shell" ]; then
+                chsh -s /bin/false "$u" 2>/dev/null
+            fi
         fi
     done < "/etc/UDPCustom/users.db"
 fi
