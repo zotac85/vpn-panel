@@ -65,6 +65,7 @@ curl -s -o "$PANEL_DIR/modules/ws.sh" "$REPO_URL/modules/ws.sh"
 curl -s -o "$PANEL_DIR/modules/security.sh" "$REPO_URL/modules/security.sh"
 curl -s -o "$PANEL_DIR/modules/traffic.sh" "$REPO_URL/modules/traffic.sh" 2>/dev/null
 curl -s -o "$PANEL_DIR/modules/devicelimit.sh" "$REPO_URL/modules/devicelimit.sh" 2>/dev/null
+curl -s -o "$PANEL_DIR/modules/banner.sh" "$REPO_URL/modules/banner.sh" 2>/dev/null
 
 # Скачивание главного исполняемого файла (точки входа)
 curl -s -o /usr/local/bin/vpn "$REPO_URL/vpn"
@@ -96,45 +97,25 @@ if [ -s /etc/UDPCustom/users.db ]; then
 fi
 
 # ──────────────────────────────────────────────────────────────
-# СХЕМА B: pam_exec в ACCOUNT-фазе (WS-туннели DarkTunnel)
-#
-# ВАЖНО:
-#  - НЕ в auth-фазе! Там $PAM_USER может быть пустым —
-#    это блокирует ВСЕХ, включая root.
-#  - В account-фазе $PAM_USER гарантированно установлен.
-#  - Ставим ПОСЛЕ pam_nologin.so.
-#  - Root пропускается скриптом.
-#  - stdout нужен, чтобы клиент увидел сообщение.
+# СХЕМА B: pam_exec в ACCOUNT-фазе (лимит для WS-туннелей)
 # ──────────────────────────────────────────────────────────────
 echo -e "\n🔒 Настройка pam_exec (лимит устройств для WS-туннелей)..."
 
-# 1) Создаём скрипт проверки
 cat << 'PAM_EOF' > /usr/local/bin/check-device-limit-pam
 #!/bin/bash
-# ──────────────────────────────────────────────────────────────
-# PAM-скрипт проверки лимита устройств для SSH (включая WS-туннели).
-# Вызывается в account-фазе — ПОСЛЕ аутентификации пароля.
-# Считает УСТАНОВЛЕННЫЕ TCP-сессии sshd, принадлежащие юзеру.
-# ──────────────────────────────────────────────────────────────
-
 USER="$PAM_USER"
 LIMITS_DIR="/etc/UDPCustom/limits"
 DB_USERS="/etc/UDPCustom/users.db"
 
-# Root и пустой юзер — пропускаем
 [ "$USER" == "root" ] && exit 0
 [ -z "$USER" ] && exit 0
-
-# Только наши юзеры (есть в базе)
 grep -q "^${USER}$" "$DB_USERS" 2>/dev/null || exit 0
 
-# Читаем лимит
 LIMIT=3
 [ -f "$LIMITS_DIR/$USER" ] && LIMIT=$(cat "$LIMITS_DIR/$USER")
 [[ "$LIMIT" =~ ^[0-9]+$ ]] || LIMIT=3
 [ "$LIMIT" -le 0 ] && exit 0
 
-# Получаем WS-порт (динамический)
 get_ws_port() {
     if [ -f /usr/local/bin/ws-proxy.py ]; then
         awk -F'=' '/listen_port/ {print $2}' /usr/local/bin/ws-proxy.py | tr -dc '0-9'
@@ -146,7 +127,6 @@ FILTER="( sport = :22 or sport = :36712 or sport = :7300"
 [[ "$WS_P" =~ ^[0-9]+$ ]] && FILTER="$FILTER or sport = :$WS_P"
 FILTER="$FILTER )"
 
-# Считаем УСТАНОВЛЕННЫЕ сессии sshd, владелец процесса = наш юзер
 COUNT=0
 while IFS= read -r line; do
     [ -z "$line" ] && continue
@@ -161,7 +141,6 @@ while IFS= read -r line; do
     done
 done <<< "$(ss -H -tnp state established "$FILTER" 2>/dev/null)"
 
-# Превышение — отказываем с сообщением (вывод в stdout — для pam_exec.so stdout)
 if [ "$COUNT" -ge "$LIMIT" ]; then
     echo ""
     echo "❌ ПРЕВЫШЕН ЛИМИТ УСТРОЙСТВ"
@@ -171,35 +150,29 @@ if [ "$COUNT" -ge "$LIMIT" ]; then
     echo ""
     exit 1
 fi
-
 exit 0
 PAM_EOF
 
 chmod +x /usr/local/bin/check-device-limit-pam
 
-# 2) ТЕСТ: убеждаемся, что скрипт не падает и возвращает корректный код
 echo -e "\n🔍 Проверка скрипта лимита..."
 PAM_TEST=$(PAM_USER=root /usr/local/bin/check-device-limit-pam 2>&1; echo "EXIT:$?")
 PAM_EXIT=$(echo "$PAM_TEST" | grep -oP 'EXIT:\K[0-9]+')
 
 if [ "$PAM_EXIT" != "0" ]; then
     echo -e "\033[0;31m⚠️  Скрипт проверки вернул код $PAM_EXIT — PAM НЕ трогаем!\033[0m"
-    echo -e "\033[0;33mПричина: $PAM_TEST\033[0m"
 else
     echo -e "\033[0;32m✅ Скрипт проверки работает корректно.\033[0m"
-
-    # 3) Убираем старые строки pam_exec для нашего скрипта
     sed -i '/check-device-limit-pam/d' /etc/pam.d/sshd 2>/dev/null
 
-    # 4) Добавляем в ACCOUNT-фазу, ПОСЛЕ pam_nologin.so (со stdout!)
     if grep -q "pam_nologin.so" /etc/pam.d/sshd; then
         sed -i '/pam_nologin.so/a account    required     pam_exec.so stdout /usr/local/bin/check-device-limit-pam' /etc/pam.d/sshd
-        echo -e "\033[0;32m✅ pam_exec добавлен в account-фазу (после pam_nologin).\033[0m"
+        echo -e "\033[0;32m✅ pam_exec добавлен в account-фазу.\033[0m"
     elif grep -q "@include common-auth" /etc/pam.d/sshd; then
         sed -i '/@include common-auth/a account    required     pam_exec.so stdout /usr/local/bin/check-device-limit-pam' /etc/pam.d/sshd
         echo -e "\033[0;32m✅ pam_exec добавлен после common-auth.\033[0m"
     else
-        echo -e "\033[0;31m⚠️  Не найдена точка вставки в /etc/pam.d/sshd — PAM не тронут.\033[0m"
+        echo -e "\033[0;31m⚠️  Не найдена точка вставки — PAM не тронут.\033[0m"
     fi
 fi
 
@@ -208,7 +181,6 @@ fi
 # ──────────────────────────────────────────────────────────────
 echo -e "\n🛡️ Автовключение контроля лимитов..."
 
-# 1) Контроль лимита устройств — cron раз в минуту
 cat << 'CHK_EOF' > /usr/local/bin/vpn-limit-check.sh
 #!/bin/bash
 DB_USERS="/etc/UDPCustom/users.db"
@@ -278,7 +250,7 @@ chmod +x /usr/local/bin/vpn-limit-check.sh
 echo "* * * * * root /usr/local/bin/vpn-limit-check.sh" > /etc/cron.d/vpn-device-limit
 chmod 644 /etc/cron.d/vpn-device-limit
 
-# 2) Мониторинг трафика — iptables-цепочка + cron раз в 5 минут
+# iptables-цепочка для трафика
 iptables -N VPN_TRAFFIC 2>/dev/null
 iptables -C OUTPUT -j VPN_TRAFFIC 2>/dev/null || iptables -I OUTPUT -j VPN_TRAFFIC
 
@@ -331,33 +303,142 @@ chmod 644 /etc/cron.d/vpn-traffic-check
 systemctl restart cron 2>/dev/null || systemctl restart crond 2>/dev/null
 
 # ──────────────────────────────────────────────────────────────
-# ФИНАЛЬНАЯ ПРОВЕРКА PAM И ПЕРЕЗАПУСК SSHD
+# БАННЕР ПРИ ПОДКЛЮЧЕНИИ
+# Инициализация только при первой установке.
+# При обновлении — НЕ перезаписываем (юзер сам настроит через панель).
+# ──────────────────────────────────────────────────────────────
+echo -e "\n🎨 Настройка баннера при подключении..."
+
+if [ ! -f /etc/UDPCustom/banner.conf ]; then
+    # Создаём конфиг со значениями по умолчанию
+    cat << 'BANNER_CONF_EOF' > /etc/UDPCustom/banner.conf
+# Настройки баннера при подключении
+# 1 = включено, 0 = выключено
+ENABLED=1
+USE_COLORS=1
+SHOW_USER=1
+SHOW_LIMIT=1
+SHOW_ONLINE=1
+
+# Текст баннера (поддерживает $USER, $LIMIT, $COUNT)
+TITLE="⚡ ULTIMATE VPN CONTROL PANEL ⚡"
+WELCOME="Добро пожаловать на защищённый сервер!"
+LINE1="🌐  Быстро • Безопасно • Анонимно"
+LINE2="📞  Поддержка: @your_telegram"
+BANNER_CONF_EOF
+
+    # Генерируем show-welcome
+    cat << 'BANNER_SCRIPT_EOF' > /usr/local/bin/show-welcome
+#!/bin/bash
+USER="$PAM_USER"
+CONFIG="/etc/UDPCustom/banner.conf"
+
+[ "$USER" == "root" ] && exit 0
+[ -z "$USER" ] && exit 0
+[ ! -f "$CONFIG" ] && exit 0
+source "$CONFIG"
+[ "$ENABLED" != "1" ] && exit 0
+
+LIMITS_DIR="/etc/UDPCustom/limits"
+LIMIT=3
+[ -f "$LIMITS_DIR/$USER" ] && LIMIT=$(cat "$LIMITS_DIR/$USER")
+
+WS_P=""
+[ -f /usr/local/bin/ws-proxy.py ] && \
+    WS_P=$(awk -F'=' '/listen_port/ {print $2}' /usr/local/bin/ws-proxy.py | tr -dc '0-9')
+
+FILTER="( sport = :22 or sport = :36712 or sport = :7300"
+[[ "$WS_P" =~ ^[0-9]+$ ]] && FILTER="$FILTER or sport = :$WS_P"
+FILTER="$FILTER )"
+
+COUNT=0
+while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    pids=$(echo "$line" | grep -oP 'pid=\K[0-9]+' 2>/dev/null)
+    [ -z "$pids" ] && continue
+    for p in $pids; do
+        owner=$(ps -o user= -p "$p" 2>/dev/null | tr -d ' ')
+        if [ -n "$owner" ] && [ "$owner" != "root" ]; then
+            [ "$owner" == "$USER" ] && COUNT=$((COUNT + 1))
+            break
+        fi
+    done
+done <<< "$(ss -H -tnp state established "$FILTER" 2>/dev/null)"
+
+if [ "$USE_COLORS" == "1" ]; then
+    G='\033[1;32m'; Y='\033[1;33m'; C='\033[1;36m'
+    W='\033[1;37m'; M='\033[1;35m'; N='\033[0m'
+else
+    G=''; Y=''; C=''; W=''; M=''; N=''
+fi
+
+echo ""
+echo -e "${G}${TITLE}${N}"
+echo ""
+echo -e "${C}${WELCOME}${N}"
+echo ""
+[ "$SHOW_USER" == "1" ] && echo -e "${W}👤  Пользователь   : ${Y}${USER}${N}"
+[ "$SHOW_LIMIT" == "1" ] && echo -e "${W}📱  Лимит устройств : ${Y}${LIMIT}${N}"
+[ "$SHOW_ONLINE" == "1" ] && echo -e "${W}🔗  Сейчас онлайн   : ${Y}${COUNT}${N}"
+echo ""
+[ -n "$LINE1" ] && echo -e "${G}${LINE1}${N}"
+[ -n "$LINE2" ] && echo -e "${M}${LINE2}${N}"
+echo ""
+exit 0
+BANNER_SCRIPT_EOF
+
+    chmod +x /usr/local/bin/show-welcome
+
+    # Подключаем в PAM после check-device-limit-pam
+    sed -i '/show-welcome/d' /etc/pam.d/sshd 2>/dev/null
+    if grep -q "check-device-limit-pam" /etc/pam.d/sshd; then
+        sed -i '/check-device-limit-pam/a account    required     pam_exec.so stdout /usr/local/bin/show-welcome' /etc/pam.d/sshd
+    fi
+    echo -e "\033[0;32m✅ Баннер создан и подключён.\033[0m"
+else
+    echo -e "\033[0;32m✅ Баннер уже настроен (не перезаписываем).\033[0m"
+    # Проверяем, что show-welcome подключён
+    if ! grep -q "show-welcome" /etc/pam.d/sshd; then
+        if grep -q "check-device-limit-pam" /etc/pam.d/sshd; then
+            sed -i '/check-device-limit-pam/a account    required     pam_exec.so stdout /usr/local/bin/show-welcome' /etc/pam.d/sshd
+            echo -e "\033[0;32m✅ show-welcome добавлен в PAM.\033[0m"
+        fi
+    fi
+fi
+
+# ──────────────────────────────────────────────────────────────
+# ФИНАЛЬНАЯ ПРОВЕРКА PAM
 # ──────────────────────────────────────────────────────────────
 echo -e "\n🔍 Финальная проверка конфигурации..."
 PAM_OK=1
 
-if ! grep -q "@include common-auth" /etc/pam.d/sshd; then
-    echo -e "\033[0;31m⚠️  @include common-auth отсутствует в /etc/pam.d/sshd!\033[0m"
-    PAM_OK=0
-fi
+grep -q "@include common-auth" /etc/pam.d/sshd || { echo -e "\033[0;31m⚠️  @include common-auth отсутствует!\033[0m"; PAM_OK=0; }
+grep -q "@include common-account" /etc/pam.d/sshd || { echo -e "\033[0;31m⚠️  @include common-account отсутствует!\033[0m"; PAM_OK=0; }
 
-if ! grep -q "@include common-account" /etc/pam.d/sshd; then
-    echo -e "\033[0;31m⚠️  @include common-account отсутствует в /etc/pam.d/sshd!\033[0m"
-    PAM_OK=0
-fi
-
-# Проверяем, что наша строка есть ровно один раз
+# Удаляем дубликаты pam_exec
 PAM_EXEC_COUNT=$(grep -c "check-device-limit-pam" /etc/pam.d/sshd 2>/dev/null || echo 0)
 if [ "$PAM_EXEC_COUNT" -gt 1 ]; then
-    echo -e "\033[0;33m⚠️  Найдено $PAM_EXEC_COUNT дубликатов pam_exec — оставляем один.\033[0m"
+    echo -e "\033[0;33m⚠️  Найдено $PAM_EXEC_COUNT дубликатов check-device-limit-pam — оставляем один.\033[0m"
     first=1
     : > /tmp/sshd.clean
     while IFS= read -r line; do
         if echo "$line" | grep -q "check-device-limit-pam"; then
-            if [ "$first" -eq 1 ]; then
-                first=0
-                echo "$line" >> /tmp/sshd.clean
-            fi
+            [ "$first" -eq 1 ] && { first=0; echo "$line" >> /tmp/sshd.clean; }
+        else
+            echo "$line" >> /tmp/sshd.clean
+        fi
+    done < /etc/pam.d/sshd
+    mv /tmp/sshd.clean /etc/pam.d/sshd
+fi
+
+WELCOME_COUNT=$(grep -c "show-welcome" /etc/pam.d/sshd 2>/dev/null || echo 0)
+if [ "$WELCOME_COUNT" -gt 1 ]; then
+    echo -e "\033[0;33m⚠️  Найдено $WELCOME_COUNT дубликатов show-welcome — оставляем один.\033[0m"
+    first=1
+    : > /tmp/sshd.clean
+    while IFS= read -r line; do
+        if echo "$line" | grep -q "show-welcome"; then
+            [ "$first" -eq 1 ] && { first=0; echo "$line" >> /tmp/sshd.clean; }
         else
             echo "$line" >> /tmp/sshd.clean
         fi
@@ -367,17 +448,18 @@ fi
 
 if [ "$PAM_OK" -eq 1 ]; then
     echo -e "\033[0;32m✅ PAM-конфигурация в порядке.\033[0m"
-    echo -e "\n🔄 Перезапуск sshd для применения настроек..."
+    echo -e "\n🔄 Перезапуск sshd..."
     echo -e "\033[1;33m⚠️  Текущая SSH-сессия может оборваться — это нормально.\033[0m"
     sleep 2
     systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
 else
-    echo -e "\033[0;31m⚠️  PAM-конфигурация повреждена! Откат pam_exec...\033[0m"
-    sed -i '/check-device-limit-pam/d' /etc/pam.d/sshd 2>/dev/null
-    echo -e "\033[0;33mСтрока pam_exec удалена. sshd НЕ перезапущен.\033[0m"
+    echo -e "\033[0;31m⚠️  PAM повреждён! Откат...\033[0m"
+    sed -i '/check-device-limit-pam/d' /etc/pam.d/sshd
+    sed -i '/show-welcome/d' /etc/pam.d/sshd
+    echo -e "\033[0;33mСтроки удалены. sshd НЕ перезапущен.\033[0m"
 fi
 
-echo -e "\033[0;32m✅ Контроль лимитов включён (pam_exec + maxlogins + cron).\033[0m"
+echo -e "\033[0;32m✅ Контроль лимитов и баннер включены.\033[0m"
 
 echo -e "\n\033[0;32m🟢 Операция успешно завершена, Хозяин!\033[0m"
-echo -e "Теперь для запуска панели просто введите в консоли: \033[1;33mvpn\033[0m"
+echo -e "Теперь для запуска панели введите: \033[1;33mvpn\033[0m"
