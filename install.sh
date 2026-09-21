@@ -100,10 +100,11 @@ fi
 #
 # ВАЖНО:
 #  - НЕ в auth-фазе! Там $PAM_USER может быть пустым —
-#    это блокирует ВСЕХ, включая root (наша прошлая ошибка).
+#    это блокирует ВСЕХ, включая root.
 #  - В account-фазе $PAM_USER гарантированно установлен.
-#  - Ставим ПОСЛЕ pam_nologin.so, но ДО @include common-account.
+#  - Ставим ПОСЛЕ pam_nologin.so.
 #  - Root пропускается скриптом.
+#  - stdout нужен, чтобы клиент увидел сообщение.
 # ──────────────────────────────────────────────────────────────
 echo -e "\n🔒 Настройка pam_exec (лимит устройств для WS-туннелей)..."
 
@@ -160,10 +161,14 @@ while IFS= read -r line; do
     done
 done <<< "$(ss -H -tnp state established "$FILTER" 2>/dev/null)"
 
-# Превышение — отказываем (сообщение в stderr)
+# Превышение — отказываем с сообщением (вывод в stdout — для pam_exec.so stdout)
 if [ "$COUNT" -ge "$LIMIT" ]; then
-    echo "❌ ПРЕВЫШЕН ЛИМИТ УСТРОЙСТВ ($COUNT / $LIMIT)" >&2
-    echo "⚠️  Отключите другое устройство и попробуйте снова." >&2
+    echo ""
+    echo "❌ ПРЕВЫШЕН ЛИМИТ УСТРОЙСТВ"
+    echo "Разрешено устройств : $LIMIT"
+    echo "Сейчас подключено   : $COUNT"
+    echo "⚠️  Отключите другое устройство и попробуйте снова."
+    echo ""
     exit 1
 fi
 
@@ -186,12 +191,12 @@ else
     # 3) Убираем старые строки pam_exec для нашего скрипта
     sed -i '/check-device-limit-pam/d' /etc/pam.d/sshd 2>/dev/null
 
-    # 4) Добавляем в ACCOUNT-фазу, ПОСЛЕ pam_nologin.so
+    # 4) Добавляем в ACCOUNT-фазу, ПОСЛЕ pam_nologin.so (со stdout!)
     if grep -q "pam_nologin.so" /etc/pam.d/sshd; then
-        sed -i '/pam_nologin.so/a account    required     pam_exec.so /usr/local/bin/check-device-limit-pam' /etc/pam.d/sshd
+        sed -i '/pam_nologin.so/a account    required     pam_exec.so stdout /usr/local/bin/check-device-limit-pam' /etc/pam.d/sshd
         echo -e "\033[0;32m✅ pam_exec добавлен в account-фазу (после pam_nologin).\033[0m"
     elif grep -q "@include common-auth" /etc/pam.d/sshd; then
-        sed -i '/@include common-auth/a account    required     pam_exec.so /usr/local/bin/check-device-limit-pam' /etc/pam.d/sshd
+        sed -i '/@include common-auth/a account    required     pam_exec.so stdout /usr/local/bin/check-device-limit-pam' /etc/pam.d/sshd
         echo -e "\033[0;32m✅ pam_exec добавлен после common-auth.\033[0m"
     else
         echo -e "\033[0;31m⚠️  Не найдена точка вставки в /etc/pam.d/sshd — PAM не тронут.\033[0m"
@@ -345,8 +350,8 @@ fi
 PAM_EXEC_COUNT=$(grep -c "check-device-limit-pam" /etc/pam.d/sshd 2>/dev/null || echo 0)
 if [ "$PAM_EXEC_COUNT" -gt 1 ]; then
     echo -e "\033[0;33m⚠️  Найдено $PAM_EXEC_COUNT дубликатов pam_exec — оставляем один.\033[0m"
-    # Оставляем только первую
     first=1
+    : > /tmp/sshd.clean
     while IFS= read -r line; do
         if echo "$line" | grep -q "check-device-limit-pam"; then
             if [ "$first" -eq 1 ]; then
@@ -370,7 +375,6 @@ else
     echo -e "\033[0;31m⚠️  PAM-конфигурация повреждена! Откат pam_exec...\033[0m"
     sed -i '/check-device-limit-pam/d' /etc/pam.d/sshd 2>/dev/null
     echo -e "\033[0;33mСтрока pam_exec удалена. sshd НЕ перезапущен.\033[0m"
-    echo -e "\033[0;33mSSH продолжает работать — проверь /etc/pam.d/sshd вручную.\033[0m"
 fi
 
 echo -e "\033[0;32m✅ Контроль лимитов включён (pam_exec + maxlogins + cron).\033[0m"
