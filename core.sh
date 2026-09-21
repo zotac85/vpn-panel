@@ -98,17 +98,17 @@ get_user_connections() {
     local count_ws=0
     local count_white=0
 
-    # Проверяем активные сетевые процессы/сессии конкретного пользователя в системе через pgrep и w/who
-    if pgrep -u "$u" >/dev/null 2>&1 || who | grep -q "$u"; then
-        local active_conns=$(ss -tn state established 2>/dev/null)
-        if [ -n "$active_conns" ]; then
-            if systemctl is-active --quiet masterdnsvpn; then
-                count_white=1
-            elif [ -f /usr/local/bin/ws-proxy.py ] && systemctl is-active --quiet ws-proxy; then
-                count_ws=1
-            else
-                count_udp=1
-            fi
+    # Проверяем активные процессы или сетевые сокеты, привязанные к пользователю
+    local user_pids=$(pgrep -u "$u" 2>/dev/null)
+    local active_conns=$(ss -tnp 2>/dev/null)
+    
+    if [ -n "$user_pids" ] || who | grep -q "$u" || echo "$active_conns" | grep -q "$u"; then
+        if systemctl is-active --quiet masterdnsvpn; then
+            count_white=1
+        elif [ -f /usr/local/bin/ws-proxy.py ] && systemctl is-active --quiet ws-proxy; then
+            count_ws=1
+        else
+            count_udp=1
         fi
     fi
 
