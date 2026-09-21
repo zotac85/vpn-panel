@@ -15,6 +15,7 @@ source "$PANEL_DIR/modules/udp.sh"
 source "$PANEL_DIR/modules/ws.sh"
 source "$PANEL_DIR/modules/security.sh"
 source "$PANEL_DIR/modules/traffic.sh"
+source "$PANEL_DIR/modules/devicelimit.sh"
 
 # Главное меню скрипта
 while true; do
@@ -31,9 +32,10 @@ while true; do
     echo -e " 4) 🕸️  WebSocket Proxy (Кастомный)"
     echo -e " 5) 🛡️  Безопасность, IPv6 и Оптимизация"
     echo -e " 6) 📶 Лимит трафика"
+    echo -e " 7) 🚦 Контроль лимита устройств"
     echo -e " 0) 🚪 Выход"
     echo -e "${CYAN}────────────────────────────────────────────${NC}"
-    read -p "Выберите раздел [0-6]: " main_choice
+    read -p "Выберите раздел [0-7]: " main_choice
 
     case $main_choice in
         1) menu_users ;;
@@ -42,6 +44,7 @@ while true; do
         4) menu_ws ;;
         5) menu_sec ;;
         6) menu_traffic ;;
+        7) menu_devicelimit ;;
         0) clear; exit 0 ;;
         *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
     esac
