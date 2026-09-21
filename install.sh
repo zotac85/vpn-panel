@@ -71,19 +71,17 @@ curl -s -o /usr/local/bin/vpn "$REPO_URL/vpn"
 chmod +x /usr/local/bin/vpn
 
 # ──────────────────────────────────────────────────────────────
-# АВТОВКЛЮЧЕНИЕ КОНТРОЛЯ ЛИМИТОВ (устройства + трафик)
-# Делаем напрямую, не через функции модулей — installer не source'ит их.
-# ──────────────────────────────────────────────────────────────
-# ──────────────────────────────────────────────────────────────
-# Подключаем pam_limits к sshd (для maxlogins по схеме A)
+# СХЕМА A: Подключаем pam_limits к sshd (для maxlogins)
 # ──────────────────────────────────────────────────────────────
 if ! grep -q "pam_limits.so" /etc/pam.d/sshd 2>/dev/null; then
     echo "session required pam_limits.so" >> /etc/pam.d/sshd
     echo -e "\033[0;32m✅ pam_limits подключён к sshd (maxlogins будет работать).\033[0m"
+else
+    echo -e "\033[0;32m✅ pam_limits уже подключён к sshd.\033[0m"
 fi
 
 # ──────────────────────────────────────────────────────────────
-# Синхронизация maxlogins для УЖЕ существующих пользователей
+# СХЕМА A: Синхронизация maxlogins для УЖЕ существующих юзеров
 # (на случай обновления панели, когда юзеры уже созданы)
 # ──────────────────────────────────────────────────────────────
 if [ -s /etc/UDPCustom/users.db ]; then
@@ -97,14 +95,19 @@ if [ -s /etc/UDPCustom/users.db ]; then
 
         # Чистим старые записи и добавляем новую
         sed -i "/^${u}[[:space:]]\+hard[[:space:]]\+maxlogins/d" /etc/security/limits.conf 2>/dev/null
+        sed -i "/^${u}[[:space:]]\+soft[[:space:]]\+maxlogins/d" /etc/security/limits.conf 2>/dev/null
         echo "${u} hard maxlogins ${limit}" >> /etc/security/limits.conf
     done < /etc/UDPCustom/users.db
     echo -e "\033[0;32m✅ maxlogins синхронизирован для всех пользователей.\033[0m"
 fi
 
+# ──────────────────────────────────────────────────────────────
+# СХЕМА C: АВТОВКЛЮЧЕНИЕ КОНТРОЛЯ ЛИМИТОВ (устройства + трафик)
+# Делаем напрямую, не через функции модулей — installer не source'ит их.
+# ──────────────────────────────────────────────────────────────
 echo -e "\n🛡️ Автовключение контроля лимитов..."
 
-# 1) Контроль лимита устройств — cron раз в минуту
+# 1) Контроль лимита устройств — cron раз в минуту (страховка для схемы A)
 cat << 'CHK_EOF' > /usr/local/bin/vpn-limit-check.sh
 #!/bin/bash
 DB_USERS="/etc/UDPCustom/users.db"
