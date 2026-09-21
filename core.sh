@@ -69,18 +69,103 @@ get_ws_port() {
     fi
 }
 
+# ──────────────────────────────────────────────────────────────
+# РЕАЛЬНЫЙ ПОДСЧЁТ SSH / WS СЕССИЙ (по PID → владелец сокета)
+#
+# Логика: WS-proxy принимает клиента и сам открывает новое
+# соединение на 127.0.0.1:22 (см. modules/ws.sh). Значит любая
+# ESTABLISHED-сессия sshd/dropbear, у которой peer-адрес — это
+# 127.0.0.1 (или ::1), пришла ЧЕРЕЗ WebSocket. Все остальные —
+# это прямые SSH/dropbear подключения.
+#
+# Владельца сессии определяем не по "какой сервис вообще запущен",
+# а по реальному UNIX-пользователю процесса-обработчика (sshd/dropbear
+# форкает дочерний процесс от имени залогинившегося пользователя).
+# ──────────────────────────────────────────────────────────────
+
+declare -gA SESS_SSH_BY_USER
+declare -gA SESS_WS_BY_USER
+SESS_SSH_TOTAL=0
+SESS_WS_TOTAL=0
+SESS_BUILT=0
+
+get_ssh_ports_filter() {
+    # Порты, на которых слушают SSH/dropbear в этой сборке (UDPCustom):
+    # 22 — стандартный sshd, 36712 / 7300 — dropbear/доп. порты.
+    local ws_p=$(get_ws_port)
+    local filter="( sport = :22 or sport = :36712 or sport = :7300"
+    if [[ "$ws_p" =~ ^[0-9]+$ ]]; then
+        filter="$filter or sport = :$ws_p"
+    fi
+    filter="$filter )"
+    echo "$filter"
+}
+
+build_session_stats() {
+    SESS_SSH_BY_USER=()
+    SESS_WS_BY_USER=()
+    SESS_SSH_TOTAL=0
+    SESS_WS_TOTAL=0
+
+    local filter
+    filter=$(get_ssh_ports_filter)
+
+    local data
+    data=$(ss -H -tnp state established "$filter" 2>/dev/null)
+
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        local peer pid u
+        peer=$(echo "$line" | awk '{print $5}')
+        pid=$(echo "$line" | grep -oP 'pid=\K[0-9]+' | head -1)
+        [ -z "$pid" ] && continue
+        u=$(ps -o user= -p "$pid" 2>/dev/null | tr -d ' ')
+        [ -z "$u" ] && continue
+        # root — это сам мастер-процесс sshd/ws-proxy, не клиентская сессия
+        [ "$u" == "root" ] && continue
+
+        if [[ "$peer" == 127.0.0.1:* || "$peer" == \[::1\]:* ]]; then
+            SESS_WS_BY_USER["$u"]=$(( ${SESS_WS_BY_USER["$u"]:-0} + 1 ))
+            ((SESS_WS_TOTAL++))
+        else
+            SESS_SSH_BY_USER["$u"]=$(( ${SESS_SSH_BY_USER["$u"]:-0} + 1 ))
+            ((SESS_SSH_TOTAL++))
+        fi
+    done <<< "$data"
+
+    SESS_BUILT=1
+}
+
+# Возвращает "count_ssh count_ws count_white" для одного пользователя.
+# ВАЖНО: перед массовым вызовом в цикле лучше один раз вызвать
+# build_session_stats, чтобы не гонять ss() на каждого юзера отдельно.
+get_user_connections() {
+    local u="$1"
+
+    if [ "$SESS_BUILT" -ne 1 ]; then
+        build_session_stats
+    fi
+
+    local count_ssh=${SESS_SSH_BY_USER["$u"]:-0}
+    local count_ws=${SESS_WS_BY_USER["$u"]:-0}
+    local count_white=0
+
+    if systemctl is-active --quiet masterdnsvpn 2>/dev/null; then
+        if pgrep -u "$u" -f masterdns &>/dev/null; then
+            count_white=1
+        fi
+    fi
+
+    echo "$count_ssh $count_ws $count_white"
+}
+
 header() {
     clear
     local CPU=$(cat /proc/loadavg | awk '{print $1}')
     local RAM=$(free -m | awk 'NR==2{printf "%s/%sMB (%s%%)", $3,$2,int($3*100/$2)}')
     local DISK=$(df -h / | awk '$NF=="/"{printf "%s/%s (%s)", $3,$2,$5}')
-    
-    local ws_p=$(get_ws_port)
-    local ws_filter=""
-    if [[ "$ws_p" =~ ^[0-9]+$ ]]; then
-        ws_filter="or dport = :$ws_p or sport = :$ws_p"
-    fi
-    local ONLINE=$(ss -H -tn state established "( dport = :36712 or sport = :36712 or dport = :7300 or sport = :7300 $ws_filter )" 2>/dev/null | awk '{print $4}' | cut -d: -f1 | grep -vE "^(127\.|0\.|10\.|192\.168\.|172\.)" | sort -u | wc -l)
+
+    build_session_stats
 
     echo -e "${CYAN}==============================================${NC}"
     echo -e "        ${YELLOW}⚡ ULTIMATE VPN CONTROL PANEL ⚡${NC}"
@@ -88,37 +173,15 @@ header() {
     echo -e " 🖥️  CPU Нагрузка : ${GREEN}$CPU${NC}"
     echo -e " 💾 RAM Память   : ${GREEN}$RAM${NC}"
     echo -e " 💽 Диск (Root)  : ${GREEN}$DISK${NC}"
-    echo -e " 🌐 Активн. сесс.: ${GREEN}$ONLINE${NC}"
+    echo -e " 🔑 SSH онлайн   : ${GREEN}${SESS_SSH_TOTAL}${NC}"
+    echo -e " 🕸️  WS онлайн    : ${GREEN}${SESS_WS_TOTAL}${NC}"
     echo -e "${CYAN}==============================================${NC}"
-}
-
-get_user_connections() {
-    local u="$1"
-    local count_udp=0
-    local count_ws=0
-    local count_white=0
-
-    # Проверяем активные процессы или сетевые сокеты, привязанные к пользователю
-    local user_pids=$(pgrep -u "$u" 2>/dev/null)
-    local active_conns=$(ss -tnp 2>/dev/null)
-    
-    if [ -n "$user_pids" ] || who | grep -q "$u" || echo "$active_conns" | grep -q "$u"; then
-        if systemctl is-active --quiet masterdnsvpn; then
-            count_white=1
-        elif [ -f /usr/local/bin/ws-proxy.py ] && systemctl is-active --quiet ws-proxy; then
-            count_ws=1
-        else
-            count_udp=1
-        fi
-    fi
-
-    echo "$count_udp $count_ws $count_white"
 }
 
 select_user() {
     header
     echo -e "${YELLOW}--- $1 ---${NC}"
-    
+
     if [ ! -s "$DB_USERS" ]; then
         echo -e "${MAGENTA}Список пользователей пуст.${NC}"
         echo ""
@@ -126,9 +189,11 @@ select_user() {
         return 1
     fi
 
+    build_session_stats
+
     USER_LIST=()
     local i=1
-    printf "${BLUE}%-3s %-10s %-11s %-4s %-4s %-4s %-6s %-10s${NC}\n" "№" "Логин" "Срок" "UDP" "WS" "Wh" "Лимит" "Статус"
+    printf "${BLUE}%-3s %-10s %-11s %-4s %-4s %-4s %-6s %-10s${NC}\n" "№" "Логин" "Срок" "SSH" "WS" "Wh" "Лимит" "Статус"
     echo -e "${CYAN}────────────────────────────────────────────────────────${NC}"
 
     while read -r u; do
@@ -137,11 +202,11 @@ select_user() {
             USER_LIST+=("$u")
             exp=$(chage -l "$u" 2>/dev/null | grep "Account expires" | cut -d: -f2 | sed 's/^ *//')
             [ "$exp" == "never" ] && exp="Бессрочно"
-            
+
             local user_limit=3
             [ -f "$LIMITS_DIR/$u" ] && user_limit=$(cat "$LIMITS_DIR/$u")
 
-            read c_udp c_ws c_white <<< $(get_user_connections "$u")
+            read c_ssh c_ws c_white <<< $(get_user_connections "$u")
 
             if passwd -S "$u" 2>/dev/null | grep -q " L "; then
                 status_str="${RED}${USER_LOCK}${NC}"
@@ -149,7 +214,7 @@ select_user() {
                 status_str="${GREEN}${USER_ON}${NC}"
             fi
 
-            printf "%-3s %-10s %-11s %-4s %-4s %-4s %-6s %-12b\n" "$i)" "$u" "$exp" "$c_udp" "$c_ws" "$c_white" "$user_limit" "$status_str"
+            printf "%-3s %-10s %-11s %-4s %-4s %-4s %-6s %-12b\n" "$i)" "$u" "$exp" "$c_ssh" "$c_ws" "$c_white" "$user_limit" "$status_str"
             ((i++))
         fi
     done < "$DB_USERS"
