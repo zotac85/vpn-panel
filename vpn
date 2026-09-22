@@ -17,6 +17,7 @@ source "$PANEL_DIR/modules/traffic.sh"
 source "$PANEL_DIR/modules/devicelimit.sh"
 source "$PANEL_DIR/modules/banner.sh"
 source "$PANEL_DIR/modules/maintenance.sh"
+source "$PANEL_DIR/modules/torrent_block.sh"
 
 while true; do
     header
