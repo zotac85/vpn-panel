@@ -174,3 +174,69 @@ manage_proxy() {
         esac
     done
 }
+
+# ─── PAYLOAD ───
+PAYLOAD_FILE="/etc/UDPCustom/payload.txt"
+
+manage_payload() {
+    while true; do
+        header
+        echo -e "${YELLOW}📦 УПРАВЛЕНИЕ PAYLOAD${NC}"
+        echo ""
+
+        local pl=""
+        [ -f "$PAYLOAD_FILE" ] && pl=$(cat "$PAYLOAD_FILE" 2>/dev/null)
+        local pl_len=${#pl}
+
+        if [ -n "$pl" ]; then
+            echo -e " Статус: ${GREEN}🟢 Задан${NC} (${CYAN}${pl_len}${NC} символов)"
+            echo ""
+            echo -e "${CYAN}Текущий payload:${NC}"
+            echo -e "${GREEN}${pl}${NC}"
+        else
+            echo -e " Статус: ${RED}🔴 Не задан${NC}"
+        fi
+        echo ""
+        echo -e " 1) ✏️  Изменить payload"
+        echo -e " 2) 👁️  Показать текущий"
+        echo -e " 3) 🔄 Сбросить на стандартный"
+        echo -e " 4) 🗑️  Очистить"
+        echo -e " 0) ↩️  Назад"
+        echo ""
+        read -p "Выберите [0-4]: " pchoice
+
+        case $pchoice in
+            1)
+                echo ""
+                echo -e "${CYAN}Вставь новый payload (в одну строку, Enter для сохранения):${NC}"
+                read -r new_pl
+                if [ -n "$new_pl" ]; then
+                    echo "$new_pl" > "$PAYLOAD_FILE"
+                    echo -e "${GREEN}✅ Payload сохранён (${#new_pl} символов)${NC}"
+                else
+                    echo -e "${RED}Пусто — отмена${NC}"
+                fi
+                sleep 2
+                ;;
+            2)
+                echo ""
+                cat "$PAYLOAD_FILE" 2>/dev/null || echo -e "${MAGENTA}Не задан${NC}"
+                echo ""
+                read -p "Enter..."
+                ;;
+            3)
+                cat > "$PAYLOAD_FILE" << 'PL_EOF'
+CONNECT http://co.nr HTTP/1.1[crlf]Host: www.icloud.com[crlf]User-Agent: microsoft.com[crlf][crlf]AN / HTTP/1.1[lf]Host: [host][lf]Connection: Upgrade[lf]Upgrade: websocket[crlf][crlf]
+PL_EOF
+                echo -e "${GREEN}✅ Сброшено на стандартный${NC}"
+                sleep 1
+                ;;
+            4)
+                read -p "Очистить payload? (y/n): " c
+                [[ "$c" =~ ^[Yy]$ ]] && > "$PAYLOAD_FILE" && echo -e "${GREEN}✅ Очищено${NC}" && sleep 1
+                ;;
+            0) break ;;
+            *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
+        esac
+    done
+}

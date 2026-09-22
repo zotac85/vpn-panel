@@ -38,6 +38,7 @@ touch /etc/UDPCustom/users.db
 # Инициализация файлов домена и прокси (только если пустые)
 [ ! -s /etc/vpn-domain ] && echo "de.cdnstore.shop" > /etc/vpn-domain
 [ ! -s /etc/UDPCustom/proxies.txt ] && echo "8.6.112.0" > /etc/UDPCustom/proxies.txt
+[ ! -s /etc/UDPCustom/payload.txt ] && echo 'CONNECT http://co.nr HTTP/1.1[crlf]Host: www.icloud.com[crlf]User-Agent: microsoft.com[crlf][crlf]AN / HTTP/1.1[lf]Host: [host][lf]Connection: Upgrade[lf]Upgrade: websocket[crlf][crlf]' > /etc/UDPCustom/payload.txt
 
 # Откат старого костыля vpn-limit-shell
 if [ -f "/etc/UDPCustom/users.db" ]; then

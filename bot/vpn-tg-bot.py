@@ -124,6 +124,18 @@ def get_random_proxy():
     except: pass
     return None
 
+def get_payload():
+    """Payload из файла /etc/UDPCustom/payload.txt"""
+    p = '/etc/UDPCustom/payload.txt'
+    if os.path.exists(p):
+        try:
+            with open(p) as f:
+                pl = f.read().strip()
+                if pl: return pl
+        except: pass
+    return None
+
+
 def create_test_user(cfg):
     for _ in range(20):
         username = "test" + gen_random(6)
@@ -132,10 +144,10 @@ def create_test_user(cfg):
     else:
         return None, None
     password = gen_random(8)
-    days = int(cfg.get('TEST_DAYS','1')); devices = int(cfg.get('TEST_DEVICES','10')); traffic_gb = int(cfg.get('TEST_TRAFFIC_GB','100'))
+    hours = int(cfg.get('TEST_HOURS', '8')); devices = int(cfg.get('TEST_DEVICES','1')); traffic_gb = int(cfg.get('TEST_TRAFFIC_GB','50'))
     bash_script = f'''
 set -e
-username="{username}"; password="{password}"; days={days}; devices={devices}; traffic_gb={traffic_gb}
+username="{username}"; password="{password}"; hours={cfg.get('TEST_HOURS','8')}; devices={devices}; traffic_gb={traffic_gb}
 useradd -M -s /bin/false "$username"; echo "$username:$password" | chpasswd
 echo "$username" >> /etc/UDPCustom/users.db
 sort -u -o /etc/UDPCustom/users.db /etc/UDPCustom/users.db
@@ -145,7 +157,7 @@ echo "$username hard maxlogins $devices" >> /etc/security/limits.conf
 mkdir -p /etc/UDPCustom/traffic_limits /etc/UDPCustom/traffic
 bytes=$((traffic_gb * 1073741824)); echo "$bytes" > "/etc/UDPCustom/traffic_limits/$username"; echo "0" > "/etc/UDPCustom/traffic/$username"
 uid=$(id -u "$username"); iptables -C VPN_TRAFFIC -m owner --uid-owner "$uid" -j RETURN 2>/dev/null || iptables -A VPN_TRAFFIC -m owner --uid-owner "$uid" -j RETURN
-exp_date=$(date -d "+$days days" +%Y-%m-%d); chage -E "$exp_date" "$username"
+exp_epoch=$(( $(date +%s) + hours * 3600 )); chage -E "$exp_epoch" "$username"
 echo "OK"
 '''
     try:
@@ -196,28 +208,35 @@ def format_time(seconds):
     h = seconds // 3600; m = (seconds % 3600) // 60
     return f"{h} ч {m} мин" if h > 0 else f"{m} мин"
 
-def generate_dark_config(username, password, domain, ws_port, proxy, cfg):
-    """Генерирует .dark файл (JSON) для DarkTunnel"""
-    payload = cfg.get('PAYLOAD','')
-    # В DarkTunnel payload передаётся как есть, с [crlf] и [lf]
+def generate_darktunnel_url(username, password, domain, ws_port, proxy, cfg):
+    import base64
+    snic = cfg.get('SNI', '') or ''
+    pcfg = get_payload() or cfg.get('PAYLOAD', '') or 'CONNECT http://co.nr HTTP/1.1[crlf]'
+    proxy_host = proxy if proxy else ''
+    proxy_port = int(ws_port) if str(ws_port).isdigit() else 2052
     config = {
-        "name": f"{cfg.get('CONFIG_NAME','VPN')}_{username}",
-        "message": "",
-        "connected_message": cfg.get('CONNECTED_MSG','Подключено!'),
-        "hardware_id_list": [],
-        "lock": True,
-        "lock_ssh_account": True,
-        "expiration_date": 0,
-        "target": f"{domain}:{ws_port}",
-        "proxy": f"{proxy}:80" if proxy else "",
-        "payload": payload,
-        "username": username,
-        "password": password
+        "type": "SSH",
+        "name": (cfg.get('CONFIG_NAME','VPN') + "_" + username),
+        "sshTunnelConfig": {
+            "sshConfig": {
+                "host": domain,
+                "port": int(ws_port) if str(ws_port).isdigit() else 2052,
+                "username": username,
+                "password": password
+            },
+            "injectConfig": {
+                "mode": "PROXY",
+                "serverNameIndication": snic,
+                "proxyHost": proxy_host,
+                "proxyPort": proxy_port,
+                "payload": pcfg
+            }
+        }
     }
-    path = f"/tmp/{username}.dark"
-    with open(path, 'w') as f:
-        json.dump(config, f, ensure_ascii=False, indent=2)
-    return path
+    j = json.dumps(config, ensure_ascii=False, separators=(',', ':'))
+    b = base64.b64encode(j.encode('utf-8')).decode('ascii')
+    return "darktunnel://" + b
+
 
 def handle_start(cfg, chat_id, user_id, first_name):
     token = cfg['BOT_TOKEN']
@@ -233,46 +252,46 @@ def handle_start(cfg, chat_id, user_id, first_name):
 def handle_test(cfg, chat_id, user_id, first_name):
     token = cfg['BOT_TOKEN']
     if is_blacklisted(user_id):
-        send_message(token, chat_id, "🚫 Ты в чёрном списке. Обратись в поддержку: @ArsenGuro"); return
+        send_message(token, chat_id, "🚫 Ты в чёрном списке. @ArsenGuro"); return
     if cfg.get('REQUIRE_SUBSCRIPTION','0') == '1':
         if not check_subscription(token, user_id, cfg.get('CHANNEL_ID','')):
             keyboard = {'inline_keyboard': [
                 [{'text': '📢 Подписаться', 'url': f"https://t.me/{cfg['CHANNEL_ID'].lstrip('@')}"}],
                 [{'text': '✅ Я подписался', 'callback_data': 'get_test'}]
             ]}
-            send_message(token, chat_id, "📢 Для получения теста подпишись на канал, потом нажми кнопку ниже.", reply_markup=keyboard); return
-    cooldown_hours = int(cfg.get('COOLDOWN_HOURS','24'))
-    ok, remaining = check_cooldown(user_id, cooldown_hours)
-    if not ok:
-        send_message(token, chat_id, f"⏰ Ты уже получал тест. Попробуй снова через {format_time(remaining)}."); return
-    send_message(token, chat_id, "⏳ Создаём твой аккаунт, подожди 5 секунд...")
+            send_message(token, chat_id, "📢 Подпишись на канал, потом нажми кнопку ниже.", reply_markup=keyboard); return
+    admin_id = cfg.get('ADMIN_ID', '')
+    if str(user_id) != str(admin_id):
+        cooldown_hours = int(cfg.get('COOLDOWN_HOURS','24'))
+        ok, remaining = check_cooldown(user_id, cooldown_hours)
+        if not ok:
+            send_message(token, chat_id, f"⏰ Попробуй через {format_time(remaining)}."); return
+    send_message(token, chat_id, "⏳ Создаём аккаунт...")
     username, password = create_test_user(cfg)
     if not username:
-        send_message(token, chat_id, "❌ Ошибка при создании аккаунта. Попробуй позже или напиши @ArsenGuro"); return
+        send_message(token, chat_id, "❌ Ошибка. Попробуй позже."); return
     record_issue(user_id, username)
     domain = get_domain(); ws_port = get_ws_port(); proxy = get_random_proxy()
     connect_line = f"{domain}:{ws_port}@{username}:{password}"
     traffic = cfg.get('TEST_TRAFFIC_GB','100'); devices = cfg.get('TEST_DEVICES','10')
-    text = (
-        f"🎉 Твой тестовый доступ готов!\n\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"📲 Строка для DarkTunnel:\n\n{connect_line}\n\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"📱 Логин : {username}\n🔑 Пароль: {password}\n"
-        f"🌐 Сервер: {domain}\n🔌 Порт  : {ws_port}\n"
-    )
+    text = (f"🎉 Тестовый доступ готов!\n\n"
+            f"📲 Строка для DarkTunnel:\n\n<code>{connect_line}</code>\n\n"
+            f"📱 Логин: {username}\n🔑 Пароль: {password}\n"
+            f"🌐 Сервер: {domain}\n🔌 Порт: {ws_port}\n")
     if proxy: text += f"🛡️ Прокси: {proxy}:80\n"
-    text += f"\n⏰ Срок: 24 часа\n📊 Трафик: {traffic} ГБ\n💻 Устройств: {devices}\n\n"
+    text += f"\n⏰ {cfg.get('TEST_HOURS','8')} ч | 📊 {traffic} ГБ | 💻 {devices} устр.\n\n"
     text += f"💬 @ArsenGuro\n📢 @ArsenVipKeys"
-    send_message(token, chat_id, text)
-    # Отправляем .dark файл
-    dark_path = generate_dark_config(username, password, domain, ws_port, proxy, cfg)
-    if dark_path:
-        tg_send_document(token, chat_id, dark_path, caption="📁 Файл конфига для DarkTunnel")
-        os.remove(dark_path)
-    if cfg.get('ADMIN_ID'):
-        send_message(token, cfg['ADMIN_ID'], f"🔔 Новая выдача: {username} (TG: {user_id})")
-    log.info(f"Выдан тест: user_id={user_id}, username={username}")
+    send_message(token, chat_id, text, parse_mode="HTML")
+
+    # Ссылка darktunnel://
+    dt_url = generate_darktunnel_url(username, password, domain, ws_port, proxy, cfg)
+    if dt_url:
+        send_message(token, chat_id, "🔗 Ссылка-конфиг (тап → копировать):\n\n<code>" + dt_url + "</code>", parse_mode="HTML")
+
+    if admin_id:
+        send_message(token, admin_id, f"🔔 Выдача: {username} (TG: {user_id})")
+    log.info(f"Выдан тест: {username}")
+
 
 def handle_help(cfg, chat_id):
     token = cfg['BOT_TOKEN']
