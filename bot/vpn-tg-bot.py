@@ -124,6 +124,16 @@ def get_random_proxy():
     except: pass
     return None
 
+def get_channels():
+    """Список каналов из /etc/UDPCustom/channels.txt"""
+    p = '/etc/UDPCustom/channels.txt'
+    if not os.path.exists(p): return []
+    try:
+        with open(p) as f:
+            return [l.strip() for l in f if l.strip() and not l.startswith('#')]
+    except: return []
+
+
 def get_welcome_text():
     """Текст приветствия из /etc/UDPCustom/welcome.txt (fallback: bot.conf)"""
     p = '/etc/UDPCustom/welcome.txt'
@@ -255,32 +265,28 @@ def generate_darktunnel_url(username, password, domain, ws_port, proxy, cfg):
 
 def handle_start(cfg, chat_id, user_id, first_name):
     token = cfg['BOT_TOKEN']
-    ch1 = cfg.get('CHANNEL_ID', '').lstrip('@')
-    ch2 = cfg.get('CHANNEL_ID_2', '').lstrip('@')
     name = first_name or 'друг'
     text = get_welcome_text() or cfg.get('WELCOME_TEXT', 'Добро пожаловать!')
     text = text.replace('{name}', name)
+    channels = get_channels()
     keyboard = {'inline_keyboard': []}
-    if ch1:
-        keyboard['inline_keyboard'].append([{'text': f'📢 {ch1}', 'url': f'https://t.me/{ch1}'}])
-    if ch2:
-        keyboard['inline_keyboard'].append([{'text': f'📢 {ch2}', 'url': f'https://t.me/{ch2}'}])
+    for ch in channels:
+        ch_clean = ch.lstrip('@')
+        keyboard['inline_keyboard'].append([{'text': f'📢 {ch_clean}', 'url': f'https://t.me/{ch_clean}'}])
     keyboard['inline_keyboard'].append([{'text': '✅ Я подписался → Получить тест', 'callback_data': 'get_test'}])
     keyboard['inline_keyboard'].append([{'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}])
-    send_message(token, chat_id, text, reply_markup=keyboard, parse_mode='HTML')
+    send_message(token, chat_id, text, reply_markup=keyboard)
 
 def handle_test(cfg, chat_id, user_id, first_name):
     token = cfg['BOT_TOKEN']
     if is_blacklisted(user_id):
         send_message(token, chat_id, "🚫 Ты в чёрном списке. @ArsenGuro"); return
     if cfg.get('REQUIRE_SUBSCRIPTION','0') == '1':
-        ch1 = cfg.get('CHANNEL_ID', '')
-        ch2 = cfg.get('CHANNEL_ID_2', '')
+        channels = get_channels()
         not_sub = []
-        if ch1 and not check_subscription(token, user_id, ch1):
-            not_sub.append(ch1.lstrip('@'))
-        if ch2 and not check_subscription(token, user_id, ch2):
-            not_sub.append(ch2.lstrip('@'))
+        for ch in channels:
+            if not check_subscription(token, user_id, ch):
+                not_sub.append(ch.lstrip('@'))
         if not_sub:
             keyboard = {'inline_keyboard': []}
             for ch in not_sub:

@@ -248,6 +248,91 @@ tg_edit_welcome_file() {
     read -p "Enter..."
 }
 
+tg_channels_menu() {
+    local CH_FILE="/etc/UDPCustom/channels.txt"
+    [ ! -f "$CH_FILE" ] && touch "$CH_FILE"
+    while true; do
+        header
+        echo -e "${YELLOW}📢 УПРАВЛЕНИЕ КАНАЛАМИ${NC}"
+        echo ""
+        local count=$(grep -cve '^\s*$' "$CH_FILE" 2>/dev/null)
+        [ -z "$count" ] && count=0
+        echo -e " Всего каналов: ${GREEN}$count${NC}"
+        echo ""
+        if [ "$count" -gt 0 ]; then
+            echo -e "${CYAN}Список:${NC}"
+            local i=1
+            while IFS= read -r line; do
+                [ -z "$line" ] && continue
+                [ "${line:0:1}" == "#" ] && continue
+                printf " ${GREEN}%2d)${NC} %s\n" "$i" "$line"
+                ((i++))
+            done < "$CH_FILE"
+        else
+            echo -e "${MAGENTA}Список пуст.${NC}"
+        fi
+        echo ""
+        echo -e " 1) ➕ Добавить канал"
+        echo -e " 2) 🗑️  Удалить по номеру"
+        echo -e " 3) 🧹 Очистить всё"
+        echo -e " 4) 🔄 Вкл/выкл проверку подписки"
+        echo -e " 5) 👁️  Показать текущий файл"
+        echo -e " 0) ↩️  Назад"
+        echo ""
+        read -p "Выберите [0-5]: " chchoice
+        case $chchoice in
+            1)
+                echo ""
+                read -p "Username канала (например @MyChannel): " newch
+                [ -z "$newch" ] && continue
+                newch=$(echo "$newch" | tr -d ' ')
+                # Добавляем @ если нет
+                [[ "$newch" != @* ]] && newch="@$newch"
+                echo "$newch" >> "$CH_FILE"
+                sort -u "$CH_FILE" -o "$CH_FILE"
+                echo -e "${GREEN}✅ Добавлено: $newch${NC}"
+                sleep 1
+                ;;
+            2)
+                echo ""
+                read -p "Номер для удаления (0 = отмена): " num
+                [[ "$num" == "0" || -z "$num" ]] && continue
+                if ! [[ "$num" =~ ^[0-9]+$ ]]; then
+                    echo -e "${RED}Неверный номер${NC}"; sleep 1; continue
+                fi
+                sed -i "${num}d" "$CH_FILE"
+                sed -i '/^\s*$/d' "$CH_FILE"
+                echo -e "${GREEN}✅ Удалено${NC}"
+                sleep 1
+                ;;
+            3)
+                read -p "Очистить весь список? (y/n): " cfm
+                [[ "$c" =~ ^[Yy]$ ]] || [[ "$cfm" =~ ^[Yy]$ ]] && > "$CH_FILE" && \
+                    echo -e "${GREEN}✅ Очищено${NC}" && sleep 1
+                ;;
+            4)
+                local cur=$(tg_get_config "REQUIRE_SUBSCRIPTION")
+                if [ "$cur" == "1" ]; then
+                    tg_set_config "REQUIRE_SUBSCRIPTION" "0"
+                    echo -e "${YELLOW}Проверка подписки выключена${NC}"
+                else
+                    tg_set_config "REQUIRE_SUBSCRIPTION" "1"
+                    echo -e "${GREEN}Проверка подписки включена${NC}"
+                fi
+                sleep 1
+                ;;
+            5)
+                echo ""
+                cat "$CH_FILE"
+                echo ""
+                read -p "Enter..."
+                ;;
+            0) break ;;
+            *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
+        esac
+    done
+}
+
 menu_tgbot() {
     while true; do
         header
@@ -291,7 +376,7 @@ menu_tgbot() {
         echo -e " 1) ⚙️  Установка / первичная настройка"
         echo -e " 2) 🔑 Изменить BOT_TOKEN"
         echo -e " 3) 👤 Изменить ADMIN_ID"
-        echo -e " 4) 📢 Изменить CHANNEL_ID"
+        echo -e " 4) 📢 Управление каналами (список)"
         echo -e " 5) 🔄 Вкл/выкл проверку подписки"
         echo -e " 6) ✏️  Изменить текст приветствия (nano-редактор)"
         echo -e " 7) ✏️  Изменить шаблон выдачи"
@@ -316,7 +401,7 @@ menu_tgbot() {
             1) tg_install ;;
             2) tg_edit_field "BOT_TOKEN" "Токен бота (от @BotFather)" ;;
             3) tg_edit_field "ADMIN_ID" "Telegram ID админа (от @userinfobot)" ;;
-            4) tg_edit_field "CHANNEL_ID" "Канал для подписки (например @ArsenVipKeys)" ;;
+            4) tg_channels_menu ;;
             5)
                 local cur=$(tg_get_config "REQUIRE_SUBSCRIPTION")
                 if [ "$cur" == "1" ]; then
