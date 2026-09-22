@@ -125,10 +125,19 @@ get_user_connections() {
 }
 
 header() {
-    printf '\033[2J\033[3J\033[H'
+    clear
     local CPU=$(cat /proc/loadavg | awk '{print $1}')
     local RAM=$(free -m | awk 'NR==2{printf "%s/%sMB (%s%%)", $3,$2,int($3*100/$2)}')
     local DISK=$(df -h / | awk '$NF=="/"{printf "%s/%s (%s)", $3,$2,$5}')
+
+    # Swap
+    local SWAP=$(free -m | awk '/Swap:/ {
+        if ($2 > 0) {
+            printf "%s/%sMB (%s%%)", $3, $2, int($3*100/$2)
+        } else {
+            printf "не создан"
+        }
+    }')
 
     build_session_stats
 
@@ -137,11 +146,13 @@ header() {
     echo -e "${CYAN}==============================================${NC}"
     echo -e " 🖥️  CPU Нагрузка : ${GREEN}$CPU${NC}"
     echo -e " 💾 RAM Память   : ${GREEN}$RAM${NC}"
+    echo -e " 🔄 Swap         : ${GREEN}$SWAP${NC}"
     echo -e " 💽 Диск (Root)  : ${GREEN}$DISK${NC}"
     echo -e " 🔑 SSH онлайн   : ${GREEN}${SESS_SSH_TOTAL}${NC}"
     echo -e " 🕸️  WS онлайн    : ${GREEN}${SESS_WS_TOTAL}${NC}"
     echo -e "${CYAN}==============================================${NC}"
 }
+
 select_user() {
     header
     echo -e "${YELLOW}--- $1 ---${NC}"
