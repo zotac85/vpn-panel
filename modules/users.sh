@@ -574,9 +574,10 @@ menu_users() {
         echo -e " 6) 📊 Общая статистика ограничений"
         echo -e " 7) 🚦 Контроль лимита устройств"
         echo -e " 8) 📶 Мониторинг и лимит трафика"
+        echo -e " 9) 🧹 Обслуживание (бэкап, истёкшие)"
         echo -e " 0) ↩️  Назад в главное меню"
         echo ""
-        read -p "Выберите действие [0-8]: " uchoice
+        read -p "Выберите действие [0-9]: " uchoice
         case $uchoice in
             1) add_user ;;
             2) edit_user_menu ;;
@@ -586,6 +587,7 @@ menu_users() {
             6) general_restrictions_stats ;;
             7) menu_devicelimit ;;
             8) menu_traffic ;;
+            9) menu_maintenance ;;
             0) break ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
         esac
