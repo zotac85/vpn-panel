@@ -40,6 +40,10 @@ touch /etc/UDPCustom/users.db
 [ ! -s /etc/UDPCustom/proxies.txt ] && echo "8.6.112.0" > /etc/UDPCustom/proxies.txt
 [ ! -s /etc/UDPCustom/payload.txt ] && echo 'CONNECT http://co.nr HTTP/1.1[crlf]Host: www.icloud.com[crlf]User-Agent: microsoft.com[crlf][crlf]AN / HTTP/1.1[lf]Host: [host][lf]Connection: Upgrade[lf]Upgrade: websocket[crlf][crlf]' > /etc/UDPCustom/payload.txt
 [ ! -s /etc/UDPCustom/welcome.txt ] && cat > /etc/UDPCustom/welcome.txt << 'WELCOME_EOF'
+[ ! -s /etc/UDPCustom/channels.txt ] && cat > /etc/UDPCustom/channels.txt << 'CHANNELS_EOF'
+@ArsenVipKeys
+@vpnbalkan
+CHANNELS_EOF
 🎁 ПОЛУЧИ БЕСПЛАТНЫЙ VPN 🎁
 
 ⏰ 8 часов доступа
