@@ -75,6 +75,7 @@ FILES_MODULES=(
     "maintenance.sh"
     "torrent_block.sh"
     "domain_proxy.sh"
+    "tgbot.sh"
 )
 
 for item in "${FILES_CORE[@]}"; do
