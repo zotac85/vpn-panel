@@ -369,3 +369,67 @@ echo -e "\033[0;32m✅ Контроль лимитов и баннер вклю�
 
 echo -e "\n\033[0;32m🟢 Операция успешно завершена, Хозяин!\033[0m"
 echo -e "Теперь для запуска панели введите: \033[1;33mvpn\033[0m"
+
+# ──────────────────────────────────────────────────────────────
+# АВТООЧИСТКА ИСТЁКШИХ АККАУНТОВ (ежедневно в 4:00)
+# ──────────────────────────────────────────────────────────────
+echo -e "\n🧹 Настройка автоочистки истёкших аккаунтов..."
+
+cat << 'CLEANUP_EOF' > /usr/local/bin/vpn-auto-cleanup.sh
+#!/bin/bash
+DB_USERS="/etc/UDPCustom/users.db"
+LIMITS_DIR="/etc/UDPCustom/limits"
+TRAFFIC_LIMITS_DIR="/etc/UDPCustom/traffic_limits"
+TRAFFIC_DIR="/etc/UDPCustom/traffic"
+LOG_FILE="/var/log/vpn-auto-cleanup.log"
+
+[ ! -s "$DB_USERS" ] && exit 0
+
+TODAY=$(date +%s)
+TMP_DB=$(mktemp)
+: > "$TMP_DB"
+
+while read -r u; do
+    [ -z "$u" ] && continue
+    if ! id "$u" &>/dev/null; then
+        continue
+    fi
+
+    exp_raw=$(chage -l "$u" 2>/dev/null | grep "Account expires" | cut -d: -f2 | sed 's/^ *//')
+    if [ "$exp_raw" == "never" ] || [ -z "$exp_raw" ]; then
+        echo "$u" >> "$TMP_DB"
+        continue
+    fi
+
+    exp_epoch=$(date -d "$exp_raw" +%s 2>/dev/null)
+    [ -z "$exp_epoch" ] && { echo "$u" >> "$TMP_DB"; continue; }
+
+    if [ "$exp_epoch" -ge "$TODAY" ]; then
+        echo "$u" >> "$TMP_DB"
+        continue
+    fi
+
+    # Истёк — удаляем
+    uid=$(id -u "$u" 2>/dev/null)
+    if [ -n "$uid" ]; then
+        while iptables -D VPN_TRAFFIC -m owner --uid-owner "$uid" -j RETURN 2>/dev/null; do :; done
+    fi
+
+    userdel -f "$u" 2>/dev/null
+    rm -f "$LIMITS_DIR/$u" "$TRAFFIC_LIMITS_DIR/$u" "$TRAFFIC_DIR/$u" 2>/dev/null
+    sed -i "/^${u}[[:space:]]\+hard[[:space:]]\+maxlogins/d" /etc/security/limits.conf 2>/dev/null
+    sed -i "/^${u}[[:space:]]\+soft[[:space:]]\+maxlogins/d" /etc/security/limits.conf 2>/dev/null
+
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Удалён истёкший: $u (истёк $exp_raw)" >> "$LOG_FILE"
+done < "$DB_USERS"
+
+# Перезаписываем базу без удалённых
+sort -u "$TMP_DB" | grep -v '^$' > "$DB_USERS" 2>/dev/null
+rm -f "$TMP_DB"
+CLEANUP_EOF
+
+chmod +x /usr/local/bin/vpn-auto-cleanup.sh
+echo "0 4 * * * root /usr/local/bin/vpn-auto-cleanup.sh" > /etc/cron.d/vpn-auto-cleanup
+chmod 644 /etc/cron.d/vpn-auto-cleanup
+
+echo -e "\033[0;32m✅ Автоочистка истёкших аккаунтов включена (ежедневно в 4:00).\033[0m"
