@@ -18,6 +18,8 @@ source "$PANEL_DIR/modules/devicelimit.sh"
 source "$PANEL_DIR/modules/banner.sh"
 source "$PANEL_DIR/modules/maintenance.sh"
 source "$PANEL_DIR/modules/torrent_block.sh"
+source "$PANEL_DIR/modules/tgbot.sh"
+source "$PANEL_DIR/modules/domain_proxy.sh"
 
 while true; do
     header
@@ -26,16 +28,17 @@ while true; do
     echo -e " WS Proxy     : $(get_service_status ws-proxy)"
     echo -e "${CYAN}────────────────────────────────────────────${NC}"
     echo -e " 1) 👥 Управление пользователями"
-    echo -e " 2) 🕸️  WebSocket Proxy (Кастомный)"
-    echo -e " 3) ⚡ UDP Custom (Управление)"
+    echo -e " 2) 🕸️ WebSocket Proxy"
+    echo -e " 3) ⚡ UDP Custom"
     echo -e " 4) 🌐 MasterDnsVPN"
-    echo -e " 5) 🛡️  Безопасность и Оптимизация"
+    echo -e " 5) 🛡️ Безопасность и Оптимизация"
     echo -e " 6) 🚫 Блокировка торрентов"
-    echo -e " 7) 🎨 Баннер при подключении"
-    echo -e " 8) 🔄 Обновить скрипт ВПН"
+    echo -e " 7) 🤖 Telegram-бот"
+    echo -e " 8) 🎨 Баннер при подключении"
+    echo -e " 9) 🔄 Обновить скрипт ВПН"
     echo -e " 0) 🚪 Выход"
     echo -e "${CYAN}────────────────────────────────────────────${NC}"
-    read -p "Выберите раздел [0-8]: " main_choice
+    read -p "Выберите раздел [0-9]: " main_choice
 
     case $main_choice in
         1) menu_users ;;
@@ -44,8 +47,9 @@ while true; do
         4) menu_masterdns ;;
         5) menu_sec ;;
         6) menu_torrent_block ;;
-        7) menu_banner ;;
-        8)
+        7) menu_tgbot ;;
+        8) menu_banner ;;
+        9)
            echo -e "\n${YELLOW}🔄 Запуск обновления...${NC}"
            bash <(curl -Ls https://raw.githubusercontent.com/zotac85/vpn-panel/main/install.sh)
            read -p "Нажмите Enter для продолжения..."
