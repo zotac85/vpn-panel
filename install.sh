@@ -35,9 +35,14 @@ fi
 mkdir -p "$PANEL_DIR/modules" /etc/UDPCustom/limits /etc/UDPCustom/traffic /etc/UDPCustom/traffic_limits
 touch /etc/UDPCustom/users.db
 
+# Инициализация файлов домена и прокси (только если пустые)
+[ ! -s /etc/vpn-domain ] && echo "de.cdnstore.shop" > /etc/vpn-domain
+[ ! -s /etc/UDPCustom/proxies.txt ] && echo "8.6.112.0" > /etc/UDPCustom/proxies.txt
+
 # Откат старого костыля vpn-limit-shell
 if [ -f "/etc/UDPCustom/users.db" ]; then
-    while read -r u; do
+    while read -r u;
+    do
         [ -z "$u" ] && continue
         if id "$u" &>/dev/null; then
             current_shell=$(getent passwd "$u" | cut -d: -f7)
