@@ -48,20 +48,47 @@ if [ -f "/etc/UDPCustom/users.db" ]; then
     done < "/etc/UDPCustom/users.db"
 fi
 
-# Скачивание модулей
+# ──────────────────────────────────────────────────────────────
+# Скачивание ВСЕХ модулей
+# ──────────────────────────────────────────────────────────────
 echo -e "\n📥 Скачивание актуальных файлов с GitHub..."
-curl -s -o "$PANEL_DIR/core.sh" "$REPO_URL/core.sh"
-curl -s -o "$PANEL_DIR/modules/users.sh" "$REPO_URL/modules/users.sh"
-curl -s -o "$PANEL_DIR/modules/masterdns.sh" "$REPO_URL/modules/masterdns.sh"
-curl -s -o "$PANEL_DIR/modules/udp.sh" "$REPO_URL/modules/udp.sh"
-curl -s -o "$PANEL_DIR/modules/ws.sh" "$REPO_URL/modules/ws.sh"
-curl -s -o "$PANEL_DIR/modules/security.sh" "$REPO_URL/modules/security.sh"
-curl -s -o "$PANEL_DIR/modules/traffic.sh" "$REPO_URL/modules/traffic.sh" 2>/dev/null
-curl -s -o "$PANEL_DIR/modules/devicelimit.sh" "$REPO_URL/modules/devicelimit.sh" 2>/dev/null
-curl -s -o "$PANEL_DIR/modules/banner.sh" "$REPO_URL/modules/banner.sh" 2>/dev/null
 
-curl -s -o /usr/local/bin/vpn "$REPO_URL/vpn"
+FILES_CORE=(
+    "core.sh:$PANEL_DIR/core.sh"
+    "vpn:/usr/local/bin/vpn"
+)
+
+FILES_MODULES=(
+    "users.sh"
+    "masterdns.sh"
+    "udp.sh"
+    "ws.sh"
+    "security.sh"
+    "traffic.sh"
+    "devicelimit.sh"
+    "banner.sh"
+    "maintenance.sh"
+)
+
+for item in "${FILES_CORE[@]}"; do
+    src="${item%%:*}"
+    dst="${item##*:}"
+    curl -sf -o "$dst" "$REPO_URL/$src"
+    if [ $? -ne 0 ]; then
+        echo -e "\033[0;31m⚠️  Не удалось скачать: $src\033[0m"
+    fi
+done
+
+for mod in "${FILES_MODULES[@]}"; do
+    curl -sf -o "$PANEL_DIR/modules/$mod" "$REPO_URL/modules/$mod"
+    if [ $? -ne 0 ]; then
+        echo -e "\033[0;33m⚠️  Модуль не найден: $mod\033[0m"
+    fi
+done
+
 chmod +x /usr/local/bin/vpn
+
+echo -e "\033[0;32m✅ Все модули скачаны.\033[0m"
 
 # ──────────────────────────────────────────────────────────────
 # СХЕМА A: pam_limits (maxlogins для прямого SSH)
@@ -88,11 +115,10 @@ if [ -s /etc/UDPCustom/users.db ]; then
 fi
 
 # ──────────────────────────────────────────────────────────────
-# СХЕМА B: pam_exec в ACCOUNT-фазе (лимит для WS-туннелей)
+# СХЕМА B: pam_exec в ACCOUNT-фазе
 # ──────────────────────────────────────────────────────────────
-echo -e "\n🔒 Настройка pam_exec (лимит устройств для WS-туннелей)..."
+echo -e "\n🔒 Настройка pam_exec..."
 
-# Удаляем старые строки (show-welcome больше не нужен)
 sed -i '/show-welcome/d' /etc/pam.d/sshd 2>/dev/null
 sed -i '/check-device-limit-pam/d' /etc/pam.d/sshd 2>/dev/null
 
@@ -142,47 +168,35 @@ PAM_EOF
 
 chmod +x /usr/local/bin/check-device-limit-pam
 
-echo -e "\n🔍 Проверка скрипта лимита..."
 if ! PAM_USER=root /usr/local/bin/check-device-limit-pam >/dev/null 2>&1; then
-    echo -e "\033[0;31m⚠️  Скрипт лимита падает — PAM НЕ трогаем!\033[0m"
+    echo -e "\033[0;31m⚠️  Скрипт лимита падает — PAM НЕ трогаем.\033[0m"
 else
-    echo -e "\033[0;32m✅ Скрипт лимита работает.\033[0m"
     if grep -q "pam_nologin.so" /etc/pam.d/sshd; then
         sed -i '/pam_nologin.so/a account    required     pam_exec.so stdout /usr/local/bin/check-device-limit-pam' /etc/pam.d/sshd
-        echo -e "\033[0;32m✅ pam_exec добавлен в account-фазу.\033[0m"
+        echo -e "\033[0;32m✅ pam_exec добавлен.\033[0m"
     fi
 fi
 
 # ──────────────────────────────────────────────────────────────
-# БАННЕР (HTML через Banner в sshd_config)
+# БАННЕР
 # ──────────────────────────────────────────────────────────────
-echo -e "\n🎨 Настройка баннера (HTML)..."
+echo -e "\n🎨 Настройка баннера..."
 
 BANNER_FILE="/etc/bannerssh"
 
-# Подключаем Banner к sshd_config
 if ! grep -qE '^[[:space:]]*Banner' /etc/ssh/sshd_config; then
     echo "Banner $BANNER_FILE" >> /etc/ssh/sshd_config
-    echo -e "\033[0;32m✅ Banner подключён к sshd_config.\033[0m"
+    echo -e "\033[0;32m✅ Banner подключён.\033[0m"
 else
     current=$(grep -E '^[[:space:]]*Banner' /etc/ssh/sshd_config | head -1 | awk '{print $2}')
-    if [ "$current" != "$BANNER_FILE" ]; then
-        sed -i "s|^[[:space:]]*Banner.*|Banner $BANNER_FILE|" /etc/ssh/sshd_config
-        echo -e "\033[0;32m✅ Banner перенаправлен на $BANNER_FILE.\033[0m"
-    else
-        echo -e "\033[0;32m✅ Banner уже подключён.\033[0m"
-    fi
+    [ "$current" != "$BANNER_FILE" ] && sed -i "s|^[[:space:]]*Banner.*|Banner $BANNER_FILE|" /etc/ssh/sshd_config
 fi
 
-# Dropbear — если установлен
 if [ -f /etc/default/dropbear ]; then
-    if ! grep -q "DROPBEAR_BANNER" /etc/default/dropbear 2>/dev/null; then
+    grep -q "DROPBEAR_BANNER" /etc/default/dropbear 2>/dev/null || \
         echo "DROPBEAR_BANNER=\"$BANNER_FILE\"" >> /etc/default/dropbear
-        echo -e "\033[0;32m✅ DROPBEAR_BANNER подключён.\033[0m"
-    fi
 fi
 
-# Создаём баннер (только если пустой)
 if [ ! -s "$BANNER_FILE" ]; then
     cat > "$BANNER_FILE" << 'EOF'
 <h5><font color='cyan'>🚀 ArsenVipKeys — Премиум Сервер 🚀</font></h5>
@@ -196,16 +210,17 @@ if [ ! -s "$BANNER_FILE" ]; then
 <h5><font color='green'>💬 Поддержка: t.me/ArsenGuro</font></h5>
 <h5><font color='cyan'>📢 Канал: t.me/ArsenVipKeys</font></h5>
 EOF
-    echo -e "\033[0;32m✅ Баннер по умолчанию создан (рус).\033[0m"
+    echo -e "\033[0;32m✅ Баннер создан.\033[0m"
 else
-    echo -e "\033[0;32m✅ Баннер уже настроен (не перезаписываем).\033[0m"
+    echo -e "\033[0;32m✅ Баннер уже настроен.\033[0m"
 fi
 
 # ──────────────────────────────────────────────────────────────
-# СХЕМА C: Страховочный cron (устройства + трафик)
+# СХЕМА C: cron-страховка + трафик
 # ──────────────────────────────────────────────────────────────
-echo -e "\n🛡️ Автовключение контроля лимитов..."
+echo -e "\n🛡️ Настройка cron-задач..."
 
+# Лимит устройств — cron
 cat << 'CHK_EOF' > /usr/local/bin/vpn-limit-check.sh
 #!/bin/bash
 DB_USERS="/etc/UDPCustom/users.db"
@@ -217,14 +232,11 @@ get_ws_port() {
         awk -F'=' '/listen_port/ {print $2}' /usr/local/bin/ws-proxy.py | tr -dc '0-9'
     fi
 }
-
 ws_p=$(get_ws_port)
 filter="( sport = :22 or sport = :36712 or sport = :7300"
 [[ "$ws_p" =~ ^[0-9]+$ ]] && filter="$filter or sport = :$ws_p"
 filter="$filter )"
-
 data=$(ss -H -tnp state established "$filter" 2>/dev/null)
-
 declare -A CONN_USER CONN_PIDS CONN_TIME
 idx=0
 while IFS= read -r line; do
@@ -248,13 +260,11 @@ while IFS= read -r line; do
     CONN_USER[$idx]="$u"; CONN_PIDS[$idx]="$pids"; CONN_TIME[$idx]="$reftime"
     ((idx++))
 done <<< "$data"
-
 declare -A USER_INDICES
 for ((i=0; i<idx; i++)); do
     u="${CONN_USER[$i]}"
     USER_INDICES[$u]="${USER_INDICES[$u]} $i"
 done
-
 for u in "${!USER_INDICES[@]}"; do
     limit=3
     [ -f "$LIMITS_DIR/$u" ] && limit=$(cat "$LIMITS_DIR/$u")
@@ -267,7 +277,7 @@ for u in "${!USER_INDICES[@]}"; do
     for ((k=count-to_kill; k<count; k++)); do
         conn_i=${sorted_idxs[$k]}
         for p in ${CONN_PIDS[$conn_i]}; do kill -9 "$p" 2>/dev/null; done
-        echo "$(date '+%Y-%m-%d %H:%M:%S') Отключён лишний сеанс: user=$u count=$count limit=$limit" >> "$LOG_FILE"
+        echo "$(date '+%Y-%m-%d %H:%M:%S') Отключён: user=$u count=$count limit=$limit" >> "$LOG_FILE"
     done
 done
 CHK_EOF
@@ -275,6 +285,7 @@ chmod +x /usr/local/bin/vpn-limit-check.sh
 echo "* * * * * root /usr/local/bin/vpn-limit-check.sh" > /etc/cron.d/vpn-device-limit
 chmod 644 /etc/cron.d/vpn-device-limit
 
+# Трафик — iptables + cron
 iptables -N VPN_TRAFFIC 2>/dev/null
 iptables -C OUTPUT -j VPN_TRAFFIC 2>/dev/null || iptables -I OUTPUT -j VPN_TRAFFIC
 
@@ -295,10 +306,8 @@ TRAFFIC_DIR="/etc/UDPCustom/traffic"
 TRAFFIC_LIMITS_DIR="/etc/UDPCustom/traffic_limits"
 TRAFFIC_CHAIN="VPN_TRAFFIC"
 DB_USERS="/etc/UDPCustom/users.db"
-
 mkdir -p "$TRAFFIC_DIR"
 iptables -L "$TRAFFIC_CHAIN" -n &>/dev/null || exit 0
-
 while read -r u; do
     [ -z "$u" ] && continue
     uid=$(id -u "$u" 2>/dev/null) || continue
@@ -324,24 +333,61 @@ chmod +x /usr/local/bin/vpn-traffic-check.sh
 echo "*/5 * * * * root /usr/local/bin/vpn-traffic-check.sh" > /etc/cron.d/vpn-traffic-check
 chmod 644 /etc/cron.d/vpn-traffic-check
 
+# ── АВТООЧИСТКА ИСТЁКШИХ ──
+cat << 'CLEANUP_EOF' > /usr/local/bin/vpn-auto-cleanup.sh
+#!/bin/bash
+DB_USERS="/etc/UDPCustom/users.db"
+LIMITS_DIR="/etc/UDPCustom/limits"
+TRAFFIC_LIMITS_DIR="/etc/UDPCustom/traffic_limits"
+TRAFFIC_DIR="/etc/UDPCustom/traffic"
+LOG_FILE="/var/log/vpn-auto-cleanup.log"
+[ ! -s "$DB_USERS" ] && exit 0
+TODAY=$(date +%s)
+TMP_DB=$(mktemp)
+: > "$TMP_DB"
+while read -r u; do
+    [ -z "$u" ] && continue
+    id "$u" &>/dev/null || continue
+    exp_raw=$(chage -l "$u" 2>/dev/null | grep "Account expires" | cut -d: -f2 | sed 's/^ *//')
+    if [ "$exp_raw" == "never" ] || [ -z "$exp_raw" ]; then
+        echo "$u" >> "$TMP_DB"
+        continue
+    fi
+    exp_epoch=$(date -d "$exp_raw" +%s 2>/dev/null)
+    [ -z "$exp_epoch" ] && { echo "$u" >> "$TMP_DB"; continue; }
+    if [ "$exp_epoch" -ge "$TODAY" ]; then
+        echo "$u" >> "$TMP_DB"
+        continue
+    fi
+    uid=$(id -u "$u" 2>/dev/null)
+    [ -n "$uid" ] && while iptables -D VPN_TRAFFIC -m owner --uid-owner "$uid" -j RETURN 2>/dev/null; do :; done
+    userdel -f "$u" 2>/dev/null
+    rm -f "$LIMITS_DIR/$u" "$TRAFFIC_LIMITS_DIR/$u" "$TRAFFIC_DIR/$u" 2>/dev/null
+    sed -i "/^${u}[[:space:]]\+hard[[:space:]]\+maxlogins/d" /etc/security/limits.conf 2>/dev/null
+    sed -i "/^${u}[[:space:]]\+soft[[:space:]]\+maxlogins/d" /etc/security/limits.conf 2>/dev/null
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Удалён истёкший: $u (истёк $exp_raw)" >> "$LOG_FILE"
+done < "$DB_USERS"
+sort -u "$TMP_DB" | grep -v '^$' > "$DB_USERS" 2>/dev/null
+rm -f "$TMP_DB"
+CLEANUP_EOF
+chmod +x /usr/local/bin/vpn-auto-cleanup.sh
+echo "0 4 * * * root /usr/local/bin/vpn-auto-cleanup.sh" > /etc/cron.d/vpn-auto-cleanup
+chmod 644 /etc/cron.d/vpn-auto-cleanup
+
 systemctl restart cron 2>/dev/null || systemctl restart crond 2>/dev/null
 
 # ──────────────────────────────────────────────────────────────
 # ФИНАЛЬНАЯ ПРОВЕРКА PAM
 # ──────────────────────────────────────────────────────────────
-echo -e "\n🔍 Финальная проверка конфигурации..."
+echo -e "\n🔍 Финальная проверка..."
 PAM_OK=1
+grep -q "@include common-auth" /etc/pam.d/sshd || { echo -e "\033[0;31m⚠️  common-auth нет!\033[0m"; PAM_OK=0; }
+grep -q "@include common-account" /etc/pam.d/sshd || { echo -e "\033[0;31m⚠️  common-account нет!\033[0m"; PAM_OK=0; }
 
-grep -q "@include common-auth" /etc/pam.d/sshd || { echo -e "\033[0;31m⚠️  @include common-auth отсутствует!\033[0m"; PAM_OK=0; }
-grep -q "@include common-account" /etc/pam.d/sshd || { echo -e "\033[0;31m⚠️  @include common-account отсутствует!\033[0m"; PAM_OK=0; }
-
-# Дубликаты pam_exec
 for pat in "check-device-limit-pam" "show-welcome"; do
     cnt=$(grep -c "$pat" /etc/pam.d/sshd 2>/dev/null || echo 0)
     if [ "$cnt" -gt 1 ]; then
-        echo -e "\033[0;33m⚠️  Дубликаты $pat — оставляем одну.\033[0m"
-        first=1
-        : > /tmp/sshd.clean
+        first=1; : > /tmp/sshd.clean
         while IFS= read -r line; do
             if echo "$line" | grep -q "$pat"; then
                 [ "$first" -eq 1 ] && { first=0; echo "$line" >> /tmp/sshd.clean; }
@@ -354,82 +400,14 @@ for pat in "check-device-limit-pam" "show-welcome"; do
 done
 
 if [ "$PAM_OK" -eq 1 ]; then
-    echo -e "\033[0;32m✅ PAM-конфигурация в порядке.\033[0m"
-    echo -e "\n🔄 Перезапуск sshd..."
+    echo -e "\033[0;32m✅ PAM в порядке. Перезапускаем sshd...\033[0m"
     sleep 2
     systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
     [ -f /etc/default/dropbear ] && systemctl restart dropbear 2>/dev/null
 else
     echo -e "\033[0;31m⚠️  PAM повреждён! Откат...\033[0m"
     sed -i '/check-device-limit-pam/d' /etc/pam.d/sshd
-    echo -e "\033[0;33mСтроки удалены. sshd НЕ перезапущен.\033[0m"
 fi
 
-echo -e "\033[0;32m✅ Контроль лимитов и баннер включены.\033[0m"
-
 echo -e "\n\033[0;32m🟢 Операция успешно завершена, Хозяин!\033[0m"
-echo -e "Теперь для запуска панели введите: \033[1;33mvpn\033[0m"
-
-# ──────────────────────────────────────────────────────────────
-# АВТООЧИСТКА ИСТЁКШИХ АККАУНТОВ (ежедневно в 4:00)
-# ──────────────────────────────────────────────────────────────
-echo -e "\n🧹 Настройка автоочистки истёкших аккаунтов..."
-
-cat << 'CLEANUP_EOF' > /usr/local/bin/vpn-auto-cleanup.sh
-#!/bin/bash
-DB_USERS="/etc/UDPCustom/users.db"
-LIMITS_DIR="/etc/UDPCustom/limits"
-TRAFFIC_LIMITS_DIR="/etc/UDPCustom/traffic_limits"
-TRAFFIC_DIR="/etc/UDPCustom/traffic"
-LOG_FILE="/var/log/vpn-auto-cleanup.log"
-
-[ ! -s "$DB_USERS" ] && exit 0
-
-TODAY=$(date +%s)
-TMP_DB=$(mktemp)
-: > "$TMP_DB"
-
-while read -r u; do
-    [ -z "$u" ] && continue
-    if ! id "$u" &>/dev/null; then
-        continue
-    fi
-
-    exp_raw=$(chage -l "$u" 2>/dev/null | grep "Account expires" | cut -d: -f2 | sed 's/^ *//')
-    if [ "$exp_raw" == "never" ] || [ -z "$exp_raw" ]; then
-        echo "$u" >> "$TMP_DB"
-        continue
-    fi
-
-    exp_epoch=$(date -d "$exp_raw" +%s 2>/dev/null)
-    [ -z "$exp_epoch" ] && { echo "$u" >> "$TMP_DB"; continue; }
-
-    if [ "$exp_epoch" -ge "$TODAY" ]; then
-        echo "$u" >> "$TMP_DB"
-        continue
-    fi
-
-    # Истёк — удаляем
-    uid=$(id -u "$u" 2>/dev/null)
-    if [ -n "$uid" ]; then
-        while iptables -D VPN_TRAFFIC -m owner --uid-owner "$uid" -j RETURN 2>/dev/null; do :; done
-    fi
-
-    userdel -f "$u" 2>/dev/null
-    rm -f "$LIMITS_DIR/$u" "$TRAFFIC_LIMITS_DIR/$u" "$TRAFFIC_DIR/$u" 2>/dev/null
-    sed -i "/^${u}[[:space:]]\+hard[[:space:]]\+maxlogins/d" /etc/security/limits.conf 2>/dev/null
-    sed -i "/^${u}[[:space:]]\+soft[[:space:]]\+maxlogins/d" /etc/security/limits.conf 2>/dev/null
-
-    echo "$(date '+%Y-%m-%d %H:%M:%S') Удалён истёкший: $u (истёк $exp_raw)" >> "$LOG_FILE"
-done < "$DB_USERS"
-
-# Перезаписываем базу без удалённых
-sort -u "$TMP_DB" | grep -v '^$' > "$DB_USERS" 2>/dev/null
-rm -f "$TMP_DB"
-CLEANUP_EOF
-
-chmod +x /usr/local/bin/vpn-auto-cleanup.sh
-echo "0 4 * * * root /usr/local/bin/vpn-auto-cleanup.sh" > /etc/cron.d/vpn-auto-cleanup
-chmod 644 /etc/cron.d/vpn-auto-cleanup
-
-echo -e "\033[0;32m✅ Автоочистка истёкших аккаунтов включена (ежедневно в 4:00).\033[0m"
+echo -e "Запуск панели: \033[1;33mvpn\033[0m"
