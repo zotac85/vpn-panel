@@ -88,44 +88,115 @@ change_dns() {
     echo -e "${YELLOW}--- 🌐 Изменение DNS-серверов ---${NC}"
     echo ""
     echo -e "${CYAN}Текущие DNS:${NC}"
-    cat /etc/resolv.conf 2>/dev/null | grep nameserver | head -5
+    grep nameserver /etc/resolv.conf 2>/dev/null | head -5
     echo ""
-    echo -e " 1) 🟠 Cloudflare  (1.1.1.1, 1.0.0.1) — быстрый"
-    echo "  2) 🔵 Google      (8.8.8.8, 8.8.4.4)"
-    echo "  3) 🟣 Quad9       (9.9.9.9, 149.112.112.112) — блокирует malware"
-    echo "  4) 🔴 AdGuard     (94.140.14.14, 94.140.15.15) — режет рекламу"
-    echo "  5) ✏️  Ввести вручную"
-    echo "  0) Отмена"
+    echo -e "${CYAN}─── 🚀 Быстрые (без блокировки) ───${NC}"
+    echo -e "  1) 🟠 Cloudflare  (1.1.1.1, 1.0.0.1)"
+    echo -e "  2) 🔵 Google      (8.8.8.8, 8.8.4.4)"
     echo ""
-    read -p "Выбор [0-5]: " dns
+    echo -e "${CYAN}─── 🛡️  Защита от вирусов/фишинга ───${NC}"
+    echo -e "  3) 🟣 Quad9       (9.9.9.9, 149.112.112.112)"
+    echo -e "  4) 🟣 Quad9+ECS   (9.9.9.10, 149.112.112.10)"
+    echo ""
+    echo -e "${CYAN}─── 🚫 Блокировка рекламы (AdGuard) ───${NC}"
+    echo -e "  5) 🟡 AdGuard     (94.140.14.14, 94.140.15.15)"
+    echo -e "  6) 🟡 AdGuard Сем (94.140.14.15, 94.140.15.16)"
+    echo -e "  7) 🟡 AdGuard Без (94.140.14.140, 94.140.14.141)"
+    echo ""
+    echo -e "${CYAN}─── 🎯 Control D (гибкая настройка) ───${NC}"
+    echo -e "  8) 🔵 Control D Реклама  (76.76.2.0, 76.76.10.0)"
+    echo -e "  9) 🔵 Control D Максимум (76.76.2.1, 76.76.10.1)"
+    echo -e " 10) 🔵 Control D Семейный (76.76.2.2, 76.76.10.2)"
+    echo ""
+    echo -e "${CYAN}─── ✏️  Вручную ───${NC}"
+    echo -e " 11) 🌐 NextDNS (ввести свой IP из кабинета)"
+    echo -e " 12) ✏️  Ввести свои DNS вручную"
+    echo ""
+    echo -e "  0) Отмена"
+    echo ""
+    read -p "Выбор [0-12]: " dns
 
-    local dns1="" dns2=""
+    local dns1="" dns2="" dns_name=""
+
     case $dns in
-        1) dns1="1.1.1.1"; dns2="1.0.0.1" ;;
-        2) dns1="8.8.8.8"; dns2="8.8.4.4" ;;
-        3) dns1="9.9.9.9"; dns2="149.112.112.112" ;;
-        4) dns1="94.140.14.14"; dns2="94.140.15.15" ;;
-        5) read -p "DNS #1: " dns1; read -p "DNS #2: " dns2 ;;
-        0) return ;;
+        1)  dns1="1.1.1.1";       dns2="1.0.0.1";       dns_name="Cloudflare" ;;
+        2)  dns1="8.8.8.8";       dns2="8.8.4.4";       dns_name="Google" ;;
+        3)  dns1="9.9.9.9";       dns2="149.112.112.112"; dns_name="Quad9" ;;
+        4)  dns1="9.9.9.10";      dns2="149.112.112.10"; dns_name="Quad9+ECS" ;;
+        5)  dns1="94.140.14.14";  dns2="94.140.15.15";  dns_name="AdGuard" ;;
+        6)  dns1="94.140.14.15";  dns2="94.140.15.16";  dns_name="AdGuard Family" ;;
+        7)  dns1="94.140.14.140"; dns2="94.140.14.141"; dns_name="AdGuard Unfiltered" ;;
+        8)  dns1="76.76.2.0";     dns2="76.76.10.0";    dns_name="Control D Ads" ;;
+        9)  dns1="76.76.2.1";     dns2="76.76.10.1";    dns_name="Control D Malware" ;;
+        10) dns1="76.76.2.2";     dns2="76.76.10.2";    dns_name="Control D Family" ;;
+        11)
+            echo ""
+            echo -e "${CYAN}Зайди на https://nextdns.io, создай профиль → получи свой IP${NC}"
+            echo -e "${CYAN}(обычно это 2 адреса: например 45.90.28.x и 45.90.30.x)${NC}"
+            echo ""
+            read -p "NextDNS IPv4 #1: " dns1
+            read -p "NextDNS IPv4 #2 (Enter — пропустить): " dns2
+            dns_name="NextDNS"
+            ;;
+        12)
+            echo ""
+            read -p "DNS #1: " dns1
+            read -p "DNS #2 (Enter — пропустить): " dns2
+            dns_name="Custom"
+            ;;
+        0|"") return ;;
         *) return ;;
     esac
 
-    if [ -n "$dns1" ]; then
-        # Отключаем systemd-resolved, если есть (чтобы не перетирал)
-        systemctl stop systemd-resolved 2>/dev/null
-        systemctl disable systemd-resolved 2>/dev/null
-
-        rm -f /etc/resolv.conf
-        cat > /etc/resolv.conf << EOF
-nameserver $dns1
-nameserver $dns2
-EOF
-        chattr +i /etc/resolv.conf 2>/dev/null
-        echo -e "${GREEN}✅ DNS обновлены: $dns1, $dns2${NC}"
+    if [ -z "$dns1" ]; then
+        echo -e "${RED}DNS #1 не задан — отмена.${NC}"
+        read -p "Enter..."
+        return
     fi
+
+    echo ""
+    echo -e "${CYAN}Применяем: ${GREEN}$dns_name${NC} ($dns1${dns2:+, $dns2})"
+    echo ""
+
+    # Отключаем systemd-resolved (чтобы не перетирал)
+    systemctl stop systemd-resolved 2>/dev/null
+    systemctl disable systemd-resolved 2>/dev/null
+
+    # Снимаем защиту от записи (если была)
+    chattr -i /etc/resolv.conf 2>/dev/null
+
+    # Записываем новый resolv.conf
+    rm -f /etc/resolv.conf
+    cat > /etc/resolv.conf << EOF
+# DNS managed by VPN Panel — $dns_name
+nameserver $dns1
+EOF
+    [ -n "$dns2" ] && echo "nameserver $dns2" >> /etc/resolv.conf
+
+    # Защищаем от случайного перезаписывания
+    chattr +i /etc/resolv.conf 2>/dev/null
+
+    # Обновляем systemd-resolved, если он есть (но закомментирован)
+    if [ -f /etc/systemd/resolved.conf ]; then
+        sed -i "s|^#\?DNS=.*|DNS=$dns1${dns2:+ $dns2}|" /etc/systemd/resolved.conf 2>/dev/null
+    fi
+
+    echo -e "${GREEN}✅ DNS обновлены!${NC}"
+    echo ""
+    echo -e "${CYAN}Проверка:${NC}"
+    cat /etc/resolv.conf
+    echo ""
+    echo -e "${CYAN}Тест резолвинга:${NC}"
+    if command -v nslookup &>/dev/null; then
+        nslookup google.com 2>/dev/null | head -6
+    elif command -v dig &>/dev/null; then
+        dig +short google.com 2>/dev/null | head -3
+    else
+        ping -c 1 -W 2 google.com 2>&1 | head -2
+    fi
+    echo ""
     read -p "Нажмите Enter..."
 }
-
 cleanup_system() {
     header
     echo -e "${YELLOW}--- 🧹 Очистка системы ---${NC}"
