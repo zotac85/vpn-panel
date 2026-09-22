@@ -149,7 +149,7 @@ get_user_connections() {
 }
 
 header() {
-    clear
+    printf '\033[2J\033[3J\033[H'
     local CPU=$(cat /proc/loadavg | awk '{print $1}')
     local RAM=$(free -m | awk 'NR==2{printf "%s/%sMB (%s%%)", $3,$2,int($3*100/$2)}')
     local DISK=$(df -h / | awk '$NF=="/"{printf "%s/%s (%s)", $3,$2,$5}')
