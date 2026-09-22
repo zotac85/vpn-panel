@@ -95,7 +95,6 @@ FILES_MODULES=(
     "tgbot.sh"
 )
 
-# Скачивание Python-скрипта Telegram-бота (только если его нет)
 # Скачивание Python-скрипта Telegram-бота
 # Обновляем если: файла нет ИЛИ версия старая (без get_welcome_text)
 if [ ! -s /usr/local/bin/vpn-tg-bot.py ] || ! grep -q "get_welcome_text" /usr/local/bin/vpn-tg-bot.py 2>/dev/null; then
