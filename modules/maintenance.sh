@@ -262,24 +262,49 @@ menu_maintenance() {
         local backup_count=0
         [ -d "$BACKUP_DIR" ] && backup_count=$(ls -1 "$BACKUP_DIR"/*.tar.gz 2>/dev/null | wc -l)
         echo -e " Бэкапов              : ${CYAN}$backup_count${NC}"
+
+        # Мониторинг трафика
+        if declare -f traffic_chain_exists &>/dev/null && traffic_chain_exists; then
+            echo -e " Мониторинг трафика   : ${GREEN}🟢 Включен${NC}"
+        else
+            echo -e " Мониторинг трафика   : ${RED}🔴 Выключен${NC}"
+        fi
+
         echo ""
+        echo -e "${CYAN}── Пользователи ──${NC}"
         echo -e " 1) 📋 Список истёкших аккаунтов"
         echo -e " 2) 🗑️  Удалить всех истёкших"
+        echo ""
+        echo -e "${CYAN}── Бэкап ──${NC}"
         echo -e " 3) 💾 Создать бэкап базы"
         echo -e " 4) 📂 Восстановить из бэкапа"
-        echo -e " 5) 📜 Журнал автоочистки"
+        echo ""
+        echo -e "${CYAN}── Трафик ──${NC}"
+        echo -e " 5) 📊 Таблица использования трафика"
+        echo -e " 6) ⚙️  Установить лимит трафика пользователю"
+        echo -e " 7) 🔄 Сбросить счётчик пользователя"
+        echo -e " 8) ⚡ Включить / обновить мониторинг"
+        echo ""
+        echo -e "${CYAN}── Журналы ──${NC}"
+        echo -e " 9) 📜 Журнал автоочистки"
+        echo ""
         echo -e " 0) ↩️  Назад"
         echo ""
-        read -p "Выберите действие [0-5]: " mchoice
+        read -p "Выберите действие [0-9]: " mchoice
 
         case $mchoice in
             1) show_expired_users ;;
             2) delete_expired_users ;;
             3) create_backup ;;
             4) restore_backup ;;
-            5) show_cleanup_log ;;
+            5) declare -f show_traffic_table &>/dev/null && show_traffic_table ;;
+            6) declare -f set_traffic_limit &>/dev/null && set_traffic_limit ;;
+            7) declare -f reset_traffic_usage &>/dev/null && reset_traffic_usage ;;
+            8) declare -f install_traffic_monitor &>/dev/null && install_traffic_monitor ;;
+            9) show_cleanup_log ;;
             0) break ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
         esac
     done
 }
+    
