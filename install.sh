@@ -403,7 +403,7 @@ grep -q "@include common-auth" /etc/pam.d/sshd || { echo -e "\033[0;31m⚠️  c
 grep -q "@include common-account" /etc/pam.d/sshd || { echo -e "\033[0;31m⚠️  common-account нет!\033[0m"; PAM_OK=0; }
 
 for pat in "check-device-limit-pam" "show-welcome"; do
-    cnt=$(grep -c "$pat" /etc/pam.d/sshd 2>/dev/null || echo 0)
+    cnt=$(grep -c "$pat" /etc/pam.d/sshd 2>/dev/null); [ -z "$cnt" ] && cnt=0
     if [ "$cnt" -gt 1 ]; then
         first=1; : > /tmp/sshd.clean
         while IFS= read -r line; do
