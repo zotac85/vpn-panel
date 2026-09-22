@@ -24,30 +24,6 @@ get_service_status() {
     fi
 }
 
-get_ufw_status() {
-    if ufw status 2>/dev/null | grep -q "Status: active"; then
-        echo -e "$DOT_ON"
-    else
-        echo -e "$DOT_OFF"
-    fi
-}
-
-get_bbr_status() {
-    if sysctl net.ipv4.tcp_congestion_control 2>/dev/null | grep -q "bbr"; then
-        echo -e "${GREEN}🟢 Включен (BBR)${NC}"
-    else
-        echo -e "${RED}🔴 Выключен (Cubic)${NC}"
-    fi
-}
-
-get_ipv6_status() {
-    if grep -q "net.ipv6.conf.all.disable_ipv6 = 1" /etc/sysctl.conf 2>/dev/null; then
-        echo -e "${GREEN}🟢 Отключен${NC}"
-    else
-        echo -e "${RED}🔴 Включен${NC}"
-    fi
-}
-
 get_udp_opt_status() {
     if grep -q "net.core.rmem_max" /etc/sysctl.conf 2>/dev/null; then
         echo -e "${GREEN}🟢 Оптимизировано${NC}"
