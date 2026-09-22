@@ -169,7 +169,7 @@ echo "$username hard maxlogins $devices" >> /etc/security/limits.conf
 mkdir -p /etc/UDPCustom/traffic_limits /etc/UDPCustom/traffic
 bytes=$((traffic_gb * 1073741824)); echo "$bytes" > "/etc/UDPCustom/traffic_limits/$username"; echo "0" > "/etc/UDPCustom/traffic/$username"
 uid=$(id -u "$username"); iptables -C VPN_TRAFFIC -m owner --uid-owner "$uid" -j RETURN 2>/dev/null || iptables -A VPN_TRAFFIC -m owner --uid-owner "$uid" -j RETURN
-exp_epoch=$(( $(date +%s) + hours * 3600 )); chage -E "$exp_epoch" "$username"
+exp_date=$(date -d "+$hours hours" +%Y-%m-%d); chage -E "$exp_date" "$username"
 echo "OK"
 '''
     try:
