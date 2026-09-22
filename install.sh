@@ -68,6 +68,7 @@ FILES_MODULES=(
     "devicelimit.sh"
     "banner.sh"
     "maintenance.sh"
+    "torrent_block.sh"
 )
 
 for item in "${FILES_CORE[@]}"; do
