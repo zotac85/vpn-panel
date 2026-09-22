@@ -81,8 +81,11 @@ FILES_MODULES=(
 )
 
 # Скачивание Python-скрипта Telegram-бота
-curl -sf -o /usr/local/bin/vpn-tg-bot.py "$REPO_URL/bot/vpn-tg-bot.py"
-chmod +x /usr/local/bin/vpn-tg-bot.py
+# Скачивание Python-скрипта Telegram-бота (только если его нет)
+if [ ! -s /usr/local/bin/vpn-tg-bot.py ]; then
+    curl -sf -o /usr/local/bin/vpn-tg-bot.py "$REPO_URL/bot/vpn-tg-bot.py"
+    chmod +x /usr/local/bin/vpn-tg-bot.py
+fi
 
 for item in "${FILES_CORE[@]}"; do
     src="${item%%:*}"
