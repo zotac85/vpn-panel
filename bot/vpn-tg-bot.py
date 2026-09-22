@@ -240,26 +240,39 @@ def generate_darktunnel_url(username, password, domain, ws_port, proxy, cfg):
 
 def handle_start(cfg, chat_id, user_id, first_name):
     token = cfg['BOT_TOKEN']
-    keyboard = {'inline_keyboard': [
-        [{'text': '🎁 Получить тест', 'callback_data': 'get_test'}],
-        [{'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}],
-        [{'text': '📢 Наш канал', 'url': 'https://t.me/ArsenVipKeys'}]
-    ]}
-    text = cfg.get('WELCOME_TEXT','Добро пожаловать!')
-    if first_name: text = f"👋 Привет, {first_name}!\n\n{text}"
-    send_message(token, chat_id, text, reply_markup=keyboard)
+    ch1 = cfg.get('CHANNEL_ID', '').lstrip('@')
+    ch2 = cfg.get('CHANNEL_ID_2', '').lstrip('@')
+    name = first_name or 'друг'
+    text = cfg.get('WELCOME_TEXT', 'Добро пожаловать!')
+    text = text.replace('{name}', name)
+    keyboard = {'inline_keyboard': []}
+    if ch1:
+        keyboard['inline_keyboard'].append([{'text': f'📢 {ch1}', 'url': f'https://t.me/{ch1}'}])
+    if ch2:
+        keyboard['inline_keyboard'].append([{'text': f'📢 {ch2}', 'url': f'https://t.me/{ch2}'}])
+    keyboard['inline_keyboard'].append([{'text': '✅ Я подписался → Получить тест', 'callback_data': 'get_test'}])
+    keyboard['inline_keyboard'].append([{'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}])
+    send_message(token, chat_id, text, reply_markup=keyboard, parse_mode='HTML')
 
 def handle_test(cfg, chat_id, user_id, first_name):
     token = cfg['BOT_TOKEN']
     if is_blacklisted(user_id):
         send_message(token, chat_id, "🚫 Ты в чёрном списке. @ArsenGuro"); return
     if cfg.get('REQUIRE_SUBSCRIPTION','0') == '1':
-        if not check_subscription(token, user_id, cfg.get('CHANNEL_ID','')):
-            keyboard = {'inline_keyboard': [
-                [{'text': '📢 Подписаться', 'url': f"https://t.me/{cfg['CHANNEL_ID'].lstrip('@')}"}],
-                [{'text': '✅ Я подписался', 'callback_data': 'get_test'}]
-            ]}
-            send_message(token, chat_id, "📢 Подпишись на канал, потом нажми кнопку ниже.", reply_markup=keyboard); return
+        ch1 = cfg.get('CHANNEL_ID', '')
+        ch2 = cfg.get('CHANNEL_ID_2', '')
+        not_sub = []
+        if ch1 and not check_subscription(token, user_id, ch1):
+            not_sub.append(ch1.lstrip('@'))
+        if ch2 and not check_subscription(token, user_id, ch2):
+            not_sub.append(ch2.lstrip('@'))
+        if not_sub:
+            keyboard = {'inline_keyboard': []}
+            for ch in not_sub:
+                keyboard['inline_keyboard'].append([{'text': f'📢 Подписаться {ch}', 'url': f'https://t.me/{ch}'}])
+            keyboard['inline_keyboard'].append([{'text': '✅ Я подписался', 'callback_data': 'get_test'}])
+            send_message(token, chat_id, "⚠️ Сначала подпишись на каналы ниже, потом нажми кнопку:", reply_markup=keyboard)
+            return
     admin_id = cfg.get('ADMIN_ID', '')
     if str(user_id) != str(admin_id):
         cooldown_hours = int(cfg.get('COOLDOWN_HOURS','24'))
