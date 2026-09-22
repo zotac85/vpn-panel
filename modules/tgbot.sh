@@ -227,6 +227,27 @@ tg_test_bot() {
     read -p "Нажмите Enter..."
 }
 
+tg_edit_welcome_file() {
+    header
+    echo -e "${YELLOW}--- ✏️  Редактирование приветствия ---${NC}"
+    echo -e "${CYAN}Файл: /etc/UDPCustom/welcome.txt${NC}"
+    echo -e "${CYAN}Поддерживает обычные переносы строк.${NC}"
+    echo ""
+    sleep 1
+    if command -v nano >/dev/null 2>&1; then
+        nano /etc/UDPCustom/welcome.txt
+    elif command -v vi >/dev/null 2>&1; then
+        vi /etc/UDPCustom/welcome.txt
+    else
+        echo -e "${YELLOW}nano не найден. Устанавливаем...${NC}"
+        apt-get update -qq && apt-get install -y nano
+        nano /etc/UDPCustom/welcome.txt
+    fi
+    systemctl restart vpn-tg-bot 2>/dev/null
+    echo -e "${GREEN}✅ Сохранено, бот перезапущен${NC}"
+    read -p "Enter..."
+}
+
 menu_tgbot() {
     while true; do
         header
@@ -272,7 +293,7 @@ menu_tgbot() {
         echo -e " 3) 👤 Изменить ADMIN_ID"
         echo -e " 4) 📢 Изменить CHANNEL_ID"
         echo -e " 5) 🔄 Вкл/выкл проверку подписки"
-        echo -e " 6) ✏️  Изменить текст приветствия"
+        echo -e " 6) ✏️  Изменить текст приветствия (nano-редактор)"
         echo -e " 7) ✏️  Изменить шаблон выдачи"
         echo -e " 8) ⏰ Изменить кулдаун / срок / лимиты"
         echo ""
@@ -307,7 +328,7 @@ menu_tgbot() {
                 fi
                 sleep 1
                 ;;
-            6) tg_edit_field "WELCOME_TEXT" "Текст приветствия" ;;
+            6) tg_edit_welcome_file ;;
             7) tg_edit_field "SUCCESS_TEMPLATE" "Шаблон выдачи" ;;
             8)
                 tg_edit_field "COOLDOWN_HOURS" "Кулдаун между тестами (часы)"

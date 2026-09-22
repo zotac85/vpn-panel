@@ -124,6 +124,18 @@ def get_random_proxy():
     except: pass
     return None
 
+def get_welcome_text():
+    """Текст приветствия из /etc/UDPCustom/welcome.txt (fallback: bot.conf)"""
+    p = '/etc/UDPCustom/welcome.txt'
+    if os.path.exists(p):
+        try:
+            with open(p) as f:
+                t = f.read().strip()
+                if t: return t
+        except: pass
+    return None
+
+
 def get_payload():
     """Payload из файла /etc/UDPCustom/payload.txt"""
     p = '/etc/UDPCustom/payload.txt'
@@ -243,7 +255,7 @@ def handle_start(cfg, chat_id, user_id, first_name):
     ch1 = cfg.get('CHANNEL_ID', '').lstrip('@')
     ch2 = cfg.get('CHANNEL_ID_2', '').lstrip('@')
     name = first_name or 'друг'
-    text = cfg.get('WELCOME_TEXT', 'Добро пожаловать!')
+    text = get_welcome_text() or cfg.get('WELCOME_TEXT', 'Добро пожаловать!')
     text = text.replace('{name}', name)
     keyboard = {'inline_keyboard': []}
     if ch1:

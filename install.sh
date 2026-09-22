@@ -39,6 +39,22 @@ touch /etc/UDPCustom/users.db
 [ ! -s /etc/vpn-domain ] && echo "de.cdnstore.shop" > /etc/vpn-domain
 [ ! -s /etc/UDPCustom/proxies.txt ] && echo "8.6.112.0" > /etc/UDPCustom/proxies.txt
 [ ! -s /etc/UDPCustom/payload.txt ] && echo 'CONNECT http://co.nr HTTP/1.1[crlf]Host: www.icloud.com[crlf]User-Agent: microsoft.com[crlf][crlf]AN / HTTP/1.1[lf]Host: [host][lf]Connection: Upgrade[lf]Upgrade: websocket[crlf][crlf]' > /etc/UDPCustom/payload.txt
+[ ! -s /etc/UDPCustom/welcome.txt ] && cat > /etc/UDPCustom/welcome.txt << 'WELCOME_EOF'
+🎁 ПОЛУЧИ БЕСПЛАТНЫЙ VPN 🎁
+
+⏰ 8 часов доступа
+📊 50 ГБ трафика
+📱 1 устройство
+🚀 Без ограничений скорости
+📲 Готовый конфиг для DarkTunnel
+
+━━━━━━━━━━━━━━━━━━
+
+🔓 Для получения теста подпишись на каналы спонсора и нажми кнопку ниже 👇
+
+━━━━━━━━━━━━━━━━━━
+💬 Поддержка: @ArsenGuro
+WELCOME_EOF
 
 # Откат старого костыля vpn-limit-shell
 if [ -f "/etc/UDPCustom/users.db" ]; then
