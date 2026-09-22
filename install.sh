@@ -35,7 +35,7 @@ fi
 mkdir -p "$PANEL_DIR/modules" /etc/UDPCustom/limits /etc/UDPCustom/traffic /etc/UDPCustom/traffic_limits
 touch /etc/UDPCustom/users.db
 
-# Инициализация файлов домена и прокси (только если пустые)
+# Инициализация файлов домена, прокси, payload (только если пустые)
 [ ! -s /etc/vpn-domain ] && echo "de.cdnstore.shop" > /etc/vpn-domain
 [ ! -s /etc/UDPCustom/proxies.txt ] && echo "8.6.112.0" > /etc/UDPCustom/proxies.txt
 [ ! -s /etc/UDPCustom/payload.txt ] && echo 'CONNECT http://co.nr HTTP/1.1[crlf]Host: www.icloud.com[crlf]User-Agent: microsoft.com[crlf][crlf]AN / HTTP/1.1[lf]Host: [host][lf]Connection: Upgrade[lf]Upgrade: websocket[crlf][crlf]' > /etc/UDPCustom/payload.txt
@@ -60,8 +60,6 @@ fi
 echo -e "\n📥 Скачивание актуальных файлов с GitHub..."
 
 FILES_CORE=(
-
-
     "core.sh:$PANEL_DIR/core.sh"
     "vpn:/usr/local/bin/vpn"
 )
@@ -81,7 +79,6 @@ FILES_MODULES=(
     "tgbot.sh"
 )
 
-# Скачивание Python-скрипта Telegram-бота
 # Скачивание Python-скрипта Telegram-бота (только если его нет)
 if [ ! -s /usr/local/bin/vpn-tg-bot.py ]; then
     curl -sf -o /usr/local/bin/vpn-tg-bot.py "$REPO_URL/bot/vpn-tg-bot.py"
@@ -238,7 +235,6 @@ fi
 # ──────────────────────────────────────────────────────────────
 echo -e "\n🛡️ Настройка cron-задач..."
 
-# Лимит устройств — cron
 cat << 'CHK_EOF' > /usr/local/bin/vpn-limit-check.sh
 #!/bin/bash
 DB_USERS="/etc/UDPCustom/users.db"
@@ -395,7 +391,7 @@ chmod 644 /etc/cron.d/vpn-auto-cleanup
 systemctl restart cron 2>/dev/null || systemctl restart crond 2>/dev/null
 
 # ──────────────────────────────────────────────────────────────
-# ФИНАЛЬНАЯ ПРОВЕРКА PAM
+# ФИНАЛЬНАЯ ПРОВЕРКА PAM  (ИСПРАВЛЕНО)
 # ──────────────────────────────────────────────────────────────
 echo -e "\n🔍 Финальная проверка..."
 PAM_OK=1
@@ -403,8 +399,9 @@ grep -q "@include common-auth" /etc/pam.d/sshd || { echo -e "\033[0;31m⚠️  c
 grep -q "@include common-account" /etc/pam.d/sshd || { echo -e "\033[0;31m⚠️  common-account нет!\033[0m"; PAM_OK=0; }
 
 for pat in "check-device-limit-pam" "show-welcome"; do
-    cnt=$(grep -c "$pat" /etc/pam.d/sshd 2>/dev/null || echo 0)
-    if [ "$cnt" -gt 1 ]; then
+    cnt=$(grep -c "$pat" /etc/pam.d/sshd 2>/dev/null)
+    [ -z "$cnt" ] && cnt=0
+    if [ "$cnt" -gt 1 ] 2>/dev/null; then
         first=1; : > /tmp/sshd.clean
         while IFS= read -r line; do
             if echo "$line" | grep -q "$pat"; then
