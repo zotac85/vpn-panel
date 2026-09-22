@@ -686,6 +686,28 @@ menu_sec() {
             echo -e " Буферы ядра        : ${RED}🔴 Стандартные${NC}"
         fi
 
+        if grep -q "net.core.rmem_max" /etc/sysctl.conf 2>/dev/null; then
+    echo -e " Буферы ядра        : ${GREEN}🟢 Оптимизированы${NC}"
+else
+    echo -e " Буферы ядра        : ${RED}🔴 Стандартные${NC}"
+fi
+
+# ── SWAP (новая строка) ──
+local swap_used=$(free -m | awk '/Swap:/ {print $3}')
+local swap_total=$(free -m | awk '/Swap:/ {print $2}')
+if [ "$swap_total" -gt 0 ]; then
+    local swap_pct=$((swap_used * 100 / swap_total))
+    if [ "$swap_pct" -ge 80 ]; then
+        echo -e " Swap               : ${RED}🟢 $swap_used/$swap_total MB ($swap_pct%)${NC}"
+    elif [ "$swap_pct" -ge 50 ]; then
+        echo -e " Swap               : ${YELLOW}🟢 $swap_used/$swap_total MB ($swap_pct%)${NC}"
+    else
+        echo -e " Swap               : ${GREEN}🟢 $swap_used/$swap_total MB ($swap_pct%)${NC}"
+    fi
+else
+    echo -e " Swap               : ${RED}🔴 Не создан${NC}"
+fi
+
         echo ""
         echo -e "${CYAN}─── 🖥️  Система ───${NC}"
         echo -e " 1) 🔄 Обновить систему"
