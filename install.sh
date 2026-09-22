@@ -59,9 +59,7 @@ fi
 echo -e "\n📥 Скачивание актуальных файлов с GitHub..."
 
 FILES_CORE=(
-# Скачивание Python-скрипта Telegram-бота
-curl -sf -o /usr/local/bin/vpn-tg-bot.py "$REPO_URL/bot/vpn-tg-bot.py"
-chmod +x /usr/local/bin/vpn-tg-bot.py
+
 
     "core.sh:$PANEL_DIR/core.sh"
     "vpn:/usr/local/bin/vpn"
@@ -81,6 +79,10 @@ FILES_MODULES=(
     "domain_proxy.sh"
     "tgbot.sh"
 )
+
+# Скачивание Python-скрипта Telegram-бота
+curl -sf -o /usr/local/bin/vpn-tg-bot.py "$REPO_URL/bot/vpn-tg-bot.py"
+chmod +x /usr/local/bin/vpn-tg-bot.py
 
 for item in "${FILES_CORE[@]}"; do
     src="${item%%:*}"
