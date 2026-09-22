@@ -185,18 +185,18 @@ fi
 # Создаём баннер (только если пустой)
 if [ ! -s "$BANNER_FILE" ]; then
     cat > "$BANNER_FILE" << 'EOF'
-<h4><font color='cyan'>🚀 ArsenVipKeys Premium Server 🚀</font></h4>
-<h6><font color='red'>❌ NO DDOS ❌</font></h6>
-<h6><font color='red'>❌ NO HACKING ❌</font></h6>
-<h6><font color='red'>❌ NO TORRENT ❌</font></h6>
-<h6><font color='red'>❌ NO SPAMMING ❌</font></h6>
-<h6><font color='red'>❌ NO CARDING ❌</font></h6>
-<h6><font color='#F535AA'>👥 MAX LOGIN 2 DEVICE 👥</font></h6>
-<h6><font color='yellow'>🚫 VIOLATE AUTO BANNED PERMANENT 🚫</font></h6>
-<h4><font color='green'>💬 Support: t.me/ArsenGuro</font></h4>
-<h4><font color='cyan'>📢 Channel: t.me/ArsenVipKeys</font></h4>
+<h5><font color='cyan'>🚀 ArsenVipKeys — Премиум Сервер 🚀</font></h5>
+<h6><font color='red'>❌ БЕЗ DDOS ❌</font></h6>
+<h6><font color='red'>❌ БЕЗ ВЗЛОМА ❌</font></h6>
+<h6><font color='red'>❌ БЕЗ ТОРРЕНТОВ ❌</font></h6>
+<h6><font color='red'>❌ БЕЗ СПАМА ❌</font></h6>
+<h6><font color='red'>❌ БЕЗ КАРДИНГА ❌</font></h6>
+<h6><font color='#F535AA'>👥 МАКС. 5 УСТРОЙСТВ 👥</font></h6>
+<h6><font color='yellow'>🚫 НАРУШЕНИЕ = БАН НАВСЕГДА 🚫</font></h6>
+<h5><font color='green'>💬 Поддержка: t.me/ArsenGuro</font></h5>
+<h5><font color='cyan'>📢 Канал: t.me/ArsenVipKeys</font></h5>
 EOF
-    echo -e "\033[0;32m✅ Баннер по умолчанию создан.\033[0m"
+    echo -e "\033[0;32m✅ Баннер по умолчанию создан (рус).\033[0m"
 else
     echo -e "\033[0;32m✅ Баннер уже настроен (не перезаписываем).\033[0m"
 fi
