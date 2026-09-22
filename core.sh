@@ -166,7 +166,6 @@ header() {
     echo -e " 🕸️  WS онлайн    : ${GREEN}${SESS_WS_TOTAL}${NC}"
     echo -e "${CYAN}==============================================${NC}"
 }
-
 select_user() {
     header
     echo -e "${YELLOW}--- $1 ---${NC}"
