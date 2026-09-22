@@ -199,11 +199,34 @@ PAM_EOF
 
 chmod +x /usr/local/bin/check-device-limit-pam
 
+# ─── PAM: точная проверка срока (timestamp) ───
+mkdir -p /etc/UDPCustom/expire_ts
+cat << 'EXP_EOF' > /usr/local/bin/check-expiration-pam
+#!/bin/bash
+USER="$PAM_USER"
+TS_DIR="/etc/UDPCustom/expire_ts"
+DB_USERS="/etc/UDPCustom/users.db"
+[ "$USER" == "root" ] && exit 0
+[ -z "$USER" ] && exit 0
+grep -q "^${USER}$" "$DB_USERS" 2>/dev/null || exit 0
+[ ! -f "$TS_DIR/$USER" ] && exit 0
+EXP_TS=$(cat "$TS_DIR/$USER" 2>/dev/null)
+[[ "$EXP_TS" =~ ^[0-9]+$ ]] || exit 0
+NOW=$(date +%s)
+if [ "$NOW" -gt "$EXP_TS" ]; then
+    echo "❌ СРОК ДЕЙСТВИЯ ИСТЁК. Обратись в поддержку: @ArsenGuro"
+    exit 1
+fi
+exit 0
+EXP_EOF
+chmod +x /usr/local/bin/check-expiration-pam
+
 if ! PAM_USER=root /usr/local/bin/check-device-limit-pam >/dev/null 2>&1; then
     echo -e "\033[0;31m⚠️  Скрипт лимита падает — PAM НЕ трогаем.\033[0m"
 else
     if grep -q "pam_nologin.so" /etc/pam.d/sshd; then
         sed -i '/pam_nologin.so/a account    required     pam_exec.so stdout /usr/local/bin/check-device-limit-pam' /etc/pam.d/sshd
+        sed -i '/check-device-limit-pam/a account    required     pam_exec.so stdout /usr/local/bin/check-expiration-pam' /etc/pam.d/sshd
         echo -e "\033[0;32m✅ pam_exec добавлен.\033[0m"
     fi
 fi
