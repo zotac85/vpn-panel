@@ -178,32 +178,27 @@ general_restrictions_stats() {
 }
 
 # ──────────────────────────────────────────────────────────────
-# ➕ Добавить пользователя
+# # ──────────────────────────────────────────────────────────────
+# Генератор случайной строки (a-z, 0-9)
 # ──────────────────────────────────────────────────────────────
-add_user() {
-    header
-    echo -e "${YELLOW}--- ➕ Создание нового пользователя ---${NC}"
-    read -p "Логин: " username
-    [ -z "$username" ] && { echo -e "${RED}Логин не может быть пустым.${NC}"; sleep 1; return; }
+gen_random() {
+    local len="${1:-8}"
+    tr -dc 'a-z0-9' < /dev/urandom | head -c "$len"
+}
+
+# ──────────────────────────────────────────────────────────────
+# Общая функция создания пользователя
+# ──────────────────────────────────────────────────────────────
+create_user_common() {
+    local username="$1"
+    local password="$2"
+    local days="$3"
+    local max_devices="$4"
+    local traffic_gb="$5"
 
     if id "$username" &>/dev/null; then
         echo -e "${RED}Пользователь '$username' уже существует!${NC}"
-        read -p "Нажмите Enter для возврата..."
-        return
-    fi
-
-    read -p "Пароль: " password
-    [ -z "$password" ] && { echo -e "${RED}Пароль не может быть пустым.${NC}"; sleep 1; return; }
-
-    read -p "Срок в днях (Enter = бессрочно): " days
-    read -p "Лимит устройств (Enter = по умолчанию 3): " max_devices
-    if ! [[ "$max_devices" =~ ^[0-9]+$ ]] || [ "$max_devices" -lt 1 ]; then
-        max_devices=3
-    fi
-
-    read -p "Лимит трафика в ГБ (Enter = без лимита): " traffic_gb
-    if ! [[ "$traffic_gb" =~ ^[0-9]+$ ]]; then
-        traffic_gb=0
+        return 1
     fi
 
     useradd -M -s /bin/false "$username"
@@ -213,7 +208,6 @@ add_user() {
     sort -u -o "$DB_USERS" "$DB_USERS"
     echo "$max_devices" > "$LIMITS_DIR/$username"
 
-    # Схема A: maxlogins
     sync_maxlogins "$username" "$max_devices"
 
     local traffic_bytes=$((traffic_gb * 1073741824))
@@ -227,29 +221,174 @@ add_user() {
     if [ -n "$days" ] && [ "$days" -gt 0 ] 2>/dev/null; then
         exp_date=$(date -d "+$days days" +%Y-%m-%d)
         chage -E "$exp_date" "$username"
-        exp_info="$exp_date"
-    else
-        exp_info="Бессрочно"
     fi
 
-    SERVER_IP=$(curl -s4 ifconfig.me || hostname -I | awk '{print $1}')
-    local traffic_info="Без лимита"
-    [ "$traffic_gb" -gt 0 ] && traffic_info="${traffic_gb} ГБ"
+    return 0
+}
 
+# ──────────────────────────────────────────────────────────────
+# 🧪 Тестовый аккаунт (одной кнопкой)
+# ──────────────────────────────────────────────────────────────
+add_test_user() {
+    header
+    echo -e "${YELLOW}--- 🧪 Создание тестового аккаунта ---${NC}"
+    echo ""
+    echo -e "${CYAN}Параметры:${NC}"
+    echo -e "  • Логин     : 8 символов (случайно)"
+    echo -e "  • Пароль    : 8 символов (случайно)"
+    echo -e "  • Лимит     : 10 устройств"
+    echo -e "  • Срок      : 1 день"
+    echo -e "  • Трафик    : 100 ГБ"
+    echo ""
+
+    # Генерируем уникальное имя
+    local username=""
+    local attempts=0
+    while [ -z "$username" ] || id "$username" &>/dev/null; do
+        username=$(gen_random 8)
+        attempts=$((attempts + 1))
+        if [ "$attempts" -gt 20 ]; then
+            echo -e "${RED}Не удалось сгенерировать уникальное имя.${NC}"
+            read -p "Enter..."
+            return
+        fi
+    done
+
+    local password=$(gen_random 8)
+    local max_devices=10
+    local days=1
+    local traffic_gb=100
+
+    create_user_common "$username" "$password" "$days" "$max_devices" "$traffic_gb" || {
+        read -p "Enter..."
+        return
+    }
+
+    SERVER_IP=$(curl -s4 ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')
+    local exp_date=$(date -d "+1 day" +%Y-%m-%d)
+
+    clear
     echo ""
     echo -e "${GREEN}╔════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║${NC}         ${YELLOW}🎉 ПОЛЬЗОВАТЕЛЬ СОЗДАН 🎉${NC}          ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}      ${YELLOW}🧪 ТЕСТОВЫЙ АККАУНТ СОЗДАН 🧪${NC}      ${GREEN}║${NC}"
     echo -e "${GREEN}╠════════════════════════════════════════════╣${NC}"
-    echo -e "${GREEN}║${NC} Сервер : ${CYAN}$SERVER_IP${NC}"
-    echo -e "${GREEN}║${NC} Логин  : ${CYAN}$username${NC}"
-    echo -e "${GREEN}║${NC} Пароль : ${CYAN}$password${NC}"
-    echo -e "${GREEN}║${NC} Срок   : ${CYAN}$exp_info${NC}"
-    echo -e "${GREEN}║${NC} Устройства : ${CYAN}Макс. $max_devices${NC}"
-    echo -e "${GREEN}║${NC} Трафик : ${CYAN}$traffic_info${NC}"
+    echo -e "${GREEN}║${NC} Сервер     : ${CYAN}$SERVER_IP${NC}"
+    echo -e "${GREEN}║${NC} Срок       : ${CYAN}1 день (до $exp_date)${NC}"
+    echo -e "${GREEN}║${NC} Устройства : ${CYAN}до $max_devices${NC}"
+    echo -e "${GREEN}║${NC} Трафик     : ${CYAN}$traffic_gb ГБ${NC}"
     echo -e "${GREEN}╚════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${YELLOW}📋 Ссылка для DarkTunnel (скопируй):${NC}"
+    echo -e "${CYAN}────────────────────────────────────────────${NC}"
+    echo -e "${GREEN}${username}:${password}${NC}"
+    echo -e "${CYAN}────────────────────────────────────────────${NC}"
+    echo ""
+    echo -e "${MAGENTA}Совет: нажми и удерживай на строке выше → копировать${NC}"
     echo ""
     read -p "Нажмите Enter для продолжения..."
 }
+
+# ──────────────────────────────────────────────────────────────
+# 👑 VIP аккаунт (ручной ввод)
+# ──────────────────────────────────────────────────────────────
+add_vip_user() {
+    header
+    echo -e "${YELLOW}--- 👑 Создание VIP аккаунта ---${NC}"
+    echo ""
+    read -p "Логин (3-20 символов): " username
+    [ -z "$username" ] && { echo -e "${RED}Логин не может быть пустым.${NC}"; sleep 1; return; }
+
+    if ! [[ "$username" =~ ^[a-zA-Z0-9_-]{3,20}$ ]]; then
+        echo -e "${RED}Логин: только a-z, A-Z, 0-9, _ и -, длина 3-20.${NC}"
+        read -p "Enter..."; return
+    fi
+
+    if id "$username" &>/dev/null; then
+        echo -e "${RED}Пользователь '$username' уже существует!${NC}"
+        read -p "Enter..."; return
+    fi
+
+    read -p "Пароль (Enter = сгенерировать): " password
+    [ -z "$password" ] && password=$(gen_random 10)
+
+    read -p "Срок в днях (Enter = бессрочно): " days
+    if ! [[ "$days" =~ ^[0-9]+$ ]]; then
+        days=0
+    fi
+
+    read -p "Лимит устройств (Enter = 5): " max_devices
+    if ! [[ "$max_devices" =~ ^[0-9]+$ ]] || [ "$max_devices" -lt 1 ]; then
+        max_devices=5
+    fi
+
+    read -p "Лимит трафика в ГБ (Enter = без лимита): " traffic_gb
+    if ! [[ "$traffic_gb" =~ ^[0-9]+$ ]]; then
+        traffic_gb=0
+    fi
+
+    create_user_common "$username" "$password" "$days" "$max_devices" "$traffic_gb" || {
+        read -p "Enter..."
+        return
+    }
+
+    SERVER_IP=$(curl -s4 ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')
+    if [ "$days" -gt 0 ] 2>/dev/null; then
+        exp_info=$(date -d "+$days days" +%Y-%m-%d)
+    else
+        exp_info="Бессрочно"
+    fi
+    local traffic_info="Без лимита"
+    [ "$traffic_gb" -gt 0 ] && traffic_info="${traffic_gb} ГБ"
+
+    clear
+    echo ""
+    echo -e "${GREEN}╔════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║${NC}        ${YELLOW}👑 VIP АККАУНТ СОЗДАН 👑${NC}          ${GREEN}║${NC}"
+    echo -e "${GREEN}╠════════════════════════════════════════════╣${NC}"
+    echo -e "${GREEN}║${NC} Сервер     : ${CYAN}$SERVER_IP${NC}"
+    echo -e "${GREEN}║${NC} Логин      : ${CYAN}$username${NC}"
+    echo -e "${GREEN}║${NC} Пароль     : ${CYAN}$password${NC}"
+    echo -e "${GREEN}║${NC} Срок       : ${CYAN}$exp_info${NC}"
+    echo -e "${GREEN}║${NC} Устройства : ${CYAN}до $max_devices${NC}"
+    echo -e "${GREEN}║${NC} Трафик     : ${CYAN}$traffic_info${NC}"
+    echo -e "${GREEN}╚════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${YELLOW}📋 Ссылка для DarkTunnel (скопируй):${NC}"
+    echo -e "${CYAN}────────────────────────────────────────────${NC}"
+    echo -e "${GREEN}${username}:${password}${NC}"
+    echo -e "${CYAN}────────────────────────────────────────────${NC}"
+    echo ""
+    read -p "Нажмите Enter для продолжения..."
+}
+
+# ──────────────────────────────────────────────────────────────
+# ➕ Меню «Добавить пользователя»
+# ──────────────────────────────────────────────────────────────
+add_user() {
+    while true; do
+        header
+        echo -e "${YELLOW}➕ ДОБАВИТЬ ПОЛЬЗОВАТЕЛЯ${NC}"
+        echo ""
+        echo -e " 1) 🧪 Создать ТЕСТОВЫЙ аккаунт (одной кнопкой)"
+        echo -e "    8 симв. логин/пароль • 10 устройств • 1 день • 100 ГБ"
+        echo ""
+        echo -e " 2) 👑 Создать VIP аккаунт (ручной ввод)"
+        echo -e "    Бессрочно • 5 устройств • без лимита трафика"
+        echo ""
+        echo -e " 0) ↩️  Назад"
+        echo ""
+        read -p "Выберите действие [0-2]: " achoice
+
+        case $achoice in
+            1) add_test_user ;;
+            2) add_vip_user ;;
+            0) break ;;
+            *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
+        esac
+    done
+}
+
+
 
 # ──────────────────────────────────────────────────────────────
 # 🗑️  Удалить пользователя
