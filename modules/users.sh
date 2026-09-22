@@ -2,7 +2,6 @@
 
 # ──────────────────────────────────────────────────────────────
 # Утилита: синхронизация maxlogins в /etc/security/limits.conf
-# Используется при создании / изменении лимита / удалении юзера.
 # ──────────────────────────────────────────────────────────────
 sync_maxlogins() {
     local u="$1"
@@ -11,27 +10,24 @@ sync_maxlogins() {
     [ -z "$u" ] && return
     local f="/etc/security/limits.conf"
 
-    # Удаляем старые записи для этого юзера (любые: hard/soft/maxlogins)
     sed -i "/^${u}[[:space:]]\+hard[[:space:]]\+maxlogins/d" "$f" 2>/dev/null
     sed -i "/^${u}[[:space:]]\+soft[[:space:]]\+maxlogins/d" "$f" 2>/dev/null
 
-    # Если limit <= 0 или не число — просто снимаем ограничение (запись удалена)
     if ! [[ "$limit" =~ ^[0-9]+$ ]] || [ "$limit" -le 0 ]; then
         return
     fi
 
-    # Добавляем новую запись
     echo "${u} hard maxlogins ${limit}" >> "$f"
 }
 
 # ──────────────────────────────────────────────────────────────
-# Персональное меню управления конкретным пользователем
+# ✏️  Меню редактирования пользователя (без удаления)
 # ──────────────────────────────────────────────────────────────
-manage_single_user() {
-    select_user "⚙️ Выбор пользователя для управления" || return
+edit_user_menu() {
+    select_user "✏️ Выбор пользователя для редактирования" || return
     while true; do
         header
-        echo -e "${YELLOW}--- 👤 Настройка клиента: ${GREEN}$SELECTED_USER${YELLOW} ---${NC}"
+        echo -e "${YELLOW}--- ✏️  Редактирование: ${GREEN}$SELECTED_USER${YELLOW} ---${NC}"
         echo -e "${CYAN}────────────────────────────────────────────${NC}"
 
         local user_limit=3
@@ -64,30 +60,60 @@ manage_single_user() {
         echo -e " 📶 Трафик           : ${CYAN}$traffic_info${NC}"
         echo -e "${CYAN}────────────────────────────────────────────${NC}"
         echo -e " 1) 🔑 Изменить пароль"
-        echo -e " 2) ⚙️ Изменить лимит устройств"
+        echo -e " 2) ⚙️  Изменить лимит устройств"
         echo -e " 3) 📶 Изменить лимит трафика"
-        echo -e " 4) 🔒 Блокировать / Разблокировать"
-        echo -e " 5) ⏳ Продлить срок действия"
-        echo -e " 6) 📊 Детальная статистика сессий"
-        echo -e " 7) 🗑️ Удалить пользователя"
-        echo -e " 0) ↩️ Назад к списку"
+        echo -e " 4) ⏳ Продлить срок действия"
+        echo -e " 5) 📊 Детальная статистика сессий"
+        echo -e " 0) ↩️  Назад к списку"
         echo -e "${CYAN}────────────────────────────────────────────${NC}"
-        read -p "Выберите действие [0-7]: " action_choice
+        read -p "Выберите действие [0-5]: " action_choice
 
         case $action_choice in
             1) change_password ;;
             2) change_user_limit ;;
             3) change_traffic_limit_menu ;;
-            4) toggle_lock ;;
-            5) renew_user ;;
-            6) client_statistics ;;
-            7) delete_user; return ;;
+            4) renew_user ;;
+            5) client_statistics ;;
             0) break ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
         esac
     done
 }
 
+# ──────────────────────────────────────────────────────────────
+# 🔒 Меню блокировки пользователя
+# ──────────────────────────────────────────────────────────────
+block_user_menu() {
+    select_user "🔒 Выбор пользователя для блокировки" || return
+    echo ""
+    echo -e "${CYAN}Пользователь: ${YELLOW}$SELECTED_USER${NC}"
+    if passwd -S "$SELECTED_USER" 2>/dev/null | grep -q " L "; then
+        echo -e "Текущий статус: ${RED}🔒 ЗАБЛОКИРОВАН${NC}"
+        echo ""
+        read -p "Разблокировать? (y/n): " c
+        if [[ "$c" =~ ^[Yy]$ ]]; then
+            usermod -U "$SELECTED_USER"
+            echo -e "${GREEN}✅ Пользователь '$SELECTED_USER' разблокирован!${NC}"
+        else
+            echo -e "${YELLOW}Отменено.${NC}"
+        fi
+    else
+        echo -e "Текущий статус: ${GREEN}🟢 АКТИВЕН${NC}"
+        echo ""
+        read -p "Заблокировать? (y/n): " c
+        if [[ "$c" =~ ^[Yy]$ ]]; then
+            usermod -L "$SELECTED_USER"
+            echo -e "${YELLOW}🔒 Пользователь '$SELECTED_USER' заблокирован!${NC}"
+        else
+            echo -e "${YELLOW}Отменено.${NC}"
+        fi
+    fi
+    read -p "Нажмите Enter для продолжения..."
+}
+
+# ──────────────────────────────────────────────────────────────
+# Вспомогательные функции
+# ──────────────────────────────────────────────────────────────
 change_traffic_limit_menu() {
     echo ""
     read -p "Введите новый лимит трафика в ГБ (0 = без лимита): " new_gb
@@ -99,7 +125,7 @@ change_traffic_limit_menu() {
             init_traffic_chain
             add_traffic_rule "$SELECTED_USER"
         fi
-        echo -e "${GREEN}Лимит трафика для '$SELECTED_USER' успешно изменен на ${new_gb} ГБ!${NC}"
+        echo -e "${GREEN}Лимит трафика для '$SELECTED_USER' изменён на ${new_gb} ГБ!${NC}"
     else
         echo -e "${RED}Неверный формат числа.${NC}"
     fi
@@ -152,11 +178,11 @@ general_restrictions_stats() {
 }
 
 # ──────────────────────────────────────────────────────────────
-# add_user — создание пользователя + maxlogins (схема A)
+# ➕ Добавить пользователя
 # ──────────────────────────────────────────────────────────────
 add_user() {
     header
-    echo -e "${YELLOW}--- 👤 Создание нового пользователя ---${NC}"
+    echo -e "${YELLOW}--- ➕ Создание нового пользователя ---${NC}"
     read -p "Логин: " username
     [ -z "$username" ] && { echo -e "${RED}Логин не может быть пустым.${NC}"; sleep 1; return; }
 
@@ -187,7 +213,7 @@ add_user() {
     sort -u -o "$DB_USERS" "$DB_USERS"
     echo "$max_devices" > "$LIMITS_DIR/$username"
 
-    # ── СХЕМА A: maxlogins в limits.conf ──
+    # Схема A: maxlogins
     sync_maxlogins "$username" "$max_devices"
 
     local traffic_bytes=$((traffic_gb * 1073741824))
@@ -226,7 +252,7 @@ add_user() {
 }
 
 # ──────────────────────────────────────────────────────────────
-# delete_user — удаление пользователя + чистка maxlogins
+# 🗑️  Удалить пользователя
 # ──────────────────────────────────────────────────────────────
 delete_user() {
     select_user "🗑️ Удаление пользователя" || return
@@ -237,31 +263,31 @@ delete_user() {
         sed -i "/^${SELECTED_USER}$/d" "$DB_USERS" 2>/dev/null
         rm -f "$LIMITS_DIR/$SELECTED_USER" "$TRAFFIC_LIMITS_DIR/$SELECTED_USER" "$TRAFFIC_DIR/$SELECTED_USER" 2>/dev/null
 
-        # ── СХЕМА A: убираем maxlogins ──
+        # Убираем maxlogins
         sync_maxlogins "$SELECTED_USER" 0
 
         if declare -f remove_traffic_rule &>/dev/null; then
             remove_traffic_rule "$SELECTED_USER"
         fi
-        echo -e "${GREEN}Пользователь '$SELECTED_USER' удален!${NC}"
+        echo -e "${GREEN}Пользователь '$SELECTED_USER' удалён!${NC}"
     else
         echo -e "${YELLOW}Удаление отменено.${NC}"
     fi
     read -p "Нажмите Enter для продолжения..."
 }
 
+# ──────────────────────────────────────────────────────────────
+# Действия с пользователем
+# ──────────────────────────────────────────────────────────────
 change_password() {
     echo ""
     read -p "Новый пароль для '$SELECTED_USER': " password
     [ -z "$password" ] && { echo -e "${RED}Пароль не может быть пустым.${NC}"; sleep 1; return; }
     echo "$SELECTED_USER:$password" | chpasswd
-    echo -e "${GREEN}Пароль для '$SELECTED_USER' обновлен!${NC}"
+    echo -e "${GREEN}Пароль для '$SELECTED_USER' обновлён!${NC}"
     read -p "Нажмите Enter для продолжения..."
 }
 
-# ──────────────────────────────────────────────────────────────
-# change_user_limit — обновление лимита + maxlogins (схема A)
-# ──────────────────────────────────────────────────────────────
 change_user_limit() {
     echo ""
     local current_limit=3
@@ -271,11 +297,11 @@ change_user_limit() {
     if [[ "$new_limit" =~ ^[0-9]+$ ]] && [ "$new_limit" -ge 1 ]; then
         echo "$new_limit" > "$LIMITS_DIR/$SELECTED_USER"
 
-        # ── СХЕМА A: обновляем maxlogins ──
+        # Схема A
         sync_maxlogins "$SELECTED_USER" "$new_limit"
 
-        echo -e "${GREEN}Лимит устройств для '$SELECTED_USER' изменен на $new_limit!${NC}"
-        echo -e "${CYAN}PAM-лимит (maxlogins) обновлён — новые подключения сверх лимита будут отклоняться.${NC}"
+        echo -e "${GREEN}Лимит устройств для '$SELECTED_USER' изменён на $new_limit!${NC}"
+        echo -e "${CYAN}PAM-лимит (maxlogins) обновлён.${NC}"
     else
         echo -e "${RED}Неверный формат числа.${NC}"
     fi
@@ -303,7 +329,7 @@ renew_user() {
     elif [ "$days" -gt 0 ] 2>/dev/null; then
         exp_date=$(date -d "+$days days" +%Y-%m-%d)
         chage -E "$exp_date" "$SELECTED_USER"
-        echo -e "${GREEN}Срок для '$SELECTED_USER' продлен до $exp_date.${NC}"
+        echo -e "${GREEN}Срок для '$SELECTED_USER' продлён до $exp_date.${NC}"
     else
         echo -e "${RED}Неверное число дней.${NC}"
     fi
@@ -333,10 +359,10 @@ client_statistics() {
     echo -e " 👤 Логин аккаунта : ${GREEN}$SELECTED_USER${NC}"
     echo -e " 📅 Срок действия  : ${CYAN}$exp${NC}"
     echo -e " 🔒 Статус учетки  : $status_str"
-    echo -e " ⚙️ Лимит устройств : ${CYAN}$user_limit${NC}"
+    echo -e " ⚙️  Лимит устройств : ${CYAN}$user_limit${NC}"
     echo -e "${CYAN}────────────────────────────────────────────${NC}"
     echo -e " 🔑 SSH активных       : ${GREEN}$count_ssh${NC}"
-    echo -e " 🕸️ SSH WS активных    : ${GREEN}$count_ws${NC}"
+    echo -e " 🕸️  SSH WS активных    : ${GREEN}$count_ws${NC}"
     echo -e " 🌐 White активных     : ${GREEN}$count_white${NC}"
     echo -e "${CYAN}────────────────────────────────────────────${NC}"
 
@@ -355,7 +381,7 @@ list_users() {
     echo -e "${YELLOW}--- 📋 Список текущего онлайна ---${NC}"
 
     if [ ! -s "$DB_USERS" ]; then
-        echo -e "${MAGENTA}Список пуст. Вы еще не создавали пользователей.${NC}"
+        echo -e "${MAGENTA}Список пуст. Вы ещё не создавали пользователей.${NC}"
         echo ""
         read -p "Нажмите Enter для продолжения..."
         return
@@ -393,29 +419,34 @@ list_users() {
     read -p "Нажмите Enter для продолжения..."
 }
 
+# ──────────────────────────────────────────────────────────────
+# 👥 ГЛАВНОЕ МЕНЮ ПОЛЬЗОВАТЕЛЕЙ
+# ──────────────────────────────────────────────────────────────
 menu_users() {
     while true; do
         header
         echo -e "${YELLOW}👥 УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ И ОГРАНИЧЕНИЯМИ${NC}"
         echo ""
-        echo -e " 1) ⚙️ Управление конкретным пользователем (пароль, лимиты, трафик, блок)"
-        echo -e " 2) 📋 Список пользователей и текущий онлайн"
-        echo -e " 3) 📊 Общая статистика ограничений по всем пользователям"
-        echo -e " 4) ➕ Добавить пользователя"
-        echo -e " 5) 🗑️ Удалить пользователя"
-        echo -e " 6) 🚦 Контроль лимита устройств"
-        echo -e " 7) 📶 Мониторинг и лимит трафика"
-        echo -e " 0) ↩️ Назад в главное меню"
+        echo -e " 1) ➕ Добавить пользователя"
+        echo -e " 2) ✏️  Редактировать пользователя"
+        echo -e " 3) 🔒 Блокировать / Разблокировать"
+        echo -e " 4) 🗑️  Удалить пользователя"
+        echo -e " 5) 📋 Список пользователей и текущий онлайн"
+        echo -e " 6) 📊 Общая статистика ограничений"
+        echo -e " 7) 🚦 Контроль лимита устройств"
+        echo -e " 8) 📶 Мониторинг и лимит трафика"
+        echo -e " 0) ↩️  Назад в главное меню"
         echo ""
-        read -p "Выберите действие [0-7]: " uchoice
+        read -p "Выберите действие [0-8]: " uchoice
         case $uchoice in
-            1) manage_single_user ;;
-            2) list_users ;;
-            3) general_restrictions_stats ;;
-            4) add_user ;;
-            5) delete_user ;;
-            6) menu_devicelimit ;;
-            7) menu_traffic ;;
+            1) add_user ;;
+            2) edit_user_menu ;;
+            3) block_user_menu ;;
+            4) delete_user ;;
+            5) list_users ;;
+            6) general_restrictions_stats ;;
+            7) menu_devicelimit ;;
+            8) menu_traffic ;;
             0) break ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
         esac
