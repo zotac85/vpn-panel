@@ -255,7 +255,7 @@ tg_channels_menu() {
         header
         echo -e "${YELLOW}📢 УПРАВЛЕНИЕ КАНАЛАМИ${NC}"
         echo ""
-        local count=$(grep -cve '^\s*$' "$CH_FILE" 2>/dev/null)
+        local count=$(grep -c '^[^#]' "$CH_FILE" 2>/dev/null || echo 0)
         [ -z "$count" ] && count=0
         echo -e " Всего каналов: ${GREEN}$count${NC}"
         echo ""
