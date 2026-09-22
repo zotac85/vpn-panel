@@ -69,6 +69,7 @@ FILES_MODULES=(
     "banner.sh"
     "maintenance.sh"
     "torrent_block.sh"
+    "domain_proxy.sh"
 )
 
 for item in "${FILES_CORE[@]}"; do
