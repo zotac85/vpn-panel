@@ -68,9 +68,9 @@ CHANNEL_ID_2=""
 CHANNEL_NAME_2=""
 REQUIRE_SUBSCRIPTION=0
 COOLDOWN_HOURS=24
-TEST_DAYS=1
-TEST_DEVICES=10
-TEST_TRAFFIC_GB=100
+TEST_HOURS=8
+TEST_DEVICES=1
+TEST_TRAFFIC_GB=50
 WELCOME_TEXT="🎁 Привет! Хочешь бесплатный VPN на 24 часа?\n\nНажми /test и получи доступ!"
 SUCCESS_TEMPLATE="🎉 Твой тестовый доступ готов!\n\n📱 Логин : {USERNAME}\n🔑 Пароль: {PASSWORD}\n⏰ Срок   : 24 часа\n📊 Трафик: {TRAFFIC} ГБ\n💻 Устройств: {DEVICES}\n\n💬 Поддержка: @ArsenGuro\n📢 Канал: @ArsenVipKeys"
 CONFIG_NAME="ArsenVipKeys"
@@ -332,7 +332,7 @@ menu_tgbot() {
             7) tg_edit_field "SUCCESS_TEMPLATE" "Шаблон выдачи" ;;
             8)
                 tg_edit_field "COOLDOWN_HOURS" "Кулдаун между тестами (часы)"
-                tg_edit_field "TEST_DAYS" "Срок тестового (дни)"
+                tg_edit_field "TEST_HOURS" "Срок тестового (часы)"
                 tg_edit_field "TEST_DEVICES" "Лимит устройств (шт)"
                 tg_edit_field "TEST_TRAFFIC_GB" "Лимит трафика (ГБ)"
                 ;;
