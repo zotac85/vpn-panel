@@ -274,6 +274,7 @@ def handle_start(cfg, chat_id, user_id, first_name):
         ch_clean = ch.lstrip('@')
         keyboard['inline_keyboard'].append([{'text': f'📢 {ch_clean}', 'url': f'https://t.me/{ch_clean}'}])
     keyboard['inline_keyboard'].append([{'text': '✅ Я подписался → Получить тест', 'callback_data': 'get_test'}])
+    keyboard['inline_keyboard'].append([{'text': '💎 Купить VIP-ключ', 'url': 'https://t.me/ArsenGuro'}])
     keyboard['inline_keyboard'].append([{'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}])
     send_message(token, chat_id, text, reply_markup=keyboard)
 
