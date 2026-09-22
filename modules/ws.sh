@@ -91,10 +91,10 @@ change_ws_port() {
         read -p "Нажмите Enter..."
         return
     fi
-    
+
     echo -e "Текущий порт: ${GREEN}$old_port${NC}"
     read -p "Введите новый порт (1-65535): " new_port
-    
+
     if [[ "$new_port" =~ ^[0-9]+$ ]] && [ "$new_port" -ge 1 ] && [ "$new_port" -le 65535 ]; then
         ufw delete allow $old_port/tcp 2>/dev/null
         sed -i "s/listen_port[[:space:]]*=[[:space:]]*[0-9]*/listen_port = $new_port/" /usr/local/bin/ws-proxy.py
@@ -111,27 +111,31 @@ menu_ws() {
     while true; do
         header
         local cur_port=$(get_ws_port)
-        
+
         echo -e "${YELLOW}🕸️  МОДУЛЬ WEBSOCKET PROXY (ОБХОД DPI)${NC}"
         echo -e " WS Proxy : $(get_service_status ws-proxy)"
         echo -e " Порт     : ${GREEN}${cur_port} (TCP)${NC}"
         echo ""
-        echo -e " 1) ⚡ Установить / Запустить WebSocket Proxy"
+        echo -e " 1) ⚡  Установить / Запустить WebSocket Proxy"
         echo -e " 2) 🔄 Перезапустить"
         echo -e " 3) ⏸️  Остановить"
         echo -e " 4) ⚙️  Изменить порт WS"
-        echo -e " 5) 📜 Посмотреть логи работы"
-        echo -e " 6) 🗑️  Удалить с сервера"
+        echo -e " 5) 🌐 Управление доменом"
+        echo -e " 6) 🔒 Управление прокси"
+        echo -e " 7) 📜 Посмотреть логи работы"
+        echo -e " 8) 🗑️  Удалить с сервера"
         echo -e " 0) ↩️  Назад в главное меню"
         echo ""
-        read -p "Выберите действие [0-6]: " ws_choice
+        read -p "Выберите действие [0-8]: " ws_choice
         case $ws_choice in
             1) install_ws ;;
             2) systemctl restart ws-proxy; echo -e "${GREEN}Перезапущено.${NC}"; sleep 1 ;;
             3) systemctl stop ws-proxy; echo -e "${YELLOW}Остановлено.${NC}"; sleep 1 ;;
             4) change_ws_port ;;
-            5) header; journalctl -u ws-proxy -n 25 --no-pager; echo ""; read -p "Enter..." ;;
-            6) 
+            5) manage_domain ;;
+            6) manage_proxy ;;
+            7) header; journalctl -u ws-proxy -n 25 --no-pager; echo ""; read -p "Enter..." ;;
+            8)
                 local dp=$(get_ws_port)
                 systemctl stop ws-proxy 2>/dev/null
                 systemctl disable ws-proxy 2>/dev/null
