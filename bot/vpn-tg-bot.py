@@ -326,6 +326,8 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         keyboard['inline_keyboard'].append([{'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}])
         if is_admin:
             keyboard['inline_keyboard'].append([{'text': '📊 Статистика', 'callback_data': 'admin_stats'}])
+            keyboard['inline_keyboard'].append([{'text': '👥 Пользователи', 'callback_data': 'admin_users_1'}])
+            keyboard['inline_keyboard'].append([{'text': '🗑️ Удалить истёкших', 'callback_data': 'admin_cleanup'}])
             keyboard['inline_keyboard'].append([{'text': '🚫 Бан-лист', 'callback_data': 'admin_banlist'}])
             keyboard['inline_keyboard'].append([{'text': '📢 Опубликовать пост', 'callback_data': 'admin_post'}])
     
@@ -345,6 +347,8 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         ]}
         if is_admin:
             keyboard['inline_keyboard'].append([{'text': '📊 Статистика', 'callback_data': 'admin_stats'}])
+            keyboard['inline_keyboard'].append([{'text': '👥 Пользователи', 'callback_data': 'admin_users_1'}])
+            keyboard['inline_keyboard'].append([{'text': '🗑️ Удалить истёкших', 'callback_data': 'admin_cleanup'}])
             keyboard['inline_keyboard'].append([{'text': '🚫 Бан-лист', 'callback_data': 'admin_banlist'}])
             keyboard['inline_keyboard'].append([{'text': '📢 Опубликовать пост', 'callback_data': 'admin_post'}])
     
@@ -367,6 +371,8 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         ]}
         if is_admin:
             keyboard['inline_keyboard'].append([{'text': '📊 Статистика', 'callback_data': 'admin_stats'}])
+            keyboard['inline_keyboard'].append([{'text': '👥 Пользователи', 'callback_data': 'admin_users_1'}])
+            keyboard['inline_keyboard'].append([{'text': '🗑️ Удалить истёкших', 'callback_data': 'admin_cleanup'}])
             keyboard['inline_keyboard'].append([{'text': '🚫 Бан-лист', 'callback_data': 'admin_banlist'}])
             keyboard['inline_keyboard'].append([{'text': '📢 Опубликовать пост', 'callback_data': 'admin_post'}])
     
@@ -672,7 +678,7 @@ def handle_channel_test(cfg, user_id, first_name):
 
 
 def handle_stats(cfg, chat_id, user_id):
-    """Статистика для админа"""
+    """Статистика: топ-5 за неделю"""
     token = cfg['BOT_TOKEN']
     admin_id = cfg.get('ADMIN_ID', '')
     if str(user_id) != str(admin_id):
@@ -689,47 +695,46 @@ def handle_stats(cfg, chat_id, user_id):
     today_cnt = 0
     week_cnt = 0
     month_cnt = 0
-    users_set = set()
-    last_issued = []
+    users_count = {}
+    week_users = {}
+    users_all = set()
     
     if os.path.exists(ISSUED_DB):
         with open(ISSUED_DB) as f:
-            lines = f.readlines()
-        total = len(lines)
-        for line in lines:
-            parts = line.strip().split('|')
-            if len(parts) < 2: continue
-            try:
-                ts = int(parts[1])
-            except: continue
-            if ts >= today_start: today_cnt += 1
-            if ts >= week_start: week_cnt += 1
-            if ts >= month_start: month_cnt += 1
-            users_set.add(parts[0])
-        # Последние 5
-        for line in lines[-5:][::-1]:
-            parts = line.strip().split('|')
-            if len(parts) < 3: continue
-            try:
-                dt = datetime.fromtimestamp(int(parts[1])).strftime('%m-%d %H:%M')
-            except:
-                dt = '?'
-            last_issued.append(f"  • {parts[2]} ({dt})")
+            for line in f:
+                parts = line.strip().split('|')
+                if len(parts) < 3: continue
+                try:
+                    ts = int(parts[1])
+                except: continue
+                uid = parts[0]
+                total += 1
+                users_all.add(uid)
+                if ts >= today_start: today_cnt += 1
+                if ts >= week_start:
+                    week_cnt += 1
+                    week_users[uid] = week_users.get(uid, 0) + 1
+                if ts >= month_start: month_cnt += 1
+                users_count[uid] = users_count.get(uid, 0) + 1
     
-    # Активные (не истёкшие)
+    # Активные
     active = 0
-    if os.path.exists("/etc/UDPCustom/users.db"):
-        with open("/etc/UDPCustom/users.db") as f:
+    if os.path.exists(USERS_DB):
+        now_ts = int(time.time())
+        with open(USERS_DB) as f:
             for u in f:
                 u = u.strip()
                 if not u: continue
-                ts_file = f"/etc/UDPCustom/expire_ts/{u}"
+                ts_file = f"{EXPIRE_DIR}/{u}"
                 if os.path.exists(ts_file):
                     try:
                         exp = int(open(ts_file).read().strip())
-                        if exp > time.time():
-                            active += 1
+                        if exp > now_ts: active += 1
                     except: pass
+    
+    # Топ-5 за НЕДЕЛЮ (исключая админа)
+    top_users = sorted([(u, c) for u, c in week_users.items() if str(u) != str(admin_id)], 
+                       key=lambda x: x[1], reverse=True)[:5]
     
     text = (
         f"📊 <b>Статистика бота</b>\n\n"
@@ -739,13 +744,31 @@ def handle_stats(cfg, chat_id, user_id):
         f"  • 7 дней  : <b>{week_cnt}</b>\n"
         f"  • 30 дней : <b>{month_cnt}</b>\n\n"
         f"<b>Пользователи:</b>\n"
-        f"  • Уникальных : <b>{len(users_set)}</b>\n"
+        f"  • Уникальных : <b>{len(users_all)}</b>\n"
         f"  • Активных   : <b>{active}</b>\n\n"
     )
-    if last_issued:
-        text += "<b>Последние 5 выдач:</b>\n" + "\n".join(last_issued)
     
-    send_message(token, chat_id, text, parse_mode='HTML')
+    if top_users:
+        text += "<b>🏆 Топ-5 за неделю:</b>\n"
+        for u, c2 in top_users:
+            text += f"  • <code>{u}</code> — <b>{c2}</b> ключей\n"
+    else:
+        text += "<i>За неделю выдач не было</i>\n"
+    
+    keyboard = {'inline_keyboard': []}
+    for u, c2 in top_users:
+        keyboard['inline_keyboard'].append([
+            {'text': f'💬 Написать {u[-4:]} ({c2})', 'url': f'tg://user?id={u}'}
+        ])
+    keyboard['inline_keyboard'].append([{'text': '🔄 Обновить', 'callback_data': 'admin_stats'}])
+    
+    tg_request(token, 'sendMessage', {
+        'chat_id': chat_id,
+        'text': text,
+        'parse_mode': 'HTML',
+        'reply_markup': keyboard
+    })
+
 
 
 def handle_ban(cfg, chat_id, user_id, args):
@@ -851,6 +874,135 @@ def mark_verified(user_id, hours=8):
         log.error(f"mark_verified error: {e}")
 
 
+USERS_DB = "/etc/UDPCustom/users.db"
+EXPIRE_DIR = "/etc/UDPCustom/expire_ts"
+LIMITS_DIR = "/etc/UDPCustom/limits"
+
+
+def get_users_stats():
+    """Возвращает список юзеров с инфой: (username, exp_ts, is_expired)"""
+    users = []
+    if not os.path.exists(USERS_DB): return users
+    now = int(time.time())
+    try:
+        with open(USERS_DB) as f:
+            for line in f:
+                u = line.strip()
+                if not u: continue
+                ts_file = f"{EXPIRE_DIR}/{u}"
+                exp_ts = 0
+                if os.path.exists(ts_file):
+                    try:
+                        exp_ts = int(open(ts_file).read().strip())
+                    except: pass
+                is_expired = exp_ts > 0 and exp_ts < now
+                users.append({'name': u, 'exp_ts': exp_ts, 'expired': is_expired})
+    except: pass
+    return users
+
+
+def handle_users(cfg, chat_id, user_id, page=1):
+    """Список юзеров с пагинацией"""
+    token = cfg['BOT_TOKEN']
+    admin_id = cfg.get('ADMIN_ID', '')
+    if str(user_id) != str(admin_id):
+        send_message(token, chat_id, "🚫 Только для админа.")
+        return
+    
+    users = get_users_stats()
+    if not users:
+        send_message(token, chat_id, "📋 Список пуст.")
+        return
+    
+    per_page = 20
+    total = len(users)
+    total_pages = (total + per_page - 1) // per_page
+    if page < 1: page = 1
+    if page > total_pages: page = total_pages
+    
+    start = (page - 1) * per_page
+    end = min(start + per_page, total)
+    
+    active = sum(1 for u in users if not u['expired'])
+    expired = total - active
+    
+    text = f"👥 <b>Пользователи</b> (стр. {page}/{total_pages})\n"
+    text += f"Всего: <b>{total}</b> | Активных: <b>{active}</b> | Истёкших: <b>{expired}</b>\n\n"
+    
+    for u in users[start:end]:
+        icon = "🟢" if not u['expired'] else "🔴"
+        name = u['name']
+        if u['exp_ts']:
+            left = u['exp_ts'] - int(time.time())
+            if left > 0:
+                h = left // 3600
+                if h < 24:
+                    time_left = f"{h}ч"
+                else:
+                    time_left = f"{h//24}д"
+            else:
+                time_left = "истёк"
+        else:
+            time_left = "∞"
+        text += f"{icon} <code>{name}</code> — {time_left}\n"
+    
+    keyboard = {'inline_keyboard': []}
+    nav_row = []
+    if page > 1:
+        nav_row.append({'text': '◀', 'callback_data': f'admin_users_{page-1}'})
+    nav_row.append({'text': f'{page}/{total_pages}', 'callback_data': 'noop'})
+    if page < total_pages:
+        nav_row.append({'text': '▶', 'callback_data': f'admin_users_{page+1}'})
+    keyboard['inline_keyboard'].append(nav_row)
+    keyboard['inline_keyboard'].append([{'text': '🗑️ Удалить истёкших', 'callback_data': 'admin_cleanup'}])
+    keyboard['inline_keyboard'].append([{'text': '🔄 Обновить', 'callback_data': f'admin_users_{page}'}])
+    
+    tg_request(token, 'sendMessage', {
+        'chat_id': chat_id,
+        'text': text,
+        'reply_markup': keyboard,
+        'parse_mode': 'HTML'
+    })
+
+
+def handle_cleanup(cfg, chat_id, user_id):
+    """Удалить всех истёкших"""
+    token = cfg['BOT_TOKEN']
+    admin_id = cfg.get('ADMIN_ID', '')
+    if str(user_id) != str(admin_id):
+        send_message(token, chat_id, "🚫 Только для админа.")
+        return
+    
+    users = get_users_stats()
+    expired = [u for u in users if u['expired']]
+    
+    if not expired:
+        send_message(token, chat_id, "✅ Нет истёкших для удаления.")
+        return
+    
+    removed = 0
+    failed = 0
+    for u in expired:
+        name = u['name']
+        try:
+            subprocess.run(['userdel', '-f', name], capture_output=True, timeout=10)
+            # Удаляем следы
+            for p in [f"/etc/UDPCustom/limits/{name}", f"/etc/UDPCustom/expire_ts/{name}", 
+                      f"/etc/UDPCustom/traffic/{name}", f"/etc/UDPCustom/traffic_limits/{name}"]:
+                try: os.remove(p)
+                except: pass
+            # Убираем из users.db
+            subprocess.run(['sed', '-i', f'/^{name}$/d', USERS_DB], capture_output=True)
+            # Убираем maxlogins
+            subprocess.run(['sed', '-i', f'/^{name}\s\+hard\s\+maxlogins/d', '/etc/security/limits.conf'], capture_output=True)
+            removed += 1
+        except:
+            failed += 1
+    
+    send_message(token, chat_id, f"✅ Удалено истёкших: <b>{removed}</b>\n" + (f"⚠️ Ошибок: {failed}" if failed else ""), parse_mode='HTML')
+    log.info(f"CLEANUP via bot: removed={removed}, failed={failed}")
+
+
 def main():
     cfg = load_config()
     if not cfg.get('BOT_TOKEN'):
@@ -872,7 +1024,9 @@ def main():
                 {'command': 'banlist', 'description': '🚫 Чёрный список'},
                 {'command': 'post', 'description': '📢 Опубликовать пост'},
                 {'command': 'ban', 'description': '🚫 Забанить (ID)'},
-                {'command': 'unban', 'description': '✅ Разбанить (ID)'}
+                {'command': 'unban', 'description': '✅ Разбанить (ID)'},
+                {'command': 'users', 'description': '👥 Пользователи'},
+                {'command': 'cleanup', 'description': '🗑️ Удалить истёкших'}
             ],
             'scope': {'type': 'chat', 'chat_id': int(admin_id)}
         })
@@ -913,6 +1067,25 @@ def main():
                         handle_banlist(cfg, cb['message']['chat']['id'], cb_user_id)
                     elif cb_data == 'admin_post':
                         post_to_channel(cfg, cb['message']['chat']['id'], cb_user_id)
+                    elif cb_data == 'admin_cleanup':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
+                            'callback_query_id': cb['id'],
+                            'text': '🗑️ Удаляем истёкших...',
+                            'show_alert': False
+                        })
+                        handle_cleanup(cfg, cb['message']['chat']['id'], cb_user_id)
+                    elif cb_data.startswith('admin_users_'):
+                        pg = cb_data.replace('admin_users_', '')
+                        try: pg = int(pg)
+                        except: pg = 1
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
+                            'callback_query_id': cb['id']
+                        })
+                        handle_users(cfg, cb['message']['chat']['id'], cb_user_id, pg)
+                    elif cb_data == 'noop':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
+                            'callback_query_id': cb['id']
+                        })
                     # Юзер нажал "Я зашёл и поставил реакцию"
                     elif cb_data == 'check_verified':
                         channels = get_channels()
@@ -961,6 +1134,8 @@ def main():
                 elif text.startswith('/banlist'): handle_banlist(cfg, chat_id, user_id)
                 elif text.startswith('/unban'): handle_unban(cfg, chat_id, user_id, text[6:].strip())
                 elif text.startswith('/ban'): handle_ban(cfg, chat_id, user_id, text[4:].strip())
+                elif text.startswith('/users'): handle_users(cfg, chat_id, user_id, 1)
+                elif text.startswith('/cleanup'): handle_cleanup(cfg, chat_id, user_id)
                 elif text.startswith('/help'): handle_help(cfg, chat_id)
         except KeyboardInterrupt: log.info("Остановка"); break
         except Exception as e: log.error(f"Ошибка в main loop: {e}"); time.sleep(5)
