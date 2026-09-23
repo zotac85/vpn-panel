@@ -44,21 +44,27 @@ fi
 mkdir -p "$PANEL_DIR/modules" /etc/UDPCustom/limits /etc/UDPCustom/traffic /etc/UDPCustom/traffic_limits
 touch /etc/UDPCustom/users.db
 
-# Инициализация файлов домена, прокси, payload (только если пустые)
+# Инициализация файлов домена, прокси, payload, каналов
 [ ! -s /etc/vpn-domain ] && echo "de.cdnstore.shop" > /etc/vpn-domain
 [ ! -s /etc/UDPCustom/proxies.txt ] && echo "8.6.112.0" > /etc/UDPCustom/proxies.txt
 [ ! -s /etc/UDPCustom/payload.txt ] && echo 'CONNECT http://co.nr HTTP/1.1[crlf]Host: www.icloud.com[crlf]User-Agent: microsoft.com[crlf][crlf]AN / HTTP/1.1[lf]Host: [host][lf]Connection: Upgrade[lf]Upgrade: websocket[crlf][crlf]' > /etc/UDPCustom/payload.txt
-[ ! -s /etc/UDPCustom/welcome.txt ] && cat > /etc/UDPCustom/welcome.txt << 'WELCOME_EOF'
+
 [ ! -s /etc/UDPCustom/channels.txt ] && cat > /etc/UDPCustom/channels.txt << 'CHANNELS_EOF'
 @ArsenVipKeys
 @vpnbalkan
 CHANNELS_EOF
+
+# welcome.txt — обновляем если нет VIP-блока (бэкап старого)
+if [ ! -f /etc/UDPCustom/welcome.txt ] || ! grep -q "VIP" /etc/UDPCustom/welcome.txt 2>/dev/null; then
+    [ -f /etc/UDPCustom/welcome.txt ] && cp /etc/UDPCustom/welcome.txt /etc/UDPCustom/welcome.txt.bak
+    cat > /etc/UDPCustom/welcome.txt << 'WELCOME_EOF'
 🎁 ПОЛУЧИ БЕСПЛАТНЫЙ VPN 🎁
 
 ⏰ 8 часов доступа
 📊 50 ГБ трафика
 📱 1 устройство
-🚀 Без ограничений скорости
+🚀 Скорость 2 мб/с
+
 📲 Готовый конфиг для DarkTunnel
 
 ━━━━━━━━━━━━━━━━━━
@@ -66,8 +72,19 @@ CHANNELS_EOF
 🔓 Для получения теста подпишись на каналы спонсора и нажми кнопку ниже 👇
 
 ━━━━━━━━━━━━━━━━━━
-💬 Поддержка: @ArsenGuro
+
+💎 Есть VIP-ключи в наличии!
+
+✅ 30 дней - 5 $
+✅ Лимит 5 устройств
+✅ Приоритетная поддержка
+✅ Без ограничений скорости
+
+💬 Выбери Купит VIP-ключ
+
+━━━━━━━━━━━━━━━━━━
 WELCOME_EOF
+fi
 
 # Откат старого костыля vpn-limit-shell
 if [ -f "/etc/UDPCustom/users.db" ]; then
@@ -110,7 +127,7 @@ FILES_MODULES=(
 
 # Скачивание Python-скрипта Telegram-бота
 # Обновляем если: файла нет ИЛИ версия старая (без get_welcome_text)
-if [ ! -s /usr/local/bin/vpn-tg-bot.py ] || ! grep -q "get_welcome_text" /usr/local/bin/vpn-tg-bot.py 2>/dev/null; then
+if [ ! -s /usr/local/bin/vpn-tg-bot.py ] || ! grep -q "Купить VIP-ключ" /usr/local/bin/vpn-tg-bot.py 2>/dev/null; then
     curl -sf -o /usr/local/bin/vpn-tg-bot.py "$REPO_URL/bot/vpn-tg-bot.py"
     chmod +x /usr/local/bin/vpn-tg-bot.py
 fi
