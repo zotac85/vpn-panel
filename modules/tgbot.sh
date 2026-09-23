@@ -227,6 +227,26 @@ tg_test_bot() {
     read -p "Нажмите Enter..."
 }
 
+tg_edit_start_file() {
+    header
+    echo -e "${YELLOW}--- ✏️  Редактирование /start ---${NC}"
+    echo -e "${CYAN}Файл: /etc/UDPCustom/start.txt${NC}"
+    echo -e "${CYAN}Переменные: {name}, {primary}, {sponsors_list}${NC}"
+    echo ""
+    sleep 1
+    if command -v nano >/dev/null 2>&1; then
+        nano /etc/UDPCustom/start.txt
+    elif command -v vi >/dev/null 2>&1; then
+        vi /etc/UDPCustom/start.txt
+    else
+        apt-get update -qq && apt-get install -y nano
+        nano /etc/UDPCustom/start.txt
+    fi
+    systemctl restart vpn-tg-bot 2>/dev/null
+    echo -e "${GREEN}✅ Сохранено, бот перезапущен${NC}"
+    read -p "Enter..."
+}
+
 tg_edit_welcome_file() {
     header
     echo -e "${YELLOW}--- ✏️  Редактирование приветствия ---${NC}"
