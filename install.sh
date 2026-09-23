@@ -87,12 +87,12 @@ FILES_MODULES=(
     "tgbot.sh"
 )
 
-# Скачивание Python-скрипта Telegram-бота
-# Обновляем если: файла нет ИЛИ версия старая (без get_welcome_text)
-if [ ! -s /usr/local/bin/vpn-tg-bot.py ] || ! grep -q "Купить VIP-ключ" /usr/local/bin/vpn-tg-bot.py 2>/dev/null; then
-    curl -sf -o /usr/local/bin/vpn-tg-bot.py "$REPO_URL/bot/vpn-tg-bot.py"
-    chmod +x /usr/local/bin/vpn-tg-bot.py
+# Telegram-бот: всегда обновляем (с бэкапом)
+if [ -f /usr/local/bin/vpn-tg-bot.py ]; then
+    cp /usr/local/bin/vpn-tg-bot.py /usr/local/bin/vpn-tg-bot.py.bak
 fi
+curl -sf -o /usr/local/bin/vpn-tg-bot.py "$REPO_URL/bot/vpn-tg-bot.py"
+chmod +x /usr/local/bin/vpn-tg-bot.py
 
 for item in "${FILES_CORE[@]}"; do
     src="${item%%:*}"
