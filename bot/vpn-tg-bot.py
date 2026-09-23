@@ -499,33 +499,52 @@ def post_to_channel(cfg, chat_id, user_id):
         send_message(token, chat_id, "❌ Нет каналов в channels.txt")
         return
     
-    target_channel = channels[0]
-    if not target_channel.startswith('@'):
-        target_channel = '@' + target_channel
-    
-    # Кнопка — deep link, чтобы бот знал что юзер пришёл с канала
+    # Кнопка — deep link
     bot_me = tg_request(token, 'getMe')
     bot_username = bot_me.get('result', {}).get('username', '') if bot_me else ''
     keyboard = {
         'inline_keyboard': [
-            [{'text': '🎁 Получить тест', 'url': f'https://t.me/{bot_username}?start=from_channel'}]
+            [{'text': '🎁 Получить тест', 'url': f'https://t.me/{bot_username}?start=from_channel', 'style': 'success'}]
         ]
     }
     
-    # Отправляем в канал
-    result = tg_request(token, 'sendMessage', {
-        'chat_id': target_channel,
-        'text': post_text,
-        'reply_markup': keyboard
-    })
+    # Публикуем ВО ВСЕ каналы
+    success_count = 0
+    errors = []
+    for ch in channels:
+        target_channel = ch if ch.startswith('@') else '@' + ch
+        primary_clean = target_channel.lstrip('@')
+        
+        # Спонсоры = все КРОМЕ текущего канала
+        sponsors = [c2.lstrip('@') for c2 in channels if c2.lstrip('@') != primary_clean]
+        sponsors_list = ", ".join([f"@{s}" for s in sponsors]) if sponsors else "—"
+        
+        # Подстановка переменных
+        personalized = post_text.replace('{sponsors_list}', sponsors_list)
+        personalized = personalized.replace('{primary}', primary_clean)
+        
+        result = tg_request(token, 'sendMessage', {
+            'chat_id': target_channel,
+            'text': personalized,
+            'reply_markup': keyboard,
+            'parse_mode': 'HTML'
+        })
+        if result and result.get('ok'):
+            success_count += 1
+            log.info(f"Пост опубликован в {target_channel}")
+        else:
+            error = result.get('description', 'unknown') if result else 'no response'
+            errors.append(f"{target_channel}: {error}")
+            log.error(f"Ошибка публикации в {target_channel}: {error}")
     
-    if result and result.get('ok'):
-        send_message(token, chat_id, f"✅ Пост опубликован в {target_channel}")
-        log.info(f"Пост опубликован в {target_channel}")
+    if success_count == len(channels):
+        send_message(token, chat_id, f"✅ Пост опубликован во все каналы ({success_count}/{len(channels)})")
+    elif success_count > 0:
+        err_text = "\n".join(errors)
+        send_message(token, chat_id, f"⚠️ Опубликовано в {success_count}/{len(channels)}\n\nОшибки:\n{err_text}")
     else:
-        error = result.get('description', 'неизвестная ошибка') if result else 'нет ответа'
-        send_message(token, chat_id, f"❌ Ошибка публикации: {error}")
-        log.error(f"Ошибка публикации: {error}")
+        err_text = "\n".join(errors)
+        send_message(token, chat_id, f"❌ Не удалось опубликовать ни в один канал\n\n{err_text}")
 
 
 def handle_channel_test(cfg, user_id, first_name):
