@@ -331,7 +331,10 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
                 {'text': '📊 Статистика', 'callback_data': 'admin_stats'},
                 {'text': '👥 Пользователи', 'callback_data': 'admin_users_1'}
             ])
-            keyboard['inline_keyboard'].append([{'text': '📢 Опубликовать пост', 'callback_data': 'admin_post'}])
+            keyboard['inline_keyboard'].append([
+                {'text': '📢 Пост', 'callback_data': 'admin_post'},
+                {'text': '📢 Каналы', 'callback_data': 'admin_channels'}
+            ])
     
     elif verified:
         # Подписан на все + verified → кнопка получить тест
@@ -354,7 +357,10 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
                 {'text': '📊 Статистика', 'callback_data': 'admin_stats'},
                 {'text': '👥 Пользователи', 'callback_data': 'admin_users_1'}
             ])
-            keyboard['inline_keyboard'].append([{'text': '📢 Опубликовать пост', 'callback_data': 'admin_post'}])
+            keyboard['inline_keyboard'].append([
+                {'text': '📢 Пост', 'callback_data': 'admin_post'},
+                {'text': '📢 Каналы', 'callback_data': 'admin_channels'}
+            ])
     
     else:
         # Подписан на все, но НЕ verified → надо зайти на канал
@@ -378,7 +384,10 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
                 {'text': '📊 Статистика', 'callback_data': 'admin_stats'},
                 {'text': '👥 Пользователи', 'callback_data': 'admin_users_1'}
             ])
-            keyboard['inline_keyboard'].append([{'text': '📢 Опубликовать пост', 'callback_data': 'admin_post'}])
+            keyboard['inline_keyboard'].append([
+                {'text': '📢 Пост', 'callback_data': 'admin_post'},
+                {'text': '📢 Каналы', 'callback_data': 'admin_channels'}
+            ])
     
     send_message(token, chat_id, text, reply_markup=keyboard, parse_mode='HTML')
 
@@ -1289,6 +1298,230 @@ def handle_restart(cfg, chat_id, user_id, args):
         send_message(token, chat_id, f"❌ Ошибка: {e}")
 
 
+CHANNELS_FILE = "/etc/UDPCustom/channels.txt"
+
+
+def handle_channels(cfg, chat_id, user_id):
+    """Список каналов с ролями"""
+    token = cfg['BOT_TOKEN']
+    if not is_admin(cfg, user_id):
+        send_message(token, chat_id, "🚫 Только для админа."); return
+    
+    channels = get_channels()
+    if not channels:
+        send_message(token, chat_id, "📢 <b>Каналов нет.</b>\n\n<i>Добавить: /addchannel @name</i>", parse_mode='HTML')
+        return
+    
+    text = f"📢 <b>Каналы ({len(channels)}):</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
+    for i, ch in enumerate(channels, 1):
+        ch_clean = ch.lstrip('@')
+        if i == 1:
+            text += f"<b>{i}.</b> <code>@{ch_clean}</code> — 🎯 <b>Основной</b>\n"
+        else:
+            text += f"<b>{i}.</b> <code>@{ch_clean}</code> — 📢 Спонсор\n"
+    
+    text += f"\n━━━━━━━━━━━━━━━━━━━━\n"
+    text += f"<i>Добавить: /addchannel @name</i>\n"
+    text += f"<i>Удалить: /delchannel N</i>"
+    
+    send_message(token, chat_id, text, parse_mode='HTML')
+
+
+PENDING_ACTIONS = {}
+
+
+def handle_addchannel(cfg, chat_id, user_id, args):
+    """Добавить канал: /addchannel @name ИЛИ через ForceReply"""
+    token = cfg['BOT_TOKEN']
+    if not is_admin(cfg, user_id):
+        send_message(token, chat_id, "🚫 Только для админа."); return
+    
+    args = args.strip()
+    
+    # Если аргумент НЕ передан — просим через ForceReply
+    if not args:
+        PENDING_ACTIONS[user_id] = 'addchannel'
+        tg_request(token, 'sendMessage', {
+            'chat_id': chat_id,
+            'text': "📢 <b>Отправь username канала</b>\n\nПример: <code>@MyChannel</code>\n\n<i>Ответь на это сообщение (свайп влево)</i>",
+            'parse_mode': 'HTML',
+            'reply_markup': {'force_reply': True, 'selective': True}
+        })
+        return
+    
+    # Есть аргумент — обрабатываем сразу
+    _do_addchannel(token, chat_id, args)
+
+
+def _do_addchannel(token, chat_id, args):
+    """Внутренняя: добавляет канал"""
+    ch = args.strip().split()[0]
+    if not ch.startswith('@'):
+        ch = '@' + ch
+    
+    # Проверяем через Telegram API
+    test = tg_request(token, 'getChat', {'chat_id': ch})
+    if not test or not test.get('ok'):
+        err = test.get('description', 'unknown') if test else 'no response'
+        send_message(token, chat_id, f"❌ Не удалось получить канал: {err}\n\nУбедись что:\n• Username правильный\n• Бот добавлен в канал")
+        return
+    
+    try:
+        channels = get_channels()
+        if ch in channels:
+            send_message(token, chat_id, f"⚠️ Канал {ch} уже в списке"); return
+        
+        with open(CHANNELS_FILE, 'a') as f:
+            f.write(ch + "\n")
+        channels.append(ch)
+        send_message(token, chat_id, f"✅ Добавлен канал: <code>{ch}</code>\nВсего: <b>{len(channels)}</b>\n\n⚠️ Не забудь сделать бота админом!", parse_mode='HTML')
+    except Exception as e:
+        send_message(token, chat_id, f"❌ Ошибка: {e}")
+
+
+def handle_delchannel(cfg, chat_id, user_id, args):
+    """Удалить канал: /delchannel N ИЛИ через ForceReply"""
+    token = cfg['BOT_TOKEN']
+    if not is_admin(cfg, user_id):
+        send_message(token, chat_id, "🚫 Только для админа."); return
+    
+    args = args.strip()
+    
+    if not args:
+        PENDING_ACTIONS[user_id] = 'delchannel'
+        tg_request(token, 'sendMessage', {
+            'chat_id': chat_id,
+            'text': "🗑️ <b>Отправь номер канала для удаления</b>\n\nПосмотреть: /channels\n\n<i>Ответь на это сообщение</i>",
+            'parse_mode': 'HTML',
+            'reply_markup': {'force_reply': True, 'selective': True}
+        })
+        return
+    
+    _do_delchannel(token, chat_id, args)
+
+
+def _do_delchannel(token, chat_id, args):
+    """Внутренняя: удаляет канал"""
+    if not args.isdigit():
+        send_message(token, chat_id, "❌ Номер должен быть числом"); return
+    
+    n = int(args)
+    try:
+        channels = get_channels()
+        if n < 1 or n > len(channels):
+            send_message(token, chat_id, f"❌ Нет канала №{n}"); return
+        
+        removed = channels.pop(n-1)
+        with open(CHANNELS_FILE, 'w') as f:
+            for ch in channels:
+                f.write(ch + "\n")
+        send_message(token, chat_id, f"✅ Удалён: <code>{removed}</code>\nОсталось: <b>{len(channels)}</b>", parse_mode='HTML')
+    except Exception as e:
+        send_message(token, chat_id, f"❌ Ошибка: {e}")
+
+
+ADMINS_FILE = "/etc/UDPCustom/admins.txt"
+
+
+def get_admins():
+    """Список всех админов (ID)"""
+    admins = []
+    if os.path.exists(ADMINS_FILE):
+        try:
+            with open(ADMINS_FILE) as f:
+                admins = [l.strip() for l in f if l.strip() and not l.startswith('#')]
+        except: pass
+    # Fallback: если файла нет — берём из bot.conf
+    if not admins:
+        cfg = load_config()
+        aid = cfg.get('ADMIN_ID', '')
+        if aid:
+            admins = [aid]
+    return admins
+
+
+def is_admin(cfg, user_id):
+    """Проверка: является ли юзер админом"""
+    return str(user_id) in get_admins()
+
+
+def handle_addadmin(cfg, chat_id, user_id, args):
+    """Добавить админа: /addadmin 123456789"""
+    token = cfg['BOT_TOKEN']
+    if not is_admin(cfg, user_id):
+        send_message(token, chat_id, "🚫 Только для админа."); return
+    args = args.strip()
+    if not args or not args.isdigit():
+        send_message(token, chat_id, "📖 Формат: <code>/addadmin 123456789</code>", parse_mode='HTML'); return
+    
+    new_id = args
+    admins = get_admins()
+    if new_id in admins:
+        send_message(token, chat_id, f"⚠️ <code>{new_id}</code> уже админ", parse_mode='HTML'); return
+    
+    try:
+        with open(ADMINS_FILE, 'a') as f:
+            f.write(new_id + "\n")
+        admins.append(new_id)
+        send_message(token, chat_id, f"✅ Добавлен админ: <code>{new_id}</code>\nВсего админов: <b>{len(admins)}</b>", parse_mode='HTML')
+        log.info(f"ADMIN added: {new_id} by {user_id}")
+    except Exception as e:
+        send_message(token, chat_id, f"❌ Ошибка: {e}")
+
+
+def handle_deladmin(cfg, chat_id, user_id, args):
+    """Удалить админа: /deladmin 123456789"""
+    token = cfg['BOT_TOKEN']
+    if not is_admin(cfg, user_id):
+        send_message(token, chat_id, "🚫 Только для админа."); return
+    args = args.strip()
+    if not args or not args.isdigit():
+        send_message(token, chat_id, "📖 Формат: <code>/deladmin 123456789</code>", parse_mode='HTML'); return
+    
+    target = args
+    admins = get_admins()
+    if target not in admins:
+        send_message(token, chat_id, f"⚠️ <code>{target}</code> не админ", parse_mode='HTML'); return
+    
+    # Нельзя удалить себя
+    if target == str(user_id):
+        send_message(token, chat_id, "❌ Нельзя удалить самого себя")
+        return
+    
+    # Нельзя удалить последнего
+    if len(admins) <= 1:
+        send_message(token, chat_id, "❌ Нельзя удалить последнего админа")
+        return
+    
+    admins.remove(target)
+    try:
+        with open(ADMINS_FILE, 'w') as f:
+            for a in admins:
+                f.write(a + "\n")
+        send_message(token, chat_id, f"✅ Удалён админ: <code>{target}</code>\nОсталось: <b>{len(admins)}</b>", parse_mode='HTML')
+        log.info(f"ADMIN removed: {target} by {user_id}")
+    except Exception as e:
+        send_message(token, chat_id, f"❌ Ошибка: {e}")
+
+
+def handle_admins(cfg, chat_id, user_id):
+    """Список админов"""
+    token = cfg['BOT_TOKEN']
+    if not is_admin(cfg, user_id):
+        send_message(token, chat_id, "🚫 Только для админа."); return
+    
+    admins = get_admins()
+    text = f"👑 <b>Админы ({len(admins)}):</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
+    for i, a in enumerate(admins, 1):
+        mark = " ⭐ (вы)" if str(a) == str(user_id) else ""
+        text += f"<b>{i}.</b> <code>{a}</code>{mark}\n"
+    text += f"\n━━━━━━━━━━━━━━━━━━━━\n"
+    text += f"<i>Добавить: /addadmin ID</i>\n"
+    text += f"<i>Удалить: /deladmin ID</i>\n\n"
+    text += f"<i>ID можно узнать в @userinfobot</i>"
+    send_message(token, chat_id, text, parse_mode='HTML')
+
+
 def main():
     cfg = load_config()
     if not cfg.get('BOT_TOKEN'):
@@ -1384,6 +1617,9 @@ def main():
                                 'text': f'❌ Ошибка: {e}',
                                 'show_alert': True
                             })
+                    elif cb_data == 'admin_channels':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        handle_channels(cfg, cb['message']['chat']['id'], cb_user_id)
                     elif cb_data == 'admin_manage':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
                             'callback_query_id': cb['id']
@@ -1466,6 +1702,15 @@ def main():
                 if 'message' not in upd: continue
                 msg = upd['message']; chat_id = msg['chat']['id']; user_id = msg['from']['id']; first_name = msg['from'].get('first_name','')
                 text = msg.get('text','')
+                
+                # Обработка ответа на ForceReply
+                if user_id in PENDING_ACTIONS and msg.get('reply_to_message'):
+                    action = PENDING_ACTIONS.pop(user_id)
+                    if action == 'addchannel':
+                        _do_addchannel(cfg['BOT_TOKEN'], chat_id, text)
+                    elif action == 'delchannel':
+                        _do_delchannel(cfg['BOT_TOKEN'], chat_id, text)
+                    continue
                 if text.startswith('/start'):
                     # Проверяем deep link параметр (пришёл из канала)
                     if 'from_channel' in text:
@@ -1491,6 +1736,9 @@ def main():
                 elif text.startswith('/setpayload'): handle_setpayload(cfg, chat_id, user_id, text[11:].strip())
                 elif text.startswith('/payload'): handle_payload(cfg, chat_id, user_id)
                 elif text.startswith('/services'): handle_services(cfg, chat_id, user_id)
+                elif text.startswith('/channels'): handle_channels(cfg, chat_id, user_id)
+                elif text.startswith('/addchannel'): handle_addchannel(cfg, chat_id, user_id, text[11:].strip())
+                elif text.startswith('/delchannel'): handle_delchannel(cfg, chat_id, user_id, text[11:].strip())
                 elif text.startswith('/restart'): handle_restart(cfg, chat_id, user_id, text[8:].strip())
                 elif text.startswith('/help'): handle_help(cfg, chat_id)
         except KeyboardInterrupt: log.info("Остановка"); break
