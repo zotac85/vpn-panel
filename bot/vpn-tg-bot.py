@@ -322,13 +322,15 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         for ch in not_sub:
             keyboard['inline_keyboard'].append([{'text': f'📢 @{ch}', 'url': f'https://t.me/{ch}'}])
         keyboard['inline_keyboard'].append([{'text': '✅ Я подписался → Проверить', 'callback_data': 'check_verified'}])
-        keyboard['inline_keyboard'].append([{'text': '💎 Купить VIP-ключ', 'url': 'https://t.me/ArsenGuro'}])
-        keyboard['inline_keyboard'].append([{'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}])
+        keyboard['inline_keyboard'].append([
+            {'text': '💎 VIP-ключ', 'url': 'https://t.me/ArsenGuro'},
+            {'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}
+        ])
         if is_admin:
-            keyboard['inline_keyboard'].append([{'text': '📊 Статистика', 'callback_data': 'admin_stats'}])
-            keyboard['inline_keyboard'].append([{'text': '👥 Пользователи', 'callback_data': 'admin_users_1'}])
-            keyboard['inline_keyboard'].append([{'text': '🗑️ Удалить истёкших', 'callback_data': 'admin_cleanup'}])
-            keyboard['inline_keyboard'].append([{'text': '🚫 Бан-лист', 'callback_data': 'admin_banlist'}])
+            keyboard['inline_keyboard'].append([
+                {'text': '📊 Статистика', 'callback_data': 'admin_stats'},
+                {'text': '👥 Пользователи', 'callback_data': 'admin_users_1'}
+            ])
             keyboard['inline_keyboard'].append([{'text': '📢 Опубликовать пост', 'callback_data': 'admin_post'}])
     
     elif verified:
@@ -342,14 +344,16 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         )
         keyboard = {'inline_keyboard': [
             [{'text': '🎁 ПОЛУЧИТЬ ТЕСТ', 'callback_data': 'get_test'}],
-            [{'text': '💎 Купить VIP-ключ', 'url': 'https://t.me/ArsenGuro'}],
-            [{'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}]
+            [
+                {'text': '💎 VIP-ключ', 'url': 'https://t.me/ArsenGuro'},
+                {'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}
+            ]
         ]}
         if is_admin:
-            keyboard['inline_keyboard'].append([{'text': '📊 Статистика', 'callback_data': 'admin_stats'}])
-            keyboard['inline_keyboard'].append([{'text': '👥 Пользователи', 'callback_data': 'admin_users_1'}])
-            keyboard['inline_keyboard'].append([{'text': '🗑️ Удалить истёкших', 'callback_data': 'admin_cleanup'}])
-            keyboard['inline_keyboard'].append([{'text': '🚫 Бан-лист', 'callback_data': 'admin_banlist'}])
+            keyboard['inline_keyboard'].append([
+                {'text': '📊 Статистика', 'callback_data': 'admin_stats'},
+                {'text': '👥 Пользователи', 'callback_data': 'admin_users_1'}
+            ])
             keyboard['inline_keyboard'].append([{'text': '📢 Опубликовать пост', 'callback_data': 'admin_post'}])
     
     else:
@@ -370,10 +374,10 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
             [{'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}]
         ]}
         if is_admin:
-            keyboard['inline_keyboard'].append([{'text': '📊 Статистика', 'callback_data': 'admin_stats'}])
-            keyboard['inline_keyboard'].append([{'text': '👥 Пользователи', 'callback_data': 'admin_users_1'}])
-            keyboard['inline_keyboard'].append([{'text': '🗑️ Удалить истёкших', 'callback_data': 'admin_cleanup'}])
-            keyboard['inline_keyboard'].append([{'text': '🚫 Бан-лист', 'callback_data': 'admin_banlist'}])
+            keyboard['inline_keyboard'].append([
+                {'text': '📊 Статистика', 'callback_data': 'admin_stats'},
+                {'text': '👥 Пользователи', 'callback_data': 'admin_users_1'}
+            ])
             keyboard['inline_keyboard'].append([{'text': '📢 Опубликовать пост', 'callback_data': 'admin_post'}])
     
     send_message(token, chat_id, text, reply_markup=keyboard, parse_mode='HTML')
@@ -677,8 +681,8 @@ def handle_channel_test(cfg, user_id, first_name):
     log.info(f"Выдан тест из канала: {username} (user_id={user_id})")
 
 
-def handle_stats(cfg, chat_id, user_id):
-    """Статистика: топ-5 за неделю"""
+def handle_stats(cfg, chat_id, user_id, mode='keys', msg_id=None):
+    """Статистика: переключение ключи/трафик"""
     token = cfg['BOT_TOKEN']
     admin_id = cfg.get('ADMIN_ID', '')
     if str(user_id) != str(admin_id):
@@ -695,7 +699,6 @@ def handle_stats(cfg, chat_id, user_id):
     today_cnt = 0
     week_cnt = 0
     month_cnt = 0
-    users_count = {}
     week_users = {}
     users_all = set()
     
@@ -704,8 +707,7 @@ def handle_stats(cfg, chat_id, user_id):
             for line in f:
                 parts = line.strip().split('|')
                 if len(parts) < 3: continue
-                try:
-                    ts = int(parts[1])
+                try: ts = int(parts[1])
                 except: continue
                 uid = parts[0]
                 total += 1
@@ -715,7 +717,6 @@ def handle_stats(cfg, chat_id, user_id):
                     week_cnt += 1
                     week_users[uid] = week_users.get(uid, 0) + 1
                 if ts >= month_start: month_cnt += 1
-                users_count[uid] = users_count.get(uid, 0) + 1
     
     # Активные
     active = 0
@@ -732,43 +733,123 @@ def handle_stats(cfg, chat_id, user_id):
                         if exp > now_ts: active += 1
                     except: pass
     
-    # Топ-5 за НЕДЕЛЮ (исключая админа)
-    top_users = sorted([(u, c) for u, c in week_users.items() if str(u) != str(admin_id)], 
+    # Топ-5 по ключам за неделю
+    top_users = sorted([(u, c2) for u, c2 in week_users.items() if str(u) != str(admin_id)],
                        key=lambda x: x[1], reverse=True)[:5]
     
-    text = (
-        f"📊 <b>Статистика бота</b>\n\n"
-        f"<b>Выдачи:</b>\n"
-        f"  • Всего   : <b>{total}</b>\n"
-        f"  • Сегодня : <b>{today_cnt}</b>\n"
-        f"  • 7 дней  : <b>{week_cnt}</b>\n"
-        f"  • 30 дней : <b>{month_cnt}</b>\n\n"
-        f"<b>Пользователи:</b>\n"
-        f"  • Уникальных : <b>{len(users_all)}</b>\n"
-        f"  • Активных   : <b>{active}</b>\n\n"
-    )
+    # Хелпер трафика
+    def human(b):
+        if b >= 1073741824: return f"{b/1073741824:.1f} GB"
+        if b >= 1048576: return f"{b/1048576:.0f} MB"
+        if b >= 1024: return f"{b/1024:.0f} KB"
+        return f"{b} B"
     
-    if top_users:
-        text += "<b>🏆 Топ-5 за неделю:</b>\n"
-        for u, c2 in top_users:
-            text += f"  • <code>{u}</code> — <b>{c2}</b> ключей\n"
+    # Топ-5 по трафику
+    traffic_data = []
+    traffic_dir = "/etc/UDPCustom/traffic"
+    if os.path.exists(traffic_dir):
+        try:
+            for fname in os.listdir(traffic_dir):
+                fpath = os.path.join(traffic_dir, fname)
+                if not os.path.isfile(fpath): continue
+                try:
+                    b = int(open(fpath).read().strip())
+                    if b > 0: traffic_data.append((fname, b))
+                except: pass
+        except: pass
+    traffic_data.sort(key=lambda x: x[1], reverse=True)
+    top_traffic = traffic_data[:5]
+    
+    # TG-ID по имени
+    user_id_by_name = {}
+    if os.path.exists(ISSUED_DB):
+        with open(ISSUED_DB) as f:
+            for line in f:
+                parts = line.strip().split('|')
+                if len(parts) >= 3:
+                    user_id_by_name[parts[2]] = parts[0]
+    
+    # ─── Формируем текст в зависимости от режима ───
+    if mode == 'keys':
+        text = (
+            f"📊 <b>СТАТИСТИКА БОТА</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"📤 <b>Выдачи</b>\n"
+            f"  Всего    · <b>{total}</b>\n"
+            f"  Сегодня  · <b>{today_cnt}</b>\n"
+            f"  7 дней   · <b>{week_cnt}</b>\n"
+            f"  30 дней  · <b>{month_cnt}</b>\n\n"
+            f"👥 <b>Пользователи</b>\n"
+            f"  Уникальных · <b>{len(users_all)}</b>\n"
+            f"  Активных   · <b>{active}</b>\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏆 <b>ТОП-5 ПО КЛЮЧАМ</b> · 7 дней\n\n"
+        )
+        if top_users:
+            medals = ["🥇", "🥈", "🥉", "4.", "5."]
+            for i, (u, c2) in enumerate(top_users):
+                medal = medals[i] if i < len(medals) else f"{i+1}."
+                text += f"  {medal} <code>{u}</code> · <b>{c2}</b>\n"
+        else:
+            text += "  <i>За неделю выдач не было</i>\n"
     else:
-        text += "<i>За неделю выдач не было</i>\n"
+        text = (
+            f"📊 <b>СТАТИСТИКА БОТА</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"📈 <b>ТОП-5 ПО ТРАФИКУ</b> · за всё время\n\n"
+        )
+        if top_traffic:
+            medals = ["🥇", "🥈", "🥉", "4.", "5."]
+            for i, (name, b) in enumerate(top_traffic):
+                medal = medals[i] if i < len(medals) else f"{i+1}."
+                text += f"  {medal} <code>{name}</code> · <b>{human(b)}</b>\n"
+        else:
+            text += "  <i>Пока нет данных</i>\n"
     
+    # ─── Кнопки ───
     keyboard = {'inline_keyboard': []}
-    for u, c2 in top_users:
-        keyboard['inline_keyboard'].append([
-            {'text': f'💬 Написать {u[-4:]} ({c2})', 'url': f'tg://user?id={u}'}
-        ])
-    keyboard['inline_keyboard'].append([{'text': '🔄 Обновить', 'callback_data': 'admin_stats'}])
     
-    tg_request(token, 'sendMessage', {
-        'chat_id': chat_id,
-        'text': text,
-        'parse_mode': 'HTML',
-        'reply_markup': keyboard
-    })
-
+    if mode == 'keys':
+        keyboard['inline_keyboard'].append([
+            {'text': '✅ 🏆 Ключи', 'callback_data': 'noop'},
+            {'text': '📊 Трафик', 'callback_data': 'admin_stats_traffic'}
+        ])
+        # Кнопки написать для топ-ключей
+        for u, c2 in top_users[:3]:
+            keyboard['inline_keyboard'].append([
+                {'text': f'💬 Написать {u[-4:]} ({c2})', 'url': f'tg://user?id={u}'}
+            ])
+    else:
+        keyboard['inline_keyboard'].append([
+            {'text': '🏆 Ключи', 'callback_data': 'admin_stats_keys'},
+            {'text': '✅ 📊 Трафик', 'callback_data': 'noop'}
+        ])
+        # Кнопки написать для топ-трафика
+        for name, b in top_traffic[:3]:
+            uid = user_id_by_name.get(name)
+            if uid:
+                keyboard['inline_keyboard'].append([
+                    {'text': f'💬 {name} ({human(b)})', 'url': f'tg://user?id={uid}'}
+                ])
+    
+    keyboard['inline_keyboard'].append([{'text': '🔄 Обновить', 'callback_data': f'admin_stats_{mode}'}])
+    
+    # Отправка или редактирование
+    if msg_id:
+        tg_request(token, 'editMessageText', {
+            'chat_id': chat_id,
+            'message_id': msg_id,
+            'text': text,
+            'parse_mode': 'HTML',
+            'reply_markup': keyboard
+        })
+    else:
+        tg_request(token, 'sendMessage', {
+            'chat_id': chat_id,
+            'text': text,
+            'parse_mode': 'HTML',
+            'reply_markup': keyboard
+        })
 
 
 def handle_ban(cfg, chat_id, user_id, args):
@@ -954,7 +1035,10 @@ def handle_users(cfg, chat_id, user_id, page=1):
     if page < total_pages:
         nav_row.append({'text': '▶', 'callback_data': f'admin_users_{page+1}'})
     keyboard['inline_keyboard'].append(nav_row)
-    keyboard['inline_keyboard'].append([{'text': '🗑️ Удалить истёкших', 'callback_data': 'admin_cleanup'}])
+    keyboard['inline_keyboard'].append([
+        {'text': '🗑️ Удалить истёкших', 'callback_data': 'admin_cleanup'},
+        {'text': '🚫 Бан-лист', 'callback_data': 'admin_banlist'}
+    ])
     keyboard['inline_keyboard'].append([{'text': '🔄 Обновить', 'callback_data': f'admin_users_{page}'}])
     
     tg_request(token, 'sendMessage', {
@@ -1003,6 +1087,208 @@ def handle_cleanup(cfg, chat_id, user_id):
     log.info(f"CLEANUP via bot: removed={removed}, failed={failed}")
 
 
+PROXIES_FILE = "/etc/UDPCustom/proxies.txt"
+DOMAIN_FILE = "/etc/vpn-domain"
+PAYLOAD_FILE = "/etc/UDPCustom/payload.txt"
+
+
+def is_admin(cfg, user_id):
+    return str(user_id) == str(cfg.get('ADMIN_ID', ''))
+
+
+def handle_addproxy(cfg, chat_id, user_id, args):
+    """Добавить прокси: /addproxy 1.2.3.4"""
+    token = cfg['BOT_TOKEN']
+    if not is_admin(cfg, user_id):
+        send_message(token, chat_id, "🚫 Только для админа."); return
+    args = args.strip()
+    if not args:
+        send_message(token, chat_id, "📖 Формат: <code>/addproxy 1.2.3.4</code>", parse_mode='HTML'); return
+    ip = args.split()[0]
+    # Простая валидация IP
+    if not ip.replace('.', '').isdigit() or ip.count('.') != 3:
+        send_message(token, chat_id, f"❌ Неверный IP: {ip}"); return
+    try:
+        with open(PROXIES_FILE, 'a') as f:
+            f.write(ip + "\n")
+        # Сортируем и убираем дубли
+        ips = sorted(set(l.strip() for l in open(PROXIES_FILE) if l.strip()))
+        with open(PROXIES_FILE, 'w') as f:
+            f.write("\n".join(ips) + "\n")
+        send_message(token, chat_id, f"✅ Прокси добавлен: <code>{ip}</code>\nВсего: <b>{len(ips)}</b>", parse_mode='HTML')
+    except Exception as e:
+        send_message(token, chat_id, f"❌ Ошибка: {e}")
+
+
+def handle_delproxy(cfg, chat_id, user_id, args):
+    """Удалить прокси: /delproxy 2"""
+    token = cfg['BOT_TOKEN']
+    if not is_admin(cfg, user_id):
+        send_message(token, chat_id, "🚫 Только для админа."); return
+    args = args.strip()
+    if not args or not args.isdigit():
+        send_message(token, chat_id, "📖 Формат: <code>/delproxy 2</code>", parse_mode='HTML'); return
+    n = int(args)
+    try:
+        ips = [l.strip() for l in open(PROXIES_FILE) if l.strip()]
+        if n < 1 or n > len(ips):
+            send_message(token, chat_id, f"❌ Нет прокси №{n}"); return
+        removed = ips.pop(n-1)
+        with open(PROXIES_FILE, 'w') as f:
+            f.write("\n".join(ips) + "\n" if ips else "")
+        send_message(token, chat_id, f"✅ Удалён: <code>{removed}</code>\nОсталось: <b>{len(ips)}</b>", parse_mode='HTML')
+    except Exception as e:
+        send_message(token, chat_id, f"❌ Ошибка: {e}")
+
+
+def handle_proxies(cfg, chat_id, user_id):
+    """Список прокси"""
+    token = cfg['BOT_TOKEN']
+    if not is_admin(cfg, user_id):
+        send_message(token, chat_id, "🚫 Только для админа."); return
+    try:
+        if not os.path.exists(PROXIES_FILE):
+            send_message(token, chat_id, "❌ Файл proxies.txt не найден"); return
+        ips = [l.strip() for l in open(PROXIES_FILE) if l.strip()]
+        if not ips:
+            send_message(token, chat_id, "📋 Список прокси пуст"); return
+        text = f"🔒 <b>Прокси ({len(ips)}):</b>\n\n"
+        for i, ip in enumerate(ips, 1):
+            text += f"<b>{i}.</b> <code>{ip}</code>\n"
+        text += f"\n<i>Добавить: /addproxy IP\nУдалить: /delproxy N</i>"
+        send_message(token, chat_id, text, parse_mode='HTML')
+    except Exception as e:
+        send_message(token, chat_id, f"❌ Ошибка: {e}")
+
+
+def handle_setdomain(cfg, chat_id, user_id, args):
+    """Изменить домен: /setdomain de.example.com"""
+    token = cfg['BOT_TOKEN']
+    if not is_admin(cfg, user_id):
+        send_message(token, chat_id, "🚫 Только для админа."); return
+    d = args.strip().replace('https://', '').replace('http://', '').split('/')[0].split(':')[0]
+    if not d or '.' not in d:
+        send_message(token, chat_id, "📖 Формат: <code>/setdomain de.example.com</code>", parse_mode='HTML'); return
+    try:
+        with open(DOMAIN_FILE, 'w') as f:
+            f.write(d + "\n")
+        send_message(token, chat_id, f"✅ Домен изменён: <code>{d}</code>", parse_mode='HTML')
+    except Exception as e:
+        send_message(token, chat_id, f"❌ Ошибка: {e}")
+
+
+def handle_domain(cfg, chat_id, user_id):
+    """Показать текущий домен"""
+    token = cfg['BOT_TOKEN']
+    if not is_admin(cfg, user_id):
+        send_message(token, chat_id, "🚫 Только для админа."); return
+    try:
+        d = open(DOMAIN_FILE).read().strip() if os.path.exists(DOMAIN_FILE) else "не задан"
+        send_message(token, chat_id, f"🌐 <b>Домен:</b> <code>{d}</code>\n\n<i>Изменить: /setdomain new.domain.com</i>", parse_mode='HTML')
+    except Exception as e:
+        send_message(token, chat_id, f"❌ Ошибка: {e}")
+
+
+def handle_setpayload(cfg, chat_id, user_id, args):
+    """Изменить payload"""
+    token = cfg['BOT_TOKEN']
+    if not is_admin(cfg, user_id):
+        send_message(token, chat_id, "🚫 Только для админа."); return
+    pl = args.strip()
+    if not pl:
+        send_message(token, chat_id, "📖 Формат: <code>/setpayload CONNECT http://...</code>", parse_mode='HTML'); return
+    try:
+        with open(PAYLOAD_FILE, 'w') as f:
+            f.write(pl + "\n")
+        send_message(token, chat_id, f"✅ Payload изменён ({len(pl)} символов)")
+    except Exception as e:
+        send_message(token, chat_id, f"❌ Ошибка: {e}")
+
+
+def handle_payload(cfg, chat_id, user_id):
+    """Показать payload"""
+    token = cfg['BOT_TOKEN']
+    if not is_admin(cfg, user_id):
+        send_message(token, chat_id, "🚫 Только для админа."); return
+    try:
+        pl = open(PAYLOAD_FILE).read().strip() if os.path.exists(PAYLOAD_FILE) else "не задан"
+        text = f"📦 <b>Payload ({len(pl)} символов):</b>\n\n<code>{pl}</code>\n\n<i>Изменить: /setpayload ...</i>"
+        send_message(token, chat_id, text, parse_mode='HTML')
+    except Exception as e:
+        send_message(token, chat_id, f"❌ Ошибка: {e}")
+
+
+def handle_services(cfg, chat_id, user_id):
+    """SSH WS управление: статус + кнопки"""
+    token = cfg['BOT_TOKEN']
+    if not is_admin(cfg, user_id):
+        send_message(token, chat_id, "🚫 Только для админа."); return
+    
+    import subprocess
+    services = ['ws-proxy', 'masterdnsvpn', 'udp-custom', 'udpgw']
+    text = "⚙️ <b>SSH WS УПРАВЛЕНИЕ</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
+    text += "<b>Статус сервисов:</b>\n"
+    for s in services:
+        try:
+            r = subprocess.run(['systemctl', 'is-active', s], capture_output=True, text=True, timeout=3)
+            status = r.stdout.strip()
+            icon = "🟢" if status == "active" else "🔴"
+            text += f"  {icon} <code>{s}</code> — {status}\n"
+        except:
+            text += f"  ❓ <code>{s}</code> — unknown\n"
+    
+    try:
+        d = open(DOMAIN_FILE).read().strip() if os.path.exists(DOMAIN_FILE) else "—"
+    except: d = "—"
+    try:
+        ips = [l.strip() for l in open(PROXIES_FILE) if l.strip()] if os.path.exists(PROXIES_FILE) else []
+        proxy_cnt = len(ips)
+    except: proxy_cnt = 0
+    try:
+        pl = open(PAYLOAD_FILE).read().strip() if os.path.exists(PAYLOAD_FILE) else ""
+        pl_len = len(pl)
+    except: pl_len = 0
+    
+    text += f"\n<b>Текущие настройки:</b>\n"
+    text += f"  🌐 Домен: <code>{d}</code>\n"
+    text += f"  🔒 Прокси: <b>{proxy_cnt}</b> шт.\n"
+    text += f"  📦 Payload: <b>{pl_len}</b> симв.\n"
+    
+    keyboard = {'inline_keyboard': [
+        [{'text': '🌐 Домен', 'callback_data': 'manage_domain'},
+         {'text': '🔒 Прокси', 'callback_data': 'manage_proxies'},
+         {'text': '📦 Payload', 'callback_data': 'manage_payload'}],
+        [{'text': '🔄 Перезапустить WS', 'callback_data': 'restart_ws'}],
+        [{'text': '🔄 Обновить', 'callback_data': 'manage_services'}]
+    ]}
+    
+    tg_request(token, 'sendMessage', {
+        'chat_id': chat_id,
+        'text': text,
+        'parse_mode': 'HTML',
+        'reply_markup': keyboard
+    })
+
+
+def handle_restart(cfg, chat_id, user_id, args):
+    """Перезапуск сервиса: /restart ws-proxy"""
+    token = cfg['BOT_TOKEN']
+    if not is_admin(cfg, user_id):
+        send_message(token, chat_id, "🚫 Только для админа."); return
+    s = args.strip()
+    if not s:
+        send_message(token, chat_id, "📖 Сервисы: <code>ws-proxy</code>, <code>masterdnsvpn</code>, <code>udp-custom</code>, <code>udpgw</code>", parse_mode='HTML'); return
+    allowed = ['ws-proxy', 'masterdnsvpn', 'udp-custom', 'udpgw']
+    if s not in allowed:
+        send_message(token, chat_id, f"❌ Сервис <code>{s}</code> не разрешён", parse_mode='HTML'); return
+    import subprocess
+    try:
+        subprocess.run(['systemctl', 'restart', s], capture_output=True, timeout=10)
+        send_message(token, chat_id, f"✅ Перезапущен: <code>{s}</code>", parse_mode='HTML')
+    except Exception as e:
+        send_message(token, chat_id, f"❌ Ошибка: {e}")
+
+
 def main():
     cfg = load_config()
     if not cfg.get('BOT_TOKEN'):
@@ -1019,14 +1305,11 @@ def main():
         tg_request(cfg['BOT_TOKEN'], 'setMyCommands', {
             'commands': [
                 {'command': 'start', 'description': '👋 Начать'},
-                {'command': 'help', 'description': '📖 Справка'},
                 {'command': 'stats', 'description': '📊 Статистика'},
-                {'command': 'banlist', 'description': '🚫 Чёрный список'},
-                {'command': 'post', 'description': '📢 Опубликовать пост'},
-                {'command': 'ban', 'description': '🚫 Забанить (ID)'},
-                {'command': 'unban', 'description': '✅ Разбанить (ID)'},
                 {'command': 'users', 'description': '👥 Пользователи'},
-                {'command': 'cleanup', 'description': '🗑️ Удалить истёкших'}
+                {'command': 'services', 'description': '⚙️ SSH WS управление'},
+                {'command': 'post', 'description': '📢 Опубликовать пост'},
+                {'command': 'help', 'description': '📖 Справка'}
             ],
             'scope': {'type': 'chat', 'chat_id': int(admin_id)}
         })
@@ -1062,11 +1345,75 @@ def main():
                         handle_channel_test(cfg, cb_user_id, cb_first_name)
                     # Админ-кнопки
                     elif cb_data == 'admin_stats':
-                        handle_stats(cfg, cb['message']['chat']['id'], cb_user_id)
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        handle_stats(cfg, cb['message']['chat']['id'], cb_user_id, 'keys')
+                    elif cb_data == 'admin_stats_keys':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        handle_stats(cfg, cb['message']['chat']['id'], cb_user_id, 'keys', cb['message']['message_id'])
+                    elif cb_data == 'admin_stats_traffic':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        handle_stats(cfg, cb['message']['chat']['id'], cb_user_id, 'traffic', cb['message']['message_id'])
                     elif cb_data == 'admin_banlist':
                         handle_banlist(cfg, cb['message']['chat']['id'], cb_user_id)
                     elif cb_data == 'admin_post':
                         post_to_channel(cfg, cb['message']['chat']['id'], cb_user_id)
+                    elif cb_data == 'manage_services':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        handle_services(cfg, cb['message']['chat']['id'], cb_user_id)
+                    elif cb_data == 'manage_domain':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        handle_domain(cfg, cb['message']['chat']['id'], cb_user_id)
+                    elif cb_data == 'manage_proxies':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        handle_proxies(cfg, cb['message']['chat']['id'], cb_user_id)
+                    elif cb_data == 'manage_payload':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        handle_payload(cfg, cb['message']['chat']['id'], cb_user_id)
+                    elif cb_data == 'restart_ws':
+                        import subprocess as _sp
+                        try:
+                            _sp.run(['systemctl', 'restart', 'ws-proxy'], capture_output=True, timeout=10)
+                            tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
+                                'callback_query_id': cb['id'],
+                                'text': '✅ ws-proxy перезапущен',
+                                'show_alert': True
+                            })
+                        except Exception as e:
+                            tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
+                                'callback_query_id': cb['id'],
+                                'text': f'❌ Ошибка: {e}',
+                                'show_alert': True
+                            })
+                    elif cb_data == 'admin_manage':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
+                            'callback_query_id': cb['id']
+                        })
+                        manage_text = (
+                            "⚙️ <b>Управление сервером</b>\n\n"
+                            "<b>🔒 Прокси:</b>\n"
+                            "<code>/proxies</code> — список\n"
+                            "<code>/addproxy 1.2.3.4</code> — добавить\n"
+                            "<code>/delproxy 2</code> — удалить №2\n\n"
+                            "<b>🌐 Домен:</b>\n"
+                            "<code>/domain</code> — показать\n"
+                            "<code>/setdomain de.example.com</code> — изменить\n\n"
+                            "<b>📦 Payload:</b>\n"
+                            "<code>/payload</code> — показать\n"
+                            "<code>/setpayload CONNECT ...</code> — изменить\n\n"
+                            "<b>⚙️ Сервисы:</b>\n"
+                            "<code>/services</code> — статус\n"
+                            "<code>/restart ws-proxy</code> — перезапуск\n\n"
+                            "<b>👥 Пользователи:</b>\n"
+                            "<code>/users</code> — список\n"
+                            "<code>/cleanup</code> — удалить истёкших\n\n"
+                            "<b>🚫 Модерация:</b>\n"
+                            "<code>/ban 123</code> | <code>/unban 123</code> | <code>/banlist</code>"
+                        )
+                        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                            'chat_id': cb['message']['chat']['id'],
+                            'text': manage_text,
+                            'parse_mode': 'HTML'
+                        })
                     elif cb_data == 'admin_cleanup':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
                             'callback_query_id': cb['id'],
@@ -1136,6 +1483,15 @@ def main():
                 elif text.startswith('/ban'): handle_ban(cfg, chat_id, user_id, text[4:].strip())
                 elif text.startswith('/users'): handle_users(cfg, chat_id, user_id, 1)
                 elif text.startswith('/cleanup'): handle_cleanup(cfg, chat_id, user_id)
+                elif text.startswith('/addproxy'): handle_addproxy(cfg, chat_id, user_id, text[9:].strip())
+                elif text.startswith('/delproxy'): handle_delproxy(cfg, chat_id, user_id, text[9:].strip())
+                elif text.startswith('/proxies'): handle_proxies(cfg, chat_id, user_id)
+                elif text.startswith('/setdomain'): handle_setdomain(cfg, chat_id, user_id, text[10:].strip())
+                elif text.startswith('/domain'): handle_domain(cfg, chat_id, user_id)
+                elif text.startswith('/setpayload'): handle_setpayload(cfg, chat_id, user_id, text[11:].strip())
+                elif text.startswith('/payload'): handle_payload(cfg, chat_id, user_id)
+                elif text.startswith('/services'): handle_services(cfg, chat_id, user_id)
+                elif text.startswith('/restart'): handle_restart(cfg, chat_id, user_id, text[8:].strip())
                 elif text.startswith('/help'): handle_help(cfg, chat_id)
         except KeyboardInterrupt: log.info("Остановка"); break
         except Exception as e: log.error(f"Ошибка в main loop: {e}"); time.sleep(5)
