@@ -7,6 +7,10 @@ VPN Panel Telegram Bot — с переносами строк и отправк�
 import os, sys, json, time, logging, subprocess, secrets, string, urllib.request, urllib.parse, mimetypes, uuid
 from datetime import datetime
 
+# Подключаем модуль администраторов
+sys.path.insert(0, '/usr/local/bin')
+from bot_modules.admin import get_admins, is_admin, handle_addadmin, handle_deladmin, handle_admins
+
 CONFIG_FILE = "/etc/UDPCustom/bot.conf"
 ISSUED_DB = "/etc/UDPCustom/bot_issued.db"
 BLACKLIST = "/etc/UDPCustom/bot_blacklist"
@@ -1101,8 +1105,6 @@ DOMAIN_FILE = "/etc/vpn-domain"
 PAYLOAD_FILE = "/etc/UDPCustom/payload.txt"
 
 
-def is_admin(cfg, user_id):
-    return str(user_id) == str(cfg.get('ADMIN_ID', ''))
 
 
 def handle_addproxy(cfg, chat_id, user_id, args):
@@ -1420,108 +1422,6 @@ def _do_delchannel(token, chat_id, args):
         send_message(token, chat_id, f"❌ Ошибка: {e}")
 
 
-ADMINS_FILE = "/etc/UDPCustom/admins.txt"
-
-
-def get_admins():
-    """Список всех админов (ID)"""
-    admins = []
-    if os.path.exists(ADMINS_FILE):
-        try:
-            with open(ADMINS_FILE) as f:
-                admins = [l.strip() for l in f if l.strip() and not l.startswith('#')]
-        except: pass
-    # Fallback: если файла нет — берём из bot.conf
-    if not admins:
-        cfg = load_config()
-        aid = cfg.get('ADMIN_ID', '')
-        if aid:
-            admins = [aid]
-    return admins
-
-
-def is_admin(cfg, user_id):
-    """Проверка: является ли юзер админом"""
-    return str(user_id) in get_admins()
-
-
-def handle_addadmin(cfg, chat_id, user_id, args):
-    """Добавить админа: /addadmin 123456789"""
-    token = cfg['BOT_TOKEN']
-    if not is_admin(cfg, user_id):
-        send_message(token, chat_id, "🚫 Только для админа."); return
-    args = args.strip()
-    if not args or not args.isdigit():
-        send_message(token, chat_id, "📖 Формат: <code>/addadmin 123456789</code>", parse_mode='HTML'); return
-    
-    new_id = args
-    admins = get_admins()
-    if new_id in admins:
-        send_message(token, chat_id, f"⚠️ <code>{new_id}</code> уже админ", parse_mode='HTML'); return
-    
-    try:
-        with open(ADMINS_FILE, 'a') as f:
-            f.write(new_id + "\n")
-        admins.append(new_id)
-        send_message(token, chat_id, f"✅ Добавлен админ: <code>{new_id}</code>\nВсего админов: <b>{len(admins)}</b>", parse_mode='HTML')
-        log.info(f"ADMIN added: {new_id} by {user_id}")
-    except Exception as e:
-        send_message(token, chat_id, f"❌ Ошибка: {e}")
-
-
-def handle_deladmin(cfg, chat_id, user_id, args):
-    """Удалить админа: /deladmin 123456789"""
-    token = cfg['BOT_TOKEN']
-    if not is_admin(cfg, user_id):
-        send_message(token, chat_id, "🚫 Только для админа."); return
-    args = args.strip()
-    if not args or not args.isdigit():
-        send_message(token, chat_id, "📖 Формат: <code>/deladmin 123456789</code>", parse_mode='HTML'); return
-    
-    target = args
-    admins = get_admins()
-    if target not in admins:
-        send_message(token, chat_id, f"⚠️ <code>{target}</code> не админ", parse_mode='HTML'); return
-    
-    # Нельзя удалить себя
-    if target == str(user_id):
-        send_message(token, chat_id, "❌ Нельзя удалить самого себя")
-        return
-    
-    # Нельзя удалить последнего
-    if len(admins) <= 1:
-        send_message(token, chat_id, "❌ Нельзя удалить последнего админа")
-        return
-    
-    admins.remove(target)
-    try:
-        with open(ADMINS_FILE, 'w') as f:
-            for a in admins:
-                f.write(a + "\n")
-        send_message(token, chat_id, f"✅ Удалён админ: <code>{target}</code>\nОсталось: <b>{len(admins)}</b>", parse_mode='HTML')
-        log.info(f"ADMIN removed: {target} by {user_id}")
-    except Exception as e:
-        send_message(token, chat_id, f"❌ Ошибка: {e}")
-
-
-def handle_admins(cfg, chat_id, user_id):
-    """Список админов"""
-    token = cfg['BOT_TOKEN']
-    if not is_admin(cfg, user_id):
-        send_message(token, chat_id, "🚫 Только для админа."); return
-    
-    admins = get_admins()
-    text = f"👑 <b>Админы ({len(admins)}):</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
-    for i, a in enumerate(admins, 1):
-        mark = " ⭐ (вы)" if str(a) == str(user_id) else ""
-        text += f"<b>{i}.</b> <code>{a}</code>{mark}\n"
-    text += f"\n━━━━━━━━━━━━━━━━━━━━\n"
-    text += f"<i>Добавить: /addadmin ID</i>\n"
-    text += f"<i>Удалить: /deladmin ID</i>\n\n"
-    text += f"<i>ID можно узнать в @userinfobot</i>"
-    send_message(token, chat_id, text, parse_mode='HTML')
-
-
 def main():
     cfg = load_config()
     if not cfg.get('BOT_TOKEN'):
@@ -1739,6 +1639,9 @@ def main():
                 elif text.startswith('/channels'): handle_channels(cfg, chat_id, user_id)
                 elif text.startswith('/addchannel'): handle_addchannel(cfg, chat_id, user_id, text[11:].strip())
                 elif text.startswith('/delchannel'): handle_delchannel(cfg, chat_id, user_id, text[11:].strip())
+                elif text.startswith('/admins'): handle_admins(cfg, chat_id, user_id)
+                elif text.startswith('/addadmin'): handle_addadmin(cfg, chat_id, user_id, text[9:].strip())
+                elif text.startswith('/deladmin'): handle_deladmin(cfg, chat_id, user_id, text[9:].strip())
                 elif text.startswith('/restart'): handle_restart(cfg, chat_id, user_id, text[8:].strip())
                 elif text.startswith('/help'): handle_help(cfg, chat_id)
         except KeyboardInterrupt: log.info("Остановка"); break
