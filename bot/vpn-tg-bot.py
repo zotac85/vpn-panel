@@ -579,14 +579,28 @@ def main():
                     cb_first_name = cb['from'].get('first_name', '')
                     cb_chat_type = cb['message']['chat']['type']
 
-                    tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
-
-                    # Кнопка из КАНАЛА → отвечаем в личку
+                    # Кнопка из КАНАЛА → popup + выдача в личку
                     if cb_data == 'channel_test':
+                        bot_me = tg_request(cfg['BOT_TOKEN'], 'getMe')
+                        bot_username = bot_me.get('result', {}).get('username', 'ArsenVipKeysBot') if bot_me else 'ArsenVipKeysBot'
+                        popup_text = '✅ Запрос принят!\n\n📱 Открой @' + bot_username + ' — там твой ключ или кнопка «Подписаться»'
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
+                            'callback_query_id': cb['id'],
+                            'text': popup_text,
+                            'show_alert': True,
+                            'cache_time': 3
+                        })
                         handle_channel_test(cfg, cb_user_id, cb_first_name)
                     # Кнопка из ЛИЧКИ → обычный /test
                     elif cb_data == 'get_test':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
+                            'callback_query_id': cb['id'],
+                            'text': '⏳ Создаём ключ...',
+                            'show_alert': False
+                        })
                         handle_test(cfg, cb['message']['chat']['id'], cb_user_id, cb_first_name)
+                    else:
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                     continue
                 if 'message' not in upd: continue
                 msg = upd['message']; chat_id = msg['chat']['id']; user_id = msg['from']['id']; first_name = msg['from'].get('first_name','')
