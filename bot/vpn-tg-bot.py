@@ -9,7 +9,7 @@ from datetime import datetime
 
 # Подключаем модуль администраторов
 sys.path.insert(0, '/usr/local/bin')
-from bot_modules.admin import get_admins, is_admin, handle_addadmin, handle_deladmin, handle_admins
+from bot_modules.admin import get_admins, is_admin, handle_addadmin, handle_deladmin, handle_admins, handle_newuser
 
 CONFIG_FILE = "/etc/UDPCustom/bot.conf"
 ISSUED_DB = "/etc/UDPCustom/bot_issued.db"
@@ -1049,10 +1049,13 @@ def handle_users(cfg, chat_id, user_id, page=1):
         nav_row.append({'text': '▶', 'callback_data': f'admin_users_{page+1}'})
     keyboard['inline_keyboard'].append(nav_row)
     keyboard['inline_keyboard'].append([
-        {'text': '🗑️ Удалить истёкших', 'callback_data': 'admin_cleanup'},
-        {'text': '🚫 Бан-лист', 'callback_data': 'admin_banlist'}
+        {'text': '➕ Добавить юзера', 'callback_data': 'admin_newuser'},
+        {'text': '🗑️ Удалить истёкших', 'callback_data': 'admin_cleanup'}
     ])
-    keyboard['inline_keyboard'].append([{'text': '🔄 Обновить', 'callback_data': f'admin_users_{page}'}])
+    keyboard['inline_keyboard'].append([
+        {'text': '🚫 Бан-лист', 'callback_data': 'admin_banlist'},
+        {'text': '🔄 Обновить', 'callback_data': f'admin_users_{page}'}
+    ])
     
     tg_request(token, 'sendMessage', {
         'chat_id': chat_id,
@@ -1550,6 +1553,27 @@ def main():
                             'text': manage_text,
                             'parse_mode': 'HTML'
                         })
+                    elif cb_data == 'admin_newuser':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        instructions = (
+                            "➕ <b>СОЗДАНИЕ ЮЗЕРА</b>\n"
+                            "━━━━━━━━━━━━━━━━━━━━\n\n"
+                            "Отправь команду одной строкой:\n\n"
+                            "<code>/newuser логин пароль дни устройства ГБ</code>\n\n"
+                            "<b>Пример:</b>\n"
+                            "<code>/newuser test1 pass123 30 5 100</code>\n\n"
+                            "<b>Параметры:</b>\n"
+                            "  📱 Логин — 2-20 символов\n"
+                            "  🔑 Пароль — любой\n"
+                            "  ⏰ Дни — 0 = бессрочно\n"
+                            "  📱 Устройства — число\n"
+                            "  📊 ГБ — 0 = без лимита"
+                        )
+                        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                            'chat_id': cb['message']['chat']['id'],
+                            'text': instructions,
+                            'parse_mode': 'HTML'
+                        })
                     elif cb_data == 'admin_cleanup':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
                             'callback_query_id': cb['id'],
@@ -1642,6 +1666,7 @@ def main():
                 elif text.startswith('/admins'): handle_admins(cfg, chat_id, user_id)
                 elif text.startswith('/addadmin'): handle_addadmin(cfg, chat_id, user_id, text[9:].strip())
                 elif text.startswith('/deladmin'): handle_deladmin(cfg, chat_id, user_id, text[9:].strip())
+                elif text.startswith('/newuser'): handle_newuser(cfg, chat_id, user_id, text[8:].strip())
                 elif text.startswith('/restart'): handle_restart(cfg, chat_id, user_id, text[8:].strip())
                 elif text.startswith('/help'): handle_help(cfg, chat_id)
         except KeyboardInterrupt: log.info("Остановка"); break

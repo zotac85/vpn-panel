@@ -147,3 +147,112 @@ def handle_admins(cfg, chat_id, user_id):
     text += f"<i>Добавить: /addadmin ID</i>\n"
     text += f"<i>Удалить: /deladmin ID</i>"
     _send_message(token, chat_id, text, parse_mode='HTML')
+
+def handle_newuser(cfg, chat_id, user_id, args):
+    """Создать юзера: /newuser login password days devices gb"""
+    token = cfg['BOT_TOKEN']
+    if not is_admin(cfg, user_id):
+        _send_message(token, chat_id, "🚫 Только для админа."); return
+    
+    args = args.strip()
+    if not args:
+        _send_message(token, chat_id,
+            "📖 <b>Формат создания юзера:</b>\n\n"
+            "<code>/newuser логин пароль дни устройства ГБ</code>\n\n"
+            "<b>Пример:</b>\n"
+            "<code>/newuser test1 pass123 30 5 100</code>\n\n"
+            "Где:\n"
+            "  • логин — имя юзера\n"
+            "  • пароль — пароль\n"
+            "  • дни — срок (0 = бессрочно)\n"
+            "  • устройства — лимит устройств\n"
+            "  • ГБ — лимит трафика (0 = без лимита)",
+            parse_mode='HTML')
+        return
+    
+    parts = args.split()
+    if len(parts) < 2:
+        _send_message(token, chat_id, "❌ Минимум 2 параметра: логин и пароль"); return
+    
+    login = parts[0]
+    password = parts[1]
+    days = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0
+    devices = int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else 3
+    gb = int(parts[4]) if len(parts) > 4 and parts[4].isdigit() else 0
+    
+    # Валидация логина
+    import re as _re
+    if not _re.match(r'^[a-zA-Z0-9_-]{2,20}$', login):
+        _send_message(token, chat_id, "❌ Логин: только a-z, A-Z, 0-9, _ и -, 2-20 символов"); return
+    
+    # Проверка что не существует (Linux + наша база)
+    import subprocess
+    exists_linux = subprocess.run(['id', '-u', login], capture_output=True).returncode == 0
+    exists_db = False
+    if os.path.exists('/etc/UDPCustom/users.db'):
+        with open('/etc/UDPCustom/users.db') as f:
+            exists_db = login in [l.strip() for l in f if l.strip()]
+    
+    if exists_linux or exists_db:
+        _send_message(token, chat_id, f"❌ Юзер <code>{login}</code> уже существует", parse_mode='HTML'); return
+    try:
+        # Создаём Linux-юзера
+        subprocess.run(['useradd', '-M', '-s', '/bin/false', login], check=True, timeout=10)
+        subprocess.run(['chpasswd'], input=f"{login}:{password}", text=True, capture_output=True, timeout=10)
+        
+        # В users.db
+        with open('/etc/UDPCustom/users.db', 'a') as f:
+            f.write(login + "\n")
+        
+        # Лимит устройств
+        os.makedirs('/etc/UDPCustom/limits', exist_ok=True)
+        with open(f'/etc/UDPCustom/limits/{login}', 'w') as f:
+            f.write(str(devices))
+        
+        # Трафик
+        os.makedirs('/etc/UDPCustom/traffic', exist_ok=True)
+        os.makedirs('/etc/UDPCustom/traffic_limits', exist_ok=True)
+        bytes_limit = gb * 1073741824
+        with open(f'/etc/UDPCustom/traffic_limits/{login}', 'w') as f:
+            f.write(str(bytes_limit))
+        with open(f'/etc/UDPCustom/traffic/{login}', 'w') as f:
+            f.write("0")
+        
+        # Expire timestamp
+        os.makedirs('/etc/UDPCustom/expire_ts', exist_ok=True)
+        if days > 0:
+            import time as _time
+            exp_ts = int(_time.time()) + (days * 86400)
+            with open(f'/etc/UDPCustom/expire_ts/{login}', 'w') as f:
+                f.write(str(exp_ts))
+        
+        # chage -E (+2 дня для страховки)
+        subprocess.run(['chage', '-E', '+2 days' if days == 0 else f'+{days+2} days', login], capture_output=True, timeout=10)
+        
+        # maxlogins
+        subprocess.run(['sed', '-i', f'/^{login}.*hard.*maxlogins/d', '/etc/security/limits.conf'], capture_output=True)
+        with open('/etc/security/limits.conf', 'a') as f:
+            f.write(f"{login} hard maxlogins {devices}\n")
+        
+        # iptables — если цепочка активна
+        uid = subprocess.run(['id', '-u', login], capture_output=True, text=True).stdout.strip()
+        if uid:
+            subprocess.run(['iptables', '-C', 'VPN_TRAFFIC', '-m', 'owner', '--uid-owner', uid, '-j', 'RETURN'], capture_output=True)
+            if subprocess.run(['iptables', '-C', 'VPN_TRAFFIC', '-m', 'owner', '--uid-owner', uid, '-j', 'RETURN'], capture_output=True).returncode != 0:
+                subprocess.run(['iptables', '-A', 'VPN_TRAFFIC', '-m', 'owner', '--uid-owner', uid, '-j', 'RETURN'], capture_output=True)
+        
+        # Ответ
+        exp_str = f"{days} дней" if days > 0 else "бессрочно"
+        traffic_str = f"{gb} ГБ" if gb > 0 else "без лимита"
+        _send_message(token, chat_id,
+            f"✅ <b>Пользователь создан!</b>\n\n"
+            f"📱 Логин: <code>{login}</code>\n"
+            f"🔑 Пароль: <code>{password}</code>\n"
+            f"⏰ Срок: {exp_str}\n"
+            f"📱 Устройств: {devices}\n"
+            f"📊 Трафик: {traffic_str}",
+            parse_mode='HTML')
+        admin_log.info(f"NEW USER: {login} by {user_id}")
+    except Exception as e:
+        _send_message(token, chat_id, f"❌ Ошибка: {e}")
+        admin_log.error(f"newuser error: {e}")
