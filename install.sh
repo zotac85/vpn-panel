@@ -57,12 +57,9 @@ if [ ! -f /etc/UDPCustom/start.txt ] || ! grep -q "sponsors_list" /etc/UDPCustom
 fi
 
 
-# channels.txt — список каналов для проверки подписки
+# channels.txt — список каналов
 if [ ! -f /etc/UDPCustom/channels.txt ] || [ ! -s /etc/UDPCustom/channels.txt ]; then
-    cat > /etc/UDPCustom/channels.txt << 'CHANNELS_EOF'
-@ArsenVipKeys
-@vpnbalkan
-CHANNELS_EOF
+    curl -sf -o /etc/UDPCustom/channels.txt "$REPO_URL/configs/channels.txt"
 fi
 
 # ──────────────────────────────────────────────────────────────
