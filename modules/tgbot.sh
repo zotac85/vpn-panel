@@ -309,7 +309,7 @@ tg_channels_menu() {
                 # Добавляем @ если нет
                 [[ "$newch" != @* ]] && newch="@$newch"
                 echo "$newch" >> "$CH_FILE"
-                sort -u "$CH_FILE" -o "$CH_FILE"
+                # sort убран — сохраняем порядок добавления
                 echo -e "${GREEN}✅ Добавлено: $newch${NC}"
                 sleep 1
                 ;;
