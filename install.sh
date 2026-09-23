@@ -450,6 +450,7 @@ if [ "$PAM_OK" -eq 1 ]; then
     echo -e "\033[0;32m✅ PAM в порядке. Перезапускаем sshd...\033[0m"
     sleep 2
     systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+    systemctl restart vpn-tg-bot 2>/dev/null
     [ -f /etc/default/dropbear ] && systemctl restart dropbear 2>/dev/null
 else
     echo -e "\033[0;31m⚠️  PAM повреждён! Откат...\033[0m"
