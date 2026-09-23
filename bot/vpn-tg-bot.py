@@ -284,7 +284,7 @@ def generate_darktunnel_url(username, password, domain, ws_port, proxy, cfg):
     return "darktunnel://" + b
 
 
-def handle_start(cfg, chat_id, user_id, first_name):
+def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
     token = cfg['BOT_TOKEN']
     name = first_name or 'друг'
     channels = get_channels()
@@ -294,49 +294,86 @@ def handle_start(cfg, chat_id, user_id, first_name):
         return
     
     primary = channels[0].lstrip('@')
-    others = [ch.lstrip('@') for ch in channels[1:]]
+    verified = force_verified if force_verified is not None else is_verified(user_id)
+    admin_id = cfg.get('ADMIN_ID', '')
+    is_admin = str(user_id) == str(admin_id)
     
-    # Список спонсоров
-    sponsors_list = ""
-    for ch in others:
-        sponsors_list += f"   👉 @{ch}\n"
-    sponsors_list = sponsors_list.rstrip('\n')
+    # ПРОВЕРКА ПОДПИСКИ на все каналы (включая спонсоров)
+    not_sub = []
+    if cfg.get('REQUIRE_SUBSCRIPTION','0') == '1':
+        for ch in channels:
+            if not check_subscription(token, user_id, ch):
+                not_sub.append(ch.lstrip('@'))
     
-    # Читаем шаблон
-    template = get_start_text()
-    if template:
-        text = template.replace('{name}', name)
-        text = text.replace('{primary}', primary)
-        text = text.replace('{sponsors_list}', sponsors_list)
-    else:
-        # Fallback если файла нет
+    if not_sub:
+        # Не подписан на какие-то каналы
         text = (
             f"👋 Привет, {name}!\n\n"
-            f"🎁 Тестовые ключи выдаются в наших каналах!\n\n"
-            f"📢 Зайди: @{primary}\n"
-            f"👇 Найди пост с кнопкой «🎁 Получить тест» и нажми её\n\n"
-            f"💬 @ArsenGuro"
+            f"⚠️ <b>Чтобы получить тестовый ключ:</b>\n\n"
+            f"1️⃣ Подпишись на все каналы ниже\n"
+            f"2️⃣ Зайди в каждый, посмотри посты\n"
+            f"3️⃣ Поставь лайк или реакцию 👍\n"
+            f"4️⃣ Вернись и нажми «Я подписался»\n\n"
+            f"<b>Ты не подписан на:</b>\n"
+            + "".join([f"👉 @{ch}\n" for ch in not_sub]) +
+            f"\n💎 Есть VIP-ключи — пиши @ArsenGuro"
         )
+        keyboard = {'inline_keyboard': []}
+        for ch in not_sub:
+            keyboard['inline_keyboard'].append([{'text': f'📢 @{ch}', 'url': f'https://t.me/{ch}'}])
+        keyboard['inline_keyboard'].append([{'text': '✅ Я подписался → Проверить', 'callback_data': 'check_verified'}])
+        keyboard['inline_keyboard'].append([{'text': '💎 Купить VIP-ключ', 'url': 'https://t.me/ArsenGuro'}])
+        keyboard['inline_keyboard'].append([{'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}])
+        if is_admin:
+            keyboard['inline_keyboard'].append([{'text': '📊 Статистика', 'callback_data': 'admin_stats'}])
+            keyboard['inline_keyboard'].append([{'text': '🚫 Бан-лист', 'callback_data': 'admin_banlist'}])
+            keyboard['inline_keyboard'].append([{'text': '📢 Опубликовать пост', 'callback_data': 'admin_post'}])
     
-    # Кнопки
-    keyboard = {'inline_keyboard': []}
-    keyboard['inline_keyboard'].append([{'text': f'📢 Основной: @{primary}', 'url': f'https://t.me/{primary}'}])
-    for ch in others:
-        keyboard['inline_keyboard'].append([{'text': f'📢 Спонсор: @{ch}', 'url': f'https://t.me/{ch}'}])
-    keyboard['inline_keyboard'].append([{'text': '💎 Купить VIP-ключ', 'url': 'https://t.me/ArsenGuro'}])
-    keyboard['inline_keyboard'].append([{'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}])
+    elif verified:
+        # Подписан на все + verified → кнопка получить тест
+        text = (
+            f"👋 Привет, {name}!\n\n"
+            f"🎁 Можешь получить тестовый ключ\n\n"
+            f"📱 8 часов | 📊 50 ГБ | 💻 1 устройство\n"
+            f"🇩🇪 Сервер Германия\n\n"
+            f"👇 Жми кнопку ниже"
+        )
+        keyboard = {'inline_keyboard': [
+            [{'text': '🎁 ПОЛУЧИТЬ ТЕСТ', 'callback_data': 'get_test'}],
+            [{'text': '💎 Купить VIP-ключ', 'url': 'https://t.me/ArsenGuro'}],
+            [{'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}]
+        ]}
+        if is_admin:
+            keyboard['inline_keyboard'].append([{'text': '📊 Статистика', 'callback_data': 'admin_stats'}])
+            keyboard['inline_keyboard'].append([{'text': '🚫 Бан-лист', 'callback_data': 'admin_banlist'}])
+            keyboard['inline_keyboard'].append([{'text': '📢 Опубликовать пост', 'callback_data': 'admin_post'}])
     
-    # Дополнительные кнопки для админа
-    admin_id = cfg.get('ADMIN_ID', '')
-    if str(user_id) == str(admin_id):
-        keyboard['inline_keyboard'].append([{'text': '📊 Статистика', 'callback_data': 'admin_stats'}])
-        keyboard['inline_keyboard'].append([{'text': '🚫 Бан-лист', 'callback_data': 'admin_banlist'}])
-        keyboard['inline_keyboard'].append([{'text': '📢 Опубликовать пост', 'callback_data': 'admin_post'}])
+    else:
+        # Подписан на все, но НЕ verified → надо зайти на канал
+        text = (
+            f"👋 Привет, {name}!\n\n"
+            f"⚠️ <b>Осталось одно действие:</b>\n\n"
+            f"1️⃣ Зайди в канал 👉 @{primary}\n"
+            f"2️⃣ Посмотри последние 3 поста\n"
+            f"3️⃣ Поставь лайк или реакцию 👍\n"
+            f"4️⃣ Вернись и нажми «Я зашёл и поставил реакцию»\n\n"
+            f"💎 Есть VIP-ключи — пиши @ArsenGuro"
+        )
+        keyboard = {'inline_keyboard': [
+            [{'text': f'📢 Перейти в @{primary}', 'url': f'https://t.me/{primary}'}],
+            [{'text': '✅ Я зашёл и поставил реакцию', 'callback_data': 'check_verified'}],
+            [{'text': '💎 Купить VIP-ключ', 'url': 'https://t.me/ArsenGuro'}],
+            [{'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}]
+        ]}
+        if is_admin:
+            keyboard['inline_keyboard'].append([{'text': '📊 Статистика', 'callback_data': 'admin_stats'}])
+            keyboard['inline_keyboard'].append([{'text': '🚫 Бан-лист', 'callback_data': 'admin_banlist'}])
+            keyboard['inline_keyboard'].append([{'text': '📢 Опубликовать пост', 'callback_data': 'admin_post'}])
     
     send_message(token, chat_id, text, reply_markup=keyboard, parse_mode='HTML')
 
 
-def handle_test(cfg, chat_id, user_id, first_name):
+def handle_test(cfg, chat_id, user_id, first_name, cb_id=None):
     token = cfg['BOT_TOKEN']
     if is_blacklisted(user_id):
         send_message(token, chat_id, "🚫 Ты в чёрном списке. @ArsenGuro"); return
@@ -347,11 +384,20 @@ def handle_test(cfg, chat_id, user_id, first_name):
             if not check_subscription(token, user_id, ch):
                 not_sub.append(ch.lstrip('@'))
         if not_sub:
-            keyboard = {'inline_keyboard': []}
-            for ch in not_sub:
-                keyboard['inline_keyboard'].append([{'text': f'📢 Подписаться {ch}', 'url': f'https://t.me/{ch}'}])
-            keyboard['inline_keyboard'].append([{'text': '✅ Я подписался', 'callback_data': 'get_test'}])
-            send_message(token, chat_id, "⚠️ Сначала подпишись на каналы ниже, потом нажми кнопку:", reply_markup=keyboard)
+            channels_list = ", ".join([f"@{ch}" for ch in not_sub])
+            if cb_id:
+                tg_request(token, 'answerCallbackQuery', {
+                    'callback_query_id': cb_id,
+                    'text': f'❌ Ты ещё не подписался на: {channels_list}\n\nПодпишись и нажми ещё раз.',
+                    'show_alert': True
+                })
+            else:
+                keyboard = {'inline_keyboard': []}
+                for ch in not_sub:
+                    keyboard['inline_keyboard'].append([{'text': f'📢 @{ch}', 'url': f'https://t.me/{ch}'}])
+                keyboard['inline_keyboard'].append([{'text': '✅ Я подписался → Проверить', 'callback_data': 'get_test'}])
+                text = '⚠️ Сначала подпишись на каналы: ' + channels_list
+                send_message(token, chat_id, text, reply_markup=keyboard)
             return
     admin_id = cfg.get('ADMIN_ID', '')
     if str(user_id) != str(admin_id):
@@ -442,10 +488,12 @@ def post_to_channel(cfg, chat_id, user_id):
     if not target_channel.startswith('@'):
         target_channel = '@' + target_channel
     
-    # Кнопка
+    # Кнопка — deep link, чтобы бот знал что юзер пришёл с канала
+    bot_me = tg_request(token, 'getMe')
+    bot_username = bot_me.get('result', {}).get('username', '') if bot_me else ''
     keyboard = {
         'inline_keyboard': [
-            [{'text': '🎁 Получить тест', 'callback_data': 'channel_test'}]
+            [{'text': '🎁 Получить тест', 'url': f'https://t.me/{bot_username}?start=from_channel'}]
         ]
     }
     
@@ -524,6 +572,10 @@ def handle_channel_test(cfg, user_id, first_name):
         return
     
     record_issue(user_id, username)
+    
+    # Обновляем verified на 8ч (отсчёт от выдачи ключа)
+    hours = int(cfg.get('TEST_HOURS', '8'))
+    mark_verified(user_id, hours)
     
     domain = get_domain()
     ws_port = get_ws_port()
@@ -724,6 +776,47 @@ def handle_banlist(cfg, chat_id, user_id):
     send_message(token, chat_id, text, parse_mode='HTML')
 
 
+VERIFIED_DB = "/etc/UDPCustom/verified_users.db"
+
+
+def is_verified(user_id):
+    """Проверяет, verified ли юзер СЕЙЧАС (с учётом таймаута 8ч)"""
+    if not os.path.exists(VERIFIED_DB): return False
+    try:
+        now = int(time.time())
+        with open(VERIFIED_DB) as f:
+            for line in f:
+                parts = line.strip().split('|')
+                if len(parts) < 2: continue
+                if parts[0] == str(user_id):
+                    try:
+                        return now < int(parts[1])
+                    except: return False
+    except: pass
+    return False
+
+
+def mark_verified(user_id, hours=8):
+    """Помечает юзера verified на N часов"""
+    try:
+        now = int(time.time())
+        until = now + (hours * 3600)
+        
+        # Убираем старые записи этого юзера
+        lines = []
+        if os.path.exists(VERIFIED_DB):
+            with open(VERIFIED_DB) as f:
+                lines = [l for l in f.readlines() if not l.startswith(f"{user_id}|")]
+        
+        # Добавляем новую
+        lines.append(f"{user_id}|{until}\n")
+        
+        with open(VERIFIED_DB, 'w') as f:
+            f.writelines(lines)
+    except Exception as e:
+        log.error(f"mark_verified error: {e}")
+
+
 def main():
     cfg = load_config()
     if not cfg.get('BOT_TOKEN'):
@@ -786,21 +879,48 @@ def main():
                         handle_banlist(cfg, cb['message']['chat']['id'], cb_user_id)
                     elif cb_data == 'admin_post':
                         post_to_channel(cfg, cb['message']['chat']['id'], cb_user_id)
+                    # Юзер нажал "Я зашёл и поставил реакцию"
+                    elif cb_data == 'check_verified':
+                        channels = get_channels()
+                        not_sub = []
+                        for ch in channels:
+                            if not check_subscription(cfg['BOT_TOKEN'], cb_user_id, ch):
+                                not_sub.append(ch.lstrip('@'))
+                        if not_sub:
+                            # Показываем alert (popup) вместо нового сообщения
+                            channels_list = ", ".join([f"@{ch}" for ch in not_sub])
+                            tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
+                                'callback_query_id': cb['id'],
+                                'text': f'❌ Ты ещё не подписался на: {channels_list}\n\nПодпишись и нажми кнопку ещё раз.',
+                                'show_alert': True
+                            })
+                        else:
+                            hours = int(cfg.get('TEST_HOURS', '8'))
+                            mark_verified(cb_user_id, hours)
+                            tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
+                                'callback_query_id': cb['id'],
+                                'text': '✅ Отлично! Теперь можешь получить тест.',
+                                'show_alert': True
+                            })
+                            handle_start(cfg, cb['message']['chat']['id'], cb_user_id, cb_first_name, True)
                     # Кнопка из ЛИЧКИ → обычный /test
                     elif cb_data == 'get_test':
-                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
-                            'callback_query_id': cb['id'],
-                            'text': '⏳ Создаём ключ...',
-                            'show_alert': False
-                        })
-                        handle_test(cfg, cb['message']['chat']['id'], cb_user_id, cb_first_name)
+                        handle_test(cfg, cb['message']['chat']['id'], cb_user_id, cb_first_name, cb['id'])
                     else:
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                     continue
                 if 'message' not in upd: continue
                 msg = upd['message']; chat_id = msg['chat']['id']; user_id = msg['from']['id']; first_name = msg['from'].get('first_name','')
                 text = msg.get('text','')
-                if text.startswith('/start'): handle_start(cfg, chat_id, user_id, first_name)
+                if text.startswith('/start'):
+                    # Проверяем deep link параметр (пришёл из канала)
+                    if 'from_channel' in text:
+                        hours = int(cfg.get('TEST_HOURS', '8'))
+                        mark_verified(user_id, hours)
+                        log.info(f"Юзер {user_id} verified через канал (на {hours}ч)")
+                        handle_start(cfg, chat_id, user_id, first_name, True)
+                    else:
+                        handle_start(cfg, chat_id, user_id, first_name)
                 elif text.startswith('/test'): handle_test(cfg, chat_id, user_id, first_name)
                 elif text.startswith('/post'): post_to_channel(cfg, chat_id, user_id)
                 elif text.startswith('/stats'): handle_stats(cfg, chat_id, user_id)
