@@ -100,6 +100,11 @@ fi
 curl -sf -o /usr/local/bin/vpn-tg-bot.py "$REPO_URL/bot/vpn-tg-bot.py"
 chmod +x /usr/local/bin/vpn-tg-bot.py
 
+# Скачиваем модули бота
+mkdir -p /usr/local/bin/bot_modules
+curl -sf -o /usr/local/bin/bot_modules/__init__.py "$REPO_URL/bot/modules/__init__.py"
+curl -sf -o /usr/local/bin/bot_modules/admin.py "$REPO_URL/bot/modules/admin.py"
+
 for item in "${FILES_CORE[@]}"; do
     src="${item%%:*}"
     dst="${item##*:}"
