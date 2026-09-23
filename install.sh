@@ -44,60 +44,16 @@ fi
 mkdir -p "$PANEL_DIR/modules" /etc/UDPCustom/limits /etc/UDPCustom/traffic /etc/UDPCustom/traffic_limits
 touch /etc/UDPCustom/users.db
 
-# Инициализация файлов домена, прокси, payload, каналов
-[ ! -s /etc/vpn-domain ] && echo "de.cdnstore.shop" > /etc/vpn-domain
-[ ! -s /etc/UDPCustom/proxies.txt ] && echo "8.6.112.0" > /etc/UDPCustom/proxies.txt
-[ ! -s /etc/UDPCustom/payload.txt ] && echo 'CONNECT http://co.nr HTTP/1.1[crlf]Host: www.icloud.com[crlf]User-Agent: microsoft.com[crlf][crlf]AN / HTTP/1.1[lf]Host: [host][lf]Connection: Upgrade[lf]Upgrade: websocket[crlf][crlf]' > /etc/UDPCustom/payload.txt
-
-[ ! -s /etc/UDPCustom/channels.txt ] && cat > /etc/UDPCustom/channels.txt << 'CHANNELS_EOF'
-@ArsenVipKeys
-@vpnbalkan
-CHANNELS_EOF
-
-# welcome.txt — обновляем если нет VIP-блока (бэкап старого)
-if [ ! -f /etc/UDPCustom/welcome.txt ] || ! grep -q "VIP" /etc/UDPCustom/welcome.txt 2>/dev/null; then
+# welcome.txt — скачиваем из configs/ (обновляем если нет)
+if [ ! -f /etc/UDPCustom/welcome.txt ] || ! grep -q "channels_list" /etc/UDPCustom/welcome.txt 2>/dev/null; then
     [ -f /etc/UDPCustom/welcome.txt ] && cp /etc/UDPCustom/welcome.txt /etc/UDPCustom/welcome.txt.bak
-    cat > /etc/UDPCustom/welcome.txt << 'WELCOME_EOF'
-🎁 ПОЛУЧИ БЕСПЛАТНЫЙ VPN 🎁
-
-⏰ 8 часов доступа
-📊 50 ГБ трафика
-📱 1 устройство
-🚀 Скорость 2 мб/с
-
-📲 Готовый конфиг для DarkTunnel
-
-━━━━━━━━━━━━━━━━━━
-
-🔓 Для получения теста подпишись на каналы спонсора и нажми кнопку ниже 👇
-
-━━━━━━━━━━━━━━━━━━
-
-💎 Есть VIP-ключи в наличии!
-
-✅ 30 дней - 5 $
-✅ Лимит 5 устройств
-✅ Приоритетная поддержка
-✅ Без ограничений скорости
-
-💬 Выбери Купит VIP-ключ
-
-━━━━━━━━━━━━━━━━━━
-WELCOME_EOF
+    curl -sf -o /etc/UDPCustom/welcome.txt "$REPO_URL/configs/welcome.txt"
 fi
 
-# Откат старого костыля vpn-limit-shell
-if [ -f "/etc/UDPCustom/users.db" ]; then
-    while read -r u;
-    do
-        [ -z "$u" ] && continue
-        if id "$u" &>/dev/null; then
-            current_shell=$(getent passwd "$u" | cut -d: -f7)
-            if [ "$current_shell" == "/usr/local/bin/vpn-limit-shell" ]; then
-                chsh -s /bin/false "$u" 2>/dev/null
-            fi
-        fi
-    done < "/etc/UDPCustom/users.db"
+# start.txt — скачиваем из configs/
+if [ ! -f /etc/UDPCustom/start.txt ] || ! grep -q "sponsors_list" /etc/UDPCustom/start.txt 2>/dev/null; then
+    [ -f /etc/UDPCustom/start.txt ] && cp /etc/UDPCustom/start.txt /etc/UDPCustom/start.txt.bak
+    curl -sf -o /etc/UDPCustom/start.txt "$REPO_URL/configs/start.txt"
 fi
 
 # ──────────────────────────────────────────────────────────────
