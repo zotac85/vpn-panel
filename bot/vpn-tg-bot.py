@@ -326,7 +326,14 @@ def handle_start(cfg, chat_id, user_id, first_name):
     keyboard['inline_keyboard'].append([{'text': '💎 Купить VIP-ключ', 'url': 'https://t.me/ArsenGuro'}])
     keyboard['inline_keyboard'].append([{'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}])
     
-    send_message(token, chat_id, text, reply_markup=keyboard)
+    # Дополнительные кнопки для админа
+    admin_id = cfg.get('ADMIN_ID', '')
+    if str(user_id) == str(admin_id):
+        keyboard['inline_keyboard'].append([{'text': '📊 Статистика', 'callback_data': 'admin_stats'}])
+        keyboard['inline_keyboard'].append([{'text': '🚫 Бан-лист', 'callback_data': 'admin_banlist'}])
+        keyboard['inline_keyboard'].append([{'text': '📢 Опубликовать пост', 'callback_data': 'admin_post'}])
+    
+    send_message(token, chat_id, text, reply_markup=keyboard, parse_mode='HTML')
 
 
 def handle_test(cfg, chat_id, user_id, first_name):
@@ -381,7 +388,27 @@ def handle_test(cfg, chat_id, user_id, first_name):
 
 def handle_help(cfg, chat_id):
     token = cfg['BOT_TOKEN']
-    send_message(token, chat_id, "📖 Команды:\n/start — Приветствие\n/test — Получить тест\n/help — Справка\n\n💬 @ArsenGuro\n📢 @ArsenVipKeys")
+    channels = get_channels()
+    primary = channels[0].lstrip('@') if channels else 'ArsenVipKeys'
+    
+    text = (
+        f"📖 <b>Как получить тестовый ключ?</b>\n\n"
+        f"1️⃣ Зайди в канал 👉 @{primary}\n"
+        f"2️⃣ Найди пост с кнопкой <b>«🎁 Получить тест»</b>\n"
+        f"3️⃣ Нажми на неё — ключ придёт в этот бот\n\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"💎 Есть VIP-ключи в наличии\n"
+        f"💬 Поддержка: @ArsenGuro"
+    )
+    
+    keyboard = {'inline_keyboard': [
+        [{'text': f'📢 Перейти в @{primary}', 'url': f'https://t.me/{primary}'}],
+        [{'text': '💎 Купить VIP-ключ', 'url': 'https://t.me/ArsenGuro'}],
+        [{'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}]
+    ]}
+    
+    send_message(token, chat_id, text, reply_markup=keyboard, parse_mode='HTML')
+
 
 def post_to_channel(cfg, chat_id, user_id):
     """Публикует пост с кнопкой в канал"""
@@ -558,10 +585,171 @@ def handle_channel_test(cfg, user_id, first_name):
     log.info(f"Выдан тест из канала: {username} (user_id={user_id})")
 
 
+def handle_stats(cfg, chat_id, user_id):
+    """Статистика для админа"""
+    token = cfg['BOT_TOKEN']
+    admin_id = cfg.get('ADMIN_ID', '')
+    if str(user_id) != str(admin_id):
+        send_message(token, chat_id, "🚫 Команда только для админа.")
+        return
+    
+    from datetime import datetime, timedelta
+    now = datetime.now()
+    today_start = now.replace(hour=0, minute=0, second=0).timestamp()
+    week_start = (now - timedelta(days=7)).timestamp()
+    month_start = (now - timedelta(days=30)).timestamp()
+    
+    total = 0
+    today_cnt = 0
+    week_cnt = 0
+    month_cnt = 0
+    users_set = set()
+    last_issued = []
+    
+    if os.path.exists(ISSUED_DB):
+        with open(ISSUED_DB) as f:
+            lines = f.readlines()
+        total = len(lines)
+        for line in lines:
+            parts = line.strip().split('|')
+            if len(parts) < 2: continue
+            try:
+                ts = int(parts[1])
+            except: continue
+            if ts >= today_start: today_cnt += 1
+            if ts >= week_start: week_cnt += 1
+            if ts >= month_start: month_cnt += 1
+            users_set.add(parts[0])
+        # Последние 5
+        for line in lines[-5:][::-1]:
+            parts = line.strip().split('|')
+            if len(parts) < 3: continue
+            try:
+                dt = datetime.fromtimestamp(int(parts[1])).strftime('%m-%d %H:%M')
+            except:
+                dt = '?'
+            last_issued.append(f"  • {parts[2]} ({dt})")
+    
+    # Активные (не истёкшие)
+    active = 0
+    if os.path.exists("/etc/UDPCustom/users.db"):
+        with open("/etc/UDPCustom/users.db") as f:
+            for u in f:
+                u = u.strip()
+                if not u: continue
+                ts_file = f"/etc/UDPCustom/expire_ts/{u}"
+                if os.path.exists(ts_file):
+                    try:
+                        exp = int(open(ts_file).read().strip())
+                        if exp > time.time():
+                            active += 1
+                    except: pass
+    
+    text = (
+        f"📊 <b>Статистика бота</b>\n\n"
+        f"<b>Выдачи:</b>\n"
+        f"  • Всего   : <b>{total}</b>\n"
+        f"  • Сегодня : <b>{today_cnt}</b>\n"
+        f"  • 7 дней  : <b>{week_cnt}</b>\n"
+        f"  • 30 дней : <b>{month_cnt}</b>\n\n"
+        f"<b>Пользователи:</b>\n"
+        f"  • Уникальных : <b>{len(users_set)}</b>\n"
+        f"  • Активных   : <b>{active}</b>\n\n"
+    )
+    if last_issued:
+        text += "<b>Последние 5 выдач:</b>\n" + "\n".join(last_issued)
+    
+    send_message(token, chat_id, text, parse_mode='HTML')
+
+
+def handle_ban(cfg, chat_id, user_id, args):
+    token = cfg['BOT_TOKEN']
+    admin_id = cfg.get('ADMIN_ID', '')
+    if str(user_id) != str(admin_id):
+        send_message(token, chat_id, "🚫 Только для админа.")
+        return
+    if not args:
+        send_message(token, chat_id, "❌ Формат: /ban 1234567890")
+        return
+    target = args.strip().split()[0]
+    if not target.isdigit():
+        send_message(token, chat_id, "❌ ID должен быть числом")
+        return
+    if is_blacklisted(target):
+        send_message(token, chat_id, f"⚠️ {target} уже в бане")
+        return
+    with open(BLACKLIST, 'a') as f:
+        f.write(target + "\n")
+    send_message(token, chat_id, f"✅ Забанен: <code>{target}</code>", parse_mode='HTML')
+    log.info(f"BAN: {target} by admin")
+
+
+def handle_unban(cfg, chat_id, user_id, args):
+    token = cfg['BOT_TOKEN']
+    admin_id = cfg.get('ADMIN_ID', '')
+    if str(user_id) != str(admin_id):
+        return
+    if not args:
+        send_message(token, chat_id, "❌ Формат: /unban 1234567890")
+        return
+    target = args.strip().split()[0]
+    if not os.path.exists(BLACKLIST):
+        send_message(token, chat_id, "Список пуст")
+        return
+    with open(BLACKLIST) as f:
+        lines = f.readlines()
+    new_lines = [l for l in lines if l.strip() != target]
+    if len(new_lines) == len(lines):
+        send_message(token, chat_id, f"⚠️ {target} не в бане")
+        return
+    with open(BLACKLIST, 'w') as f:
+        f.writelines(new_lines)
+    send_message(token, chat_id, f"✅ Разбанен: <code>{target}</code>", parse_mode='HTML')
+    log.info(f"UNBAN: {target} by admin")
+
+
+def handle_banlist(cfg, chat_id, user_id):
+    token = cfg['BOT_TOKEN']
+    admin_id = cfg.get('ADMIN_ID', '')
+    if str(user_id) != str(admin_id):
+        return
+    if not os.path.exists(BLACKLIST) or os.path.getsize(BLACKLIST) == 0:
+        send_message(token, chat_id, "📋 Чёрный список пуст")
+        return
+    with open(BLACKLIST) as f:
+        banned = [l.strip() for l in f if l.strip()]
+    text = f"🚫 <b>Чёрный список ({len(banned)}):</b>\n\n"
+    for b in banned[-30:]:
+        text += f"  • <code>{b}</code>\n"
+    send_message(token, chat_id, text, parse_mode='HTML')
+
+
 def main():
     cfg = load_config()
     if not cfg.get('BOT_TOKEN'):
         log.error("BOT_TOKEN не задан"); sys.exit(1)
+    # Команды для ВСЕХ юзеров
+    tg_request(cfg['BOT_TOKEN'], 'setMyCommands', {'commands': [
+        {'command': 'start', 'description': '👋 Начать'},
+        {'command': 'help', 'description': '📖 Как получить ключ'}
+    ]})
+    
+    # Команды ТОЛЬКО для админа (scope: chat)
+    admin_id = cfg.get('ADMIN_ID', '')
+    if admin_id:
+        tg_request(cfg['BOT_TOKEN'], 'setMyCommands', {
+            'commands': [
+                {'command': 'start', 'description': '👋 Начать'},
+                {'command': 'help', 'description': '📖 Справка'},
+                {'command': 'stats', 'description': '📊 Статистика'},
+                {'command': 'banlist', 'description': '🚫 Чёрный список'},
+                {'command': 'post', 'description': '📢 Опубликовать пост'},
+                {'command': 'ban', 'description': '🚫 Забанить (ID)'},
+                {'command': 'unban', 'description': '✅ Разбанить (ID)'}
+            ],
+            'scope': {'type': 'chat', 'chat_id': int(admin_id)}
+        })
+    
     log.info("━━━ VPN Telegram Bot запущен ━━━")
     log.info(f"Token: ...{cfg['BOT_TOKEN'][-8:]}")
     tg_request(cfg['BOT_TOKEN'], 'deleteWebhook')
@@ -591,6 +779,13 @@ def main():
                             'cache_time': 3
                         })
                         handle_channel_test(cfg, cb_user_id, cb_first_name)
+                    # Админ-кнопки
+                    elif cb_data == 'admin_stats':
+                        handle_stats(cfg, cb['message']['chat']['id'], cb_user_id)
+                    elif cb_data == 'admin_banlist':
+                        handle_banlist(cfg, cb['message']['chat']['id'], cb_user_id)
+                    elif cb_data == 'admin_post':
+                        post_to_channel(cfg, cb['message']['chat']['id'], cb_user_id)
                     # Кнопка из ЛИЧКИ → обычный /test
                     elif cb_data == 'get_test':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
@@ -608,6 +803,10 @@ def main():
                 if text.startswith('/start'): handle_start(cfg, chat_id, user_id, first_name)
                 elif text.startswith('/test'): handle_test(cfg, chat_id, user_id, first_name)
                 elif text.startswith('/post'): post_to_channel(cfg, chat_id, user_id)
+                elif text.startswith('/stats'): handle_stats(cfg, chat_id, user_id)
+                elif text.startswith('/banlist'): handle_banlist(cfg, chat_id, user_id)
+                elif text.startswith('/unban'): handle_unban(cfg, chat_id, user_id, text[6:].strip())
+                elif text.startswith('/ban'): handle_ban(cfg, chat_id, user_id, text[4:].strip())
                 elif text.startswith('/help'): handle_help(cfg, chat_id)
         except KeyboardInterrupt: log.info("Остановка"); break
         except Exception as e: log.error(f"Ошибка в main loop: {e}"); time.sleep(5)
