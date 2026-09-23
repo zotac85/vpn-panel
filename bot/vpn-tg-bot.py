@@ -428,7 +428,22 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None):
         send_message(token, chat_id, "🔗 Ссылка-конфиг (тап → копировать):\n\n<code>" + dt_url + "</code>", parse_mode="HTML")
 
     if admin_id:
-        send_message(token, admin_id, f"🔔 Выдача: {username} (TG: {user_id})")
+        from datetime import datetime
+        now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        admin_msg = (
+            f"🔔 <b>Новая выдача из бота</b>\n\n"
+            f"👤 Telegram: {first_name or '—'} (ID: {user_id})\n"
+            f"📱 Логин : <code>{username}</code>\n"
+            f"🔑 Пароль: <code>{password}</code>\n"
+            f"🌐 Сервер: {domain}\n"
+            f"🔌 Порт  : {ws_port}\n"
+            f"🕐 {now_str}"
+        )
+        tg_request(token, 'sendMessage', {
+            'chat_id': admin_id,
+            'text': admin_msg,
+            'parse_mode': 'HTML'
+        })
     log.info(f"Выдан тест: {username}")
 
 
