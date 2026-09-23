@@ -517,45 +517,115 @@ client_statistics() {
 
 list_users() {
     header
-    echo -e "${YELLOW}--- 📋 Список текущего онлайна ---${NC}"
+    echo -e "${YELLOW}📋 СПИСОК ПОЛЬЗОВАТЕЛЕЙ${NC}"
+    echo ""
+    echo " 1) Все пользователи"
+    echo " 2) Только активные"
+    echo " 3) Только истёкшие"
+    echo " 0) Назад"
+    echo ""
+    read -p "Выбор [0-3]: " fchoice
+    case $fchoice in
+        1) list_users_paged "all" 1 ;;
+        2) list_users_paged "active" 1 ;;
+        3) list_users_paged "expired" 1 ;;
+        0) return ;;
+        *) return ;;
+    esac
+}
 
+list_users_paged() {
+    local filter="$1"
+    local page="${2:-1}"
+    local per_page=20
+    
     if [ ! -s "$DB_USERS" ]; then
-        echo -e "${MAGENTA}Список пуст. Вы ещё не создавали пользователей.${NC}"
-        echo ""
-        read -p "Нажмите Enter для продолжения..."
+        header
+        echo -e "${MAGENTA}Список пуст.${NC}"
+        read -p "Нажмите Enter..."
         return
     fi
-
-    build_session_stats
-
-    printf "${BLUE}%-3s %-10s %-11s %-4s %-4s %-4s %-6s %-10s${NC}\n" "№" "Логин" "Срок" "SSH" "WS" "Wh" "Лимит" "Статус"
-    echo -e "${CYAN}────────────────────────────────────────────────────────${NC}"
-
-    local i=1
+    
+    # Собираем юзеров по фильтру
+    local all_users=()
+    local NOW=$(date +%s)
     while read -r u; do
         [ -z "$u" ] && continue
-        if id "$u" &>/dev/null; then
-            exp=$(chage -l "$u" 2>/dev/null | grep "Account expires" | cut -d: -f2 | sed 's/^ *//')
-            [ "$exp" == "never" ] && exp="Бессрочно"
-
-            local user_limit=3
-            [ -f "$LIMITS_DIR/$u" ] && user_limit=$(cat "$LIMITS_DIR/$u")
-
-            read c_ssh c_ws c_white <<< $(get_user_connections "$u")
-
-            if passwd -S "$u" 2>/dev/null | grep -q " L "; then
-                status_str="${RED}${USER_LOCK}${NC}"
-            else
-                status_str="${GREEN}${USER_ON}${NC}"
+        id "$u" &>/dev/null || continue
+        
+        local is_expired=0
+        local ts_file="/etc/UDPCustom/expire_ts/$u"
+        if [ -f "$ts_file" ]; then
+            local ts=$(cat "$ts_file" 2>/dev/null)
+            if [[ "$ts" =~ ^[0-9]+$ ]] && [ "$ts" -lt "$NOW" ]; then
+                is_expired=1
             fi
-
-            printf "%-3s %-10s %-11s %-4s %-4s %-4s %-6s %-12b\n" "$i)" "$u" "$exp" "$c_ssh" "$c_ws" "$c_white" "$user_limit" "$status_str"
-            ((i++))
         fi
+        
+        [ "$filter" == "active" ] && [ "$is_expired" -eq 1 ] && continue
+        [ "$filter" == "expired" ] && [ "$is_expired" -eq 0 ] && continue
+        
+        all_users+=("$u")
     done < "$DB_USERS"
-
+    
+    local total=${#all_users[@]}
+    if [ "$total" -eq 0 ]; then
+        header
+        echo -e "${MAGENTA}Нет пользователей в категории.${NC}"
+        read -p "Enter..."
+        return
+    fi
+    
+    local total_pages=$(( (total + per_page - 1) / per_page ))
+    [ "$page" -gt "$total_pages" ] && page=$total_pages
+    [ "$page" -lt 1 ] && page=1
+    
+    local start=$(( (page - 1) * per_page ))
+    local end=$(( start + per_page ))
+    [ "$end" -gt "$total" ] && end=$total
+    
+    header
+    echo -e "${YELLOW}--- 📋 Список пользователей ---${NC}"
+    
+    local filter_name="Все"
+    [ "$filter" == "active" ] && filter_name="Активные"
+    [ "$filter" == "expired" ] && filter_name="Истёкшие"
+    
+    echo -e "${CYAN}Фильтр: $filter_name | Всего: $total | Стр. $page/$total_pages${NC}"
     echo ""
-    read -p "Нажмите Enter для продолжения..."
+    
+    build_session_stats
+    
+    printf "${BLUE}%-3s %-12s %-11s %-4s %-4s %-4s %-6s${NC}\n" "№" "Логин" "Срок" "SSH" "WS" "Wh" "Лимит"
+    echo -e "${CYAN}─────────────────────────────────────────────────${NC}"
+    
+    local i=$(( start + 1 ))
+    for ((idx=start; idx<end; idx++)); do
+        local u="${all_users[$idx]}"
+        local exp=$(chage -l "$u" 2>/dev/null | grep "Account expires" | cut -d: -f2 | sed 's/^ *//')
+        [ "$exp" == "never" ] && exp="∞"
+        # Сокращаем дату: Nov 16, 2026 → Nov16
+        
+        local user_limit=3
+        [ -f "$LIMITS_DIR/$u" ] && user_limit=$(cat "$LIMITS_DIR/$u")
+        
+        read c_ssh c_ws c_white <<< $(get_user_connections "$u")
+        
+        printf "%-3s %-12s %-11s %-4s %-4s %-4s %-6s\n" "$i)" "$u" "$exp" "$c_ssh" "$c_ws" "$c_white" "$user_limit"
+        ((i++))
+    done
+    
+    echo -e "${CYAN}─────────────────────────────────────────────────${NC}"
+    echo ""
+    echo " 1) ◀ Назад | 2) Далее ▶ | 3) Фильтр | 0) Выход"
+    echo ""
+    read -p "Выбор [0-3]: " nav
+    case $nav in
+        1) list_users_paged "$filter" $((page > 1 ? page - 1 : 1)) ;;
+        2) list_users_paged "$filter" $((page < total_pages ? page + 1 : total_pages)) ;;
+        3) list_users ;;
+        0) return ;;
+    esac
 }
 
 # ──────────────────────────────────────────────────────────────
