@@ -69,6 +69,7 @@ CHANNEL_NAME_2=""
 REQUIRE_SUBSCRIPTION=0
 COOLDOWN_HOURS=8
 TEST_HOURS=8
+VERIFIED_MINUTES=60
 TEST_DEVICES=1
 TEST_TRAFFIC_GB=50
 WELCOME_TEXT="🎁 Привет! Хочешь бесплатный VPN на 24 часа?\n\nНажми /test и получи доступ!"
@@ -446,6 +447,7 @@ menu_tgbot() {
             14)
                 tg_edit_field "COOLDOWN_HOURS" "Кулдаун между тестами (часы)"
                 tg_edit_field "TEST_HOURS" "Срок тестового (часы)"
+                tg_edit_field "VERIFIED_MINUTES" "Срок verified (минуты) — через сколько снова в канал"
                 tg_edit_field "TEST_DEVICES" "Лимит устройств (шт)"
                 tg_edit_field "TEST_TRAFFIC_GB" "Лимит трафика (ГБ)"
                 ;;

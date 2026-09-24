@@ -1041,7 +1041,7 @@ def mark_verified(user_id, hours=8):
     """Помечает юзера verified на N часов"""
     try:
         now = int(time.time())
-        until = now + (hours * 3600)
+        until = int(now + (hours * 3600))
         
         # Убираем старые записи этого юзера
         lines = []
@@ -1887,7 +1887,8 @@ def main():
                 if text.startswith('/start'):
                     # Проверяем deep link параметр (пришёл из канала)
                     if 'from_channel' in text:
-                        hours = int(cfg.get('TEST_HOURS', '8'))
+                        mins = int(cfg.get('VERIFIED_MINUTES', '60'))
+                        hours = mins / 60
                         mark_verified(user_id, hours)
                         log.info(f"Юзер {user_id} verified через канал (на {hours}ч)")
                         handle_start(cfg, chat_id, user_id, first_name, True)
