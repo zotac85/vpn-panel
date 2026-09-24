@@ -486,13 +486,46 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None):
     if proxy: text += f"🛡️ Прокси: {proxy}:80\n"
     text += f"\n⏰ {cfg.get('TEST_HOURS','8')} ч | 📊 {traffic} ГБ | 💻 {devices} устр.\n\n"
     text += f"💬 @ArsenGuro\n📢 @ArsenVipKeys"
-    # Удаляем welcome-сообщение
+    # Убираем кнопку "Получить тест" из welcome-сообщения
     welcome_file = f"/etc/UDPCustom/welcome_msgs/{user_id}"
     if os.path.exists(welcome_file):
         try:
             with open(welcome_file) as f:
                 w_id = int(f.read().strip())
-            tg_request(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': w_id})
+            # Новая клавиатура без "Получить тест"
+            new_kb = {'inline_keyboard': [
+                [{'text': '🔑 Мой ключ', 'callback_data': 'mykey'}],
+                [
+                    {'text': '💎 VIP-ключ', 'url': 'https://t.me/ArsenGuro'},
+                    {'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}
+                ]
+            ]}
+            admin_id = cfg.get('ADMIN_ID', '')
+            if str(user_id) == str(admin_id):
+                new_kb['inline_keyboard'].append([
+                    {'text': '📊 Статистика', 'callback_data': 'admin_stats'},
+                    {'text': '👥 Пользователи', 'callback_data': 'admin_users_1'}
+                ])
+                new_kb['inline_keyboard'].append([
+                    {'text': '📢 Пост', 'callback_data': 'admin_post'},
+                    {'text': '📢 Каналы', 'callback_data': 'admin_channels'}
+                ])
+            # Сохраняем админ-кнопки
+            admin_id = cfg.get('ADMIN_ID', '')
+            if str(user_id) == str(admin_id):
+                new_kb['inline_keyboard'].append([
+                    {'text': '📊 Статистика', 'callback_data': 'admin_stats'},
+                    {'text': '👥 Пользователи', 'callback_data': 'admin_users_1'}
+                ])
+                new_kb['inline_keyboard'].append([
+                    {'text': '📢 Пост', 'callback_data': 'admin_post'},
+                    {'text': '📢 Каналы', 'callback_data': 'admin_channels'}
+                ])
+            tg_request(token, 'editMessageReplyMarkup', {
+                'chat_id': chat_id,
+                'message_id': w_id,
+                'reply_markup': new_kb
+            })
             os.remove(welcome_file)
         except: pass
     
@@ -721,13 +754,24 @@ def handle_channel_test(cfg, user_id, first_name):
     
     text += f"\n💬 @ArsenGuro\n📢 @ArsenVipKeys"
     
-    # Удаляем welcome-сообщение из лички
+    # Убираем кнопку "Получить тест" из welcome-сообщения
     welcome_file = f"/etc/UDPCustom/welcome_msgs/{user_id}"
     if os.path.exists(welcome_file):
         try:
             with open(welcome_file) as f:
                 w_id = int(f.read().strip())
-            tg_request(token, 'deleteMessage', {'chat_id': user_id, 'message_id': w_id})
+            new_kb = {'inline_keyboard': [
+                [{'text': '🔑 Мой ключ', 'callback_data': 'mykey'}],
+                [
+                    {'text': '💎 VIP-ключ', 'url': 'https://t.me/ArsenGuro'},
+                    {'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}
+                ]
+            ]}
+            tg_request(token, 'editMessageReplyMarkup', {
+                'chat_id': user_id,
+                'message_id': w_id,
+                'reply_markup': new_kb
+            })
             os.remove(welcome_file)
         except: pass
     send_message_ttl(token, user_id, text, ttl=1800, parse_mode='HTML')
