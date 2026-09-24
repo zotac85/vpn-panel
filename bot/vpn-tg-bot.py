@@ -10,6 +10,7 @@ from datetime import datetime
 # Подключаем модуль администраторов
 sys.path.insert(0, '/usr/local/bin')
 from bot_modules.admin import get_admins, is_admin, handle_addadmin, handle_deladmin, handle_admins, handle_newuser
+from bot_modules.autopost import handle_autopost, start_autopost_thread, load_autopost_config
 
 CONFIG_FILE = "/etc/UDPCustom/bot.conf"
 ISSUED_DB = "/etc/UDPCustom/bot_issued.db"
@@ -1603,6 +1604,10 @@ def main():
             'scope': {'type': 'chat', 'chat_id': int(admin_id)}
         })
     
+    # Запускаем автопостинг
+    start_autopost_thread(cfg['BOT_TOKEN'], {})
+    log.info("Autopost поток запущен")
+    
     log.info("━━━ VPN Telegram Bot запущен ━━━")
     log.info(f"Token: ...{cfg['BOT_TOKEN'][-8:]}")
     tg_request(cfg['BOT_TOKEN'], 'deleteWebhook')
@@ -1645,7 +1650,64 @@ def main():
                     elif cb_data == 'admin_banlist':
                         handle_banlist(cfg, cb['message']['chat']['id'], cb_user_id)
                     elif cb_data == 'admin_post':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        # Подменю управления постом
+                        ap = load_autopost_config()
+                        status = "🟢 Вкл" if ap.get('ENABLED') == '1' else "🔴 Выкл"
+                        mode = ap.get('MODE', 'interval')
+                        if mode == 'time':
+                            mode_str = f"📅 {ap.get('TIMES', '—')}"
+                        else:
+                            mode_str = f"⏰ Каждые {ap.get('INTERVAL_HOURS', '12')}ч"
+                        
+                        text = (
+                            f"📢 <b>УПРАВЛЕНИЕ ПОСТОМ</b>\n"
+                            f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                            f"Автопостинг: <b>{status}</b>\n"
+                            f"Режим: <b>{mode_str}</b>\n\n"
+                            f"Выбери действие 👇"
+                        )
+                        keyboard = {'inline_keyboard': [
+                            [{'text': '📤 Опубликовать сейчас', 'callback_data': 'post_now'}],
+                            [
+                                {'text': '▶️ Включить', 'callback_data': 'autopost_on'},
+                                {'text': '⏸️ Выключить', 'callback_data': 'autopost_off'}
+                            ],
+                            [
+                                {'text': '⏰ Каждые 6ч', 'callback_data': 'autopost_6'},
+                                {'text': '⏰ Каждые 12ч', 'callback_data': 'autopost_12'}
+                            ],
+                            [{'text': '📅 Настроить время', 'callback_data': 'autopost_time'}],
+                            [{'text': '🔄 Обновить', 'callback_data': 'admin_post'}]
+                        ]}
+                        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                            'chat_id': cb['message']['chat']['id'],
+                            'text': text,
+                            'parse_mode': 'HTML',
+                            'reply_markup': keyboard
+                        })
+                    elif cb_data == 'post_now':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         post_to_channel(cfg, cb['message']['chat']['id'], cb_user_id)
+                    elif cb_data == 'autopost_on':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': '✅ Включено'})
+                        handle_autopost(cfg, cb['message']['chat']['id'], cb_user_id, 'on')
+                    elif cb_data == 'autopost_off':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': '⏸️ Выключено'})
+                        handle_autopost(cfg, cb['message']['chat']['id'], cb_user_id, 'off')
+                    elif cb_data == 'autopost_6':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': '⏰ 6 часов'})
+                        handle_autopost(cfg, cb['message']['chat']['id'], cb_user_id, 'every 6')
+                    elif cb_data == 'autopost_12':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': '⏰ 12 часов'})
+                        handle_autopost(cfg, cb['message']['chat']['id'], cb_user_id, 'every 12')
+                    elif cb_data == 'autopost_time':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                            'chat_id': cb['message']['chat']['id'],
+                            'text': "📅 <b>Отправь время через запятую:</b>\n\nПример: <code>/autopost time 10:00,22:00</code>",
+                            'parse_mode': 'HTML'
+                        })
                     elif cb_data == 'manage_services':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         handle_services(cfg, cb['message']['chat']['id'], cb_user_id)
@@ -1823,6 +1885,7 @@ def main():
                 elif text.startswith('/addadmin'): handle_addadmin(cfg, chat_id, user_id, text[9:].strip())
                 elif text.startswith('/deladmin'): handle_deladmin(cfg, chat_id, user_id, text[9:].strip())
                 elif text.startswith('/newuser'): handle_newuser(cfg, chat_id, user_id, text[8:].strip())
+                elif text.startswith('/autopost'): handle_autopost(cfg, chat_id, user_id, text[9:].strip())
                 elif text.startswith('/restart'): handle_restart(cfg, chat_id, user_id, text[8:].strip())
                 elif text.startswith('/help'): handle_help(cfg, chat_id)
         except KeyboardInterrupt: log.info("Остановка"); break
