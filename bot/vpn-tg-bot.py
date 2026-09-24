@@ -24,8 +24,8 @@ log = logging.getLogger()
 def load_config():
     cfg = {
         'BOT_TOKEN':'', 'ADMIN_ID':'', 'CHANNEL_ID':'', 'CHANNEL_ID_2':'', 'CHANNEL_NAME_2':'',
-        'REQUIRE_SUBSCRIPTION':'0', 'COOLDOWN_HOURS':'24', 'TEST_DAYS':'1',
-        'TEST_DEVICES':'10', 'TEST_TRAFFIC_GB':'100',
+        'REQUIRE_SUBSCRIPTION':'0', 'COOLDOWN_HOURS':'8', 'TEST_DAYS':'1',
+        'TEST_DEVICES':'1', 'TEST_TRAFFIC_GB':'50',
         'WELCOME_TEXT':'🎁 Привет! Нажми /test чтобы получить тестовый доступ.',
         'SUCCESS_TEMPLATE':'🎉 Логин: {USERNAME}\n🔑 Пароль: {PASSWORD}',
         'CONFIG_NAME':'ArsenVipKeys', 'CONNECTED_MSG':'Подключено!',
@@ -467,7 +467,7 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None):
             return
     admin_id = cfg.get('ADMIN_ID', '')
     if str(user_id) != str(admin_id):
-        cooldown_hours = int(cfg.get('COOLDOWN_HOURS','24'))
+        cooldown_hours = int(cfg.get('COOLDOWN_HOURS','8'))
         ok, remaining = check_cooldown(user_id, cooldown_hours)
         if not ok:
             send_message_ttl(token, chat_id, f"⏰ Попробуй через {format_time(remaining)}.", ttl=15); return
@@ -478,7 +478,7 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None):
     record_issue(user_id, username)
     domain = get_domain(); ws_port = get_ws_port(); proxy = get_random_proxy()
     connect_line = f"{domain}:{ws_port}@{username}:{password}"
-    traffic = cfg.get('TEST_TRAFFIC_GB','100'); devices = cfg.get('TEST_DEVICES','10')
+    traffic = cfg.get('TEST_TRAFFIC_GB','50'); devices = cfg.get('TEST_DEVICES','1')
     text = (f"🎉 Тестовый доступ готов!\n\n"
             f"📲 Строка для DarkTunnel:\n\n<code>{connect_line}</code>\n\n"
             f"📱 Логин: {username}\n🔑 Пароль: {password}\n"
@@ -662,7 +662,7 @@ def handle_channel_test(cfg, user_id, first_name):
     # Проверяем кулдаун
     admin_id = cfg.get('ADMIN_ID', '')
     if str(user_id) != str(admin_id):
-        cooldown_hours = int(cfg.get('COOLDOWN_HOURS', '24'))
+        cooldown_hours = int(cfg.get('COOLDOWN_HOURS', '8'))
         ok, remaining = check_cooldown(user_id, cooldown_hours)
         if not ok:
             send_message_ttl(token, user_id, f"⏰ Ты уже получал тест. Попробуй через {format_time(remaining)}.", ttl=15)
