@@ -392,16 +392,15 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         # Подписан на все, но НЕ verified → надо зайти на канал
         text = (
             f"👋 Привет, {name}!\n\n"
-            f"⚠️ <b>Осталось одно действие:</b>\n\n"
+            f"⚠️ <b>Чтобы получить тестовый ключ:</b>\n\n"
             f"1️⃣ Зайди в канал 👉 @{primary}\n"
-            f"2️⃣ Посмотри последние 3 поста\n"
-            f"3️⃣ Поставь лайк или реакцию 👍\n"
-            f"4️⃣ Вернись и нажми «Я зашёл и поставил реакцию»\n\n"
+            f"2️⃣ Найди пост с кнопкой <b>«🎁 Получить тест»</b>\n"
+            f"3️⃣ Нажми эту кнопку — ключ придёт сюда, в бота\n\n"
             f"💎 Есть VIP-ключи — пиши @ArsenGuro"
         )
         keyboard = {'inline_keyboard': [
             [{'text': f'📢 Перейти в @{primary}', 'url': f'https://t.me/{primary}'}],
-            [{'text': '✅ Я зашёл и поставил реакцию', 'callback_data': 'check_verified'}],
+            [{'text': '🔑 Мой ключ', 'callback_data': 'mykey'}],
             [{'text': '💎 Купить VIP-ключ', 'url': 'https://t.me/ArsenGuro'}],
             [{'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}]
         ]}
@@ -704,9 +703,6 @@ def handle_channel_test(cfg, user_id, first_name):
     
     record_issue(user_id, username)
     
-    # Обновляем verified на 8ч (отсчёт от выдачи ключа)
-    hours = int(cfg.get('TEST_HOURS', '8'))
-    mark_verified(user_id, hours)
     
     domain = get_domain()
     ws_port = get_ws_port()
@@ -1862,14 +1858,14 @@ def main():
                                 'show_alert': True
                             })
                         else:
-                            hours = int(cfg.get('TEST_HOURS', '8'))
-                            mark_verified(cb_user_id, hours)
+                            # Подписан — но verified НЕ ставим
+                            # Verified ставится только через deep-link из поста
                             tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
                                 'callback_query_id': cb['id'],
-                                'text': '✅ Отлично! Теперь можешь получить тест.',
+                                'text': '✅ Подписка есть! Теперь зайди в канал и нажми кнопку под постом.',
                                 'show_alert': True
                             })
-                            handle_start(cfg, cb['message']['chat']['id'], cb_user_id, cb_first_name, True)
+                            handle_start(cfg, cb['message']['chat']['id'], cb_user_id, cb_first_name, False)
                     # Кнопка из ЛИЧКИ → обычный /test
                     elif cb_data == 'get_test':
                         handle_test(cfg, cb['message']['chat']['id'], cb_user_id, cb_first_name, cb['id'])
