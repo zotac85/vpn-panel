@@ -56,18 +56,17 @@ if [ ! -f /etc/UDPCustom/start.txt ] || ! grep -q "sponsors_list" /etc/UDPCustom
     curl -sf -o /etc/UDPCustom/start.txt "$REPO_URL/configs/start.txt"
 fi
 
-# start.txt — скачиваем из configs/
-if [ ! -f /etc/UDPCustom/start.txt ] || ! grep -q "sponsors_list" /etc/UDPCustom/start.txt 2>/dev/null; then
-    [ -f /etc/UDPCustom/start.txt ] && cp /etc/UDPCustom/start.txt /etc/UDPCustom/start.txt.bak
-    curl -sf -o /etc/UDPCustom/start.txt "$REPO_URL/configs/start.txt"
-fi
-
 # channels.txt — список каналов
 if [ ! -f /etc/UDPCustom/channels.txt ] || [ ! -s /etc/UDPCustom/channels.txt ]; then
     [ -f /etc/UDPCustom/channels.txt ] && cp /etc/UDPCustom/channels.txt /etc/UDPCustom/channels.txt.bak
     curl -sf -o /etc/UDPCustom/channels.txt "$REPO_URL/configs/channels.txt"
 fi
 
+# post.txt — текст поста для публикации
+if [ ! -f /etc/UDPCustom/post.txt ] || ! grep -q "DarkTunnel" /etc/UDPCustom/post.txt 2>/dev/null; then
+    [ -f /etc/UDPCustom/post.txt ] && cp /etc/UDPCustom/post.txt /etc/UDPCustom/post.txt.bak
+    curl -sf -o /etc/UDPCustom/post.txt "$REPO_URL/configs/post.txt"
+fi
 # ──────────────────────────────────────────────────────────────
 # Скачивание ВСЕХ модулей
 # ──────────────────────────────────────────────────────────────
