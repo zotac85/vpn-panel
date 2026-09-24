@@ -540,6 +540,7 @@ def handle_help(cfg, chat_id):
     
     keyboard = {'inline_keyboard': [
         [{'text': f'📢 Перейти в @{primary}', 'url': f'https://t.me/{primary}'}],
+        [{'text': '🔑 Мой ключ', 'callback_data': 'mykey'}],
         [{'text': '💎 Купить VIP-ключ', 'url': 'https://t.me/ArsenGuro'}],
         [{'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}]
     ]}
