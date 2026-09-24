@@ -11,6 +11,7 @@ from datetime import datetime
 sys.path.insert(0, '/usr/local/bin')
 from bot_modules.admin import get_admins, is_admin, handle_addadmin, handle_deladmin, handle_admins, handle_newuser
 from bot_modules.autopost import handle_autopost, start_autopost_thread, load_autopost_config
+from bot_modules.cabinet import show_cabinet, handle_cabinet_callback
 
 CONFIG_FILE = "/etc/UDPCustom/bot.conf"
 ISSUED_DB = "/etc/UDPCustom/bot_issued.db"
@@ -374,6 +375,7 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         )
         keyboard = {'inline_keyboard': [
             [{'text': '🎁 ПОЛУЧИТЬ ТЕСТ', 'callback_data': 'get_test'}],
+            [{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}],
             [{'text': '🔑 Мой ключ', 'callback_data': 'mykey'}],
             [
                 {'text': '💎 VIP-ключ', 'url': 'https://t.me/ArsenGuro'},
@@ -402,9 +404,8 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         )
         keyboard = {'inline_keyboard': [
             [{'text': f'📢 Перейти в @{primary}', 'url': f'https://t.me/{primary}'}],
+            [{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}],
             [{'text': '🔑 Мой ключ', 'callback_data': 'mykey'}],
-            [{'text': '💎 Купить VIP-ключ', 'url': 'https://t.me/ArsenGuro'}],
-            [{'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}]
         ]}
         if is_admin:
             keyboard['inline_keyboard'].append([
@@ -551,25 +552,22 @@ def handle_help(cfg, chat_id):
     token = cfg['BOT_TOKEN']
     channels = get_channels()
     primary = channels[0].lstrip('@') if channels else 'ArsenVipKeys'
-    
     text = (
         f"📖 <b>Как получить тестовый ключ?</b>\n\n"
         f"1️⃣ Зайди в канал 👉 @{primary}\n"
         f"2️⃣ Найди пост с кнопкой <b>«🎁 Получить тест»</b>\n"
-        f"3️⃣ Нажми на неё — ключ придёт в этот бот\n\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"💎 Есть VIP-ключи в наличии\n"
-        f"💬 Поддержка: @ArsenGuro"
+        f"3️⃣ Нажми на неё — ключ придёт в этот бот\n"
     )
-    
     keyboard = {'inline_keyboard': [
-        [{'text': f'📢 Перейти в @{primary}', 'url': f'https://t.me/{primary}'}],
-        [{'text': '🔑 Мой ключ', 'callback_data': 'mykey'}],
-        [{'text': '💎 Купить VIP-ключ', 'url': 'https://t.me/ArsenGuro'}],
-        [{'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}]
+        [{'text': '📖 Инструкция', 'callback_data': 'cab_help_instruction'},
+         {'text': '❓ FAQ', 'callback_data': 'cab_help_faq'}],
+        [{'text': '🎬 Видео', 'url': f'https://t.me/{primary}'},
+         {'text': '👤 Кабинет', 'callback_data': 'cab_main'}],
+        [{'text': f'📢 Перейти в @{primary}', 'url': f'https://t.me/{primary}'}]
     ]}
-    
     send_message(token, chat_id, text, reply_markup=keyboard, parse_mode='HTML')
+
+
 
 
 def post_to_channel(cfg, chat_id, user_id):
@@ -1804,6 +1802,9 @@ def main():
                     elif cb_data == 'mykey':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         handle_mykey(cfg, cb['message']['chat']['id'], cb_user_id)
+                    elif cb_data.startswith('cab_'):
+                        handle_cabinet_callback(cfg, cb_data, cb, cb_user_id, cb_first_name)
+                        continue
                     elif cb_data == 'admin_newuser':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         instructions = (
@@ -1921,6 +1922,7 @@ def main():
                 elif text.startswith('/newuser'): handle_newuser(cfg, chat_id, user_id, text[8:].strip())
                 elif text.startswith('/autopost'): handle_autopost(cfg, chat_id, user_id, text[9:].strip())
                 elif text.startswith('/restart'): handle_restart(cfg, chat_id, user_id, text[8:].strip())
+                elif text.startswith('/cabinet'): show_cabinet(cfg, chat_id, user_id, first_name)
                 elif text.startswith('/help'): handle_help(cfg, chat_id)
         except KeyboardInterrupt: log.info("Остановка"); break
         except Exception as e: log.error(f"Ошибка в main loop: {e}"); time.sleep(5)
