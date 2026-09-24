@@ -7,6 +7,7 @@ import time
 import base64
 import logging
 import urllib.request
+from bot_modules import db
 
 # ─── Пути ───
 ISSUED_DB = "/etc/UDPCustom/bot_issued.db"
@@ -279,28 +280,39 @@ def make_darktunnel_url(username, password, domain, ws_port, proxy):
 # ═══════════════════════════════════════════════════════════════
 
 def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
-    """Главное меню кабинета"""
+    """Главное меню кабинета — данные из БД"""
     token = cfg['BOT_TOKEN']
-    name = first_name or "друг"
+    user = db.get_user(user_id)
+    if not user:
+        user = db.upsert_user(user_id, first_name)
+    name = user.get('first_name') or first_name or "друг"
+    balance = float(user.get('balance') or 0)
+    test_keys = db.get_test_keys(user_id, active_only=True)
+    vip_keys  = db.get_vip_keys(user_id, active_only=True)
+    all_test  = db.get_test_keys(user_id)
+    all_vip   = db.get_vip_keys(user_id)
+    active_count = len(test_keys) + len(vip_keys)
+    total_count  = len(all_test) + len(all_vip)
 
-    keys = get_user_keys(user_id)
-    active_count = sum(1 for k in keys if k['active'])
-    total_count = len(keys)
-
-    text = (
-        f"👤 <b>ЛИЧНЫЙ КАБИНЕТ</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"👋 Добро пожаловать, <b>{name}</b>!\n\n"
-        f"🆔 ID пользователя: <code>{user_id}</code>\n"
-        f"💰 Текущий баланс: <b>0.00 USDT</b>\n"
-        f"🔑 Активных ключей: <b>{active_count}</b>\n"
-        f"📊 Всего создано ключей: <b>{total_count}</b>\n\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-    )
+    NL = chr(10)
+    lines = [
+        "👤 <b>ЛИЧНЫЙ КАБИНЕТ</b>",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "",
+        f"👋 Добро пожаловать, <b>{name}</b>!",
+        "",
+        f"🆔 ID пользователя: <code>{user_id}</code>",
+        f"💰 Текущий баланс: <b>{balance:.2f} USDT</b>",
+        f"🔑 Активных ключей: <b>{active_count}</b>",
+        f"👥 Приглашено рефералов: <b>{db.get_ref_count(user_id)}</b>",
+        "",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+    ]
+    text = NL.join(lines)
 
     keyboard = {'inline_keyboard': [
         [{'text': f'🔑 Мои ключи ({active_count})', 'callback_data': 'cab_keys'},
-         {'text': '➕ Создать ключ', 'callback_data': 'cab_create'}],
+         {'text': '💎 Купить VIP', 'url': 'https://t.me/ArsenGuro'}],
         [{'text': '💰 Баланс', 'callback_data': 'cab_balance'},
          {'text': '🎫 Промокод', 'callback_data': 'cab_promo'}],
         [{'text': '👥 Рефералы', 'callback_data': 'cab_refs'},
@@ -314,52 +326,68 @@ def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
         _send(token, chat_id, text, keyboard)
 
 
-def show_my_keys(cfg, chat_id, user_id, msg_id=None):
-    """Список ключей пользователя"""
+def show_my_keys(cfg, chat_id, user_id, kind='all', msg_id=None):
+    """Короткий список активных ключей. kind: 'all' | 'test' | 'vip'"""
     token = cfg['BOT_TOKEN']
-    keys = get_user_keys(user_id)
 
-    if not keys:
-        text = (
-            f"🔑 <b>МОИ КЛЮЧИ</b>\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"❌ У тебя пока нет ключей.\n\n"
-            f"Создай первый через <b>«➕ Создать ключ»</b>!"
-        )
-        keyboard = {'inline_keyboard': [
-            [{'text': '➕ Создать ключ', 'callback_data': 'cab_create'}],
-            [{'text': '⬅️ Назад', 'callback_data': 'cab_main'}]
-        ]}
+    test_keys = db.get_test_keys(user_id, active_only=True)
+    vip_keys  = db.get_vip_keys(user_id, active_only=True)
+
+    if kind == 'test':
+        items = [('test', k) for k in test_keys]
+    elif kind == 'vip':
+        items = [('vip', k) for k in vip_keys]
     else:
-        text = (
-            f"🔑 <b>МОИ КЛЮЧИ</b> ({len(keys)})\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n\n"
-        )
-        for i, k in enumerate(keys[:10], 1):
-            if k['active']:
-                left = k['exp_ts'] - int(time.time()) if k['exp_ts'] > 0 else 0
-                icon = "🟢"
-                info = f"⏰ {_human_time(left)}" if k['exp_ts'] > 0 else "♾ бессрочно"
-            else:
-                icon = "🔴"
-                info = "истёк"
-            traffic_info = _human_bytes(k['traffic'])
-            text += f"{icon} <code>{k['name']}</code> — {info} • {traffic_info}\n"
+        items = [('test', k) for k in test_keys] + [('vip', k) for k in vip_keys]
 
-        keyboard = {'inline_keyboard': []}
-        # Кнопки для каждого активного ключа
-        for k in keys[:5]:
-            if k['active']:
-                keyboard['inline_keyboard'].append([
-                    {'text': f"🔑 {k['name']}",
-                     'callback_data': f"cab_key:{k['name']}"}
-                ])
+    NL = chr(10)
+    lines = ["🔑 <b>МОИ КЛЮЧИ</b>", "━━━━━━━━━━━━━━━━━━━━", ""]
+    if not items:
+        lines.append("❌ Нет активных ключей.")
+        lines.append("")
+        lines.append("🎁 Получить тест — через канал")
+        lines.append("💎 Купить VIP — @ArsenGuro")
+    else:
+        for kk, k in items:
+            if k['expires_at'] == 0:
+                t = "♾ бессрочно"
+            else:
+                left = k['expires_at'] - int(time.time())
+                t = _human_time(left) if left > 0 else "❌ истёк"
+            icon = "💎" if kk == 'vip' else "🎁"
+            lines.append(f"{icon} <b>{k['login']}</b>")
+            lines.append(f"     ⏰ {t}")
+            lines.append("")
+        lines.append("<i>Тапни по ключу ниже — детали и конфиг</i>")
+    text = NL.join(lines)
+
+    keyboard = {'inline_keyboard': []}
+    if not items:
+        me = _tg(token, 'getMe')
+        bot_u = me['result'].get('username', '') if me and me.get('ok') else ''
         keyboard['inline_keyboard'].append([
-            {'text': '➕ Создать ключ', 'callback_data': 'cab_create'}
+            {'text': '🎁 Получить тест', 'url': f'https://t.me/{bot_u}?start=go'}
         ])
         keyboard['inline_keyboard'].append([
-            {'text': '⬅️ Назад', 'callback_data': 'cab_main'}
+            {'text': '💎 Купить VIP', 'url': 'https://t.me/ArsenGuro'}
         ])
+    else:
+        keyboard['inline_keyboard'].append([
+            {'text': f"🎁 Тестовые ({len(test_keys)})", 'callback_data': 'cab_keys_test'},
+            {'text': f"💎 VIP ({len(vip_keys)})", 'callback_data': 'cab_keys_vip'}
+        ])
+    if kind != 'all':
+        keyboard['inline_keyboard'].append([
+            {'text': '📋 Все ключи', 'callback_data': 'cab_keys'}
+        ])
+    for kk, k in items[:10]:
+        icon = "💎" if kk == 'vip' else "🎁"
+        keyboard['inline_keyboard'].append([
+            {'text': f"{icon} {k['login']}", 'callback_data': f"cab_key:{k['login']}"}
+        ])
+    keyboard['inline_keyboard'].append([
+        {'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}
+    ])
 
     if msg_id:
         _edit(token, chat_id, msg_id, text, keyboard)
@@ -368,65 +396,67 @@ def show_my_keys(cfg, chat_id, user_id, msg_id=None):
 
 
 def show_key_detail(cfg, chat_id, user_id, key_name, msg_id=None):
-    """Детали одного ключа"""
+    """Детали ключа (из БД)"""
     token = cfg['BOT_TOKEN']
 
-    # Проверим что ключ реально принадлежит юзеру
-    keys = get_user_keys(user_id)
-    key = next((k for k in keys if k['name'] == key_name), None)
+    key = db.get_test_key(key_name)
+    kind = 'test'
     if not key:
+        key = db.get_vip_key(key_name)
+        kind = 'vip'
+    if not key or int(key['tg_id']) != int(user_id):
         _send(token, chat_id, "❌ Ключ не найден")
         return
 
-    password = get_password(key_name)
-    domain = get_domain()
-    ws_port = get_ws_port()
-    proxy = get_random_proxy()
+    location = cfg.get('SERVER_LOCATION', '🇩🇪 Германия')
+    now = int(time.time())
+    created_ts = key['created_at'] or now
+    exp_ts = key['expires_at'] or 0
 
-    left = key['exp_ts'] - int(time.time()) if key['exp_ts'] > 0 else 0
-    if key['exp_ts'] == 0:
-        time_str = "♾ бессрочно"
-    elif left > 0:
-        time_str = _human_time(left)
+    from datetime import datetime
+    created_str = datetime.fromtimestamp(created_ts).strftime('%d.%m.%Y %H:%M')
+    if exp_ts > 0:
+        exp_str = datetime.fromtimestamp(exp_ts).strftime('%d.%m.%Y %H:%M')
+        left = exp_ts - now
+        if left > 0:
+            t = _human_time(left)
+        else:
+            t = "❌ истёк"
     else:
-        time_str = "❌ истёк"
+        exp_str = "♾ бессрочно"
+        t = "♾ бессрочно"
 
-    traffic_str = _human_bytes(key['traffic'])
+    traffic = _human_bytes(key['traffic_used'])
     if key['traffic_limit'] > 0:
-        traffic_str += f" / {_human_bytes(key['traffic_limit'])}"
+        traffic += f" / {_human_bytes(key['traffic_limit'])}"
+    else:
+        traffic += " / ∞"
 
-    text = (
-        f"🔑 <b>КЛЮЧ: {key_name}</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"📱 Логин: <code>{key_name}</code>\n"
-        f"🔑 Пароль: <code>{password or '—'}</code>\n"
-        f"🌐 Сервер: <code>{domain}</code>\n"
-        f"🔌 Порт: <code>{ws_port}</code>\n"
-    )
-    if proxy:
-        text += f"🛡️ Прокси: <code>{proxy}:80</code>\n"
-    text += (
-        f"\n⏰ Осталось: <b>{time_str}</b>\n"
-        f"📊 Трафик: <b>{traffic_str}</b>\n"
-        f"📱 Устройств: <b>{key['devices']}</b>\n"
-    )
+    icon = "💎" if kind == 'vip' else "🎁"
+    NL = chr(10)
+    lines = [
+        f"{icon} <b>КЛЮЧ {key_name}</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "",
+        f"📅 Создан:     {created_str}",
+        f"⏰ Истекает:   {exp_str}",
+        f"⏳ Осталось:   {t}",
+        f"📊 Трафик:     {traffic}",
+        f"📱 Устройств:  {key['devices']}",
+        f"🌍 Локация:    {location}",
+        "━━━━━━━━━━━━━━━━━━━━"
+    ]
+    text = NL.join(lines)
 
+    is_active = exp_ts == 0 or exp_ts > now
     keyboard = {'inline_keyboard': []}
-
-    # Кнопка darktunnel-ссылки (если активен и есть пароль)
-    if key['active'] and password:
-        dt_url = make_darktunnel_url(key_name, password, domain, ws_port, proxy)
-        if dt_url:
-            # Telegram имеет лимит 64 символа на URL, поэтому делаем через callback
-            keyboard['inline_keyboard'].append([
-                {'text': '📲 Показать конфиг DarkTunnel', 'callback_data': f'cab_dt:{key_name}'}
-            ])
-
+    if is_active:
+        keyboard['inline_keyboard'].append([
+            {'text': '📲 Получить конфиг', 'callback_data': f'cab_dt:{key_name}'}
+        ])
+    back_kind = 'cab_keys_vip' if kind == 'vip' else 'cab_keys_test'
     keyboard['inline_keyboard'].append([
-        {'text': '📋 Скопировать логин', 'callback_data': f'cab_copy:{key_name}'}
-    ])
-    keyboard['inline_keyboard'].append([
-        {'text': '⬅️ К ключам', 'callback_data': 'cab_keys'}
+        {'text': '⬅️ К ключам', 'callback_data': back_kind}
     ])
 
     if msg_id:
@@ -436,16 +466,17 @@ def show_key_detail(cfg, chat_id, user_id, key_name, msg_id=None):
 
 
 def show_darktunnel_url(cfg, chat_id, user_id, key_name, msg_id=None):
-    """Показать только darktunnel:// ссылку"""
+    """Отправляет darktunnel:// конфиг НОВЫМ сообщением"""
     token = cfg['BOT_TOKEN']
 
-    keys = get_user_keys(user_id)
-    key = next((k for k in keys if k['name'] == key_name), None)
-    if not key or not key['active']:
-        _send(token, chat_id, "❌ Ключ не найден или истёк")
+    key = db.get_test_key(key_name) or db.get_vip_key(key_name)
+    if not key or int(key['tg_id']) != int(user_id):
+        _send(token, chat_id, "❌ Ключ не найден")
         return
-
-    password = get_password(key_name)
+    if key['expires_at'] > 0 and key['expires_at'] < int(time.time()):
+        _send(token, chat_id, "❌ Ключ истёк")
+        return
+    password = key['password']
     if not password:
         _send(token, chat_id, "❌ Пароль не найден")
         return
@@ -454,20 +485,23 @@ def show_darktunnel_url(cfg, chat_id, user_id, key_name, msg_id=None):
     ws_port = get_ws_port()
     proxy = get_random_proxy()
     dt_url = make_darktunnel_url(key_name, password, domain, ws_port, proxy)
-
     if not dt_url:
         _send(token, chat_id, "❌ Не удалось создать конфиг")
         return
 
-    text = (
-        f"📲 <b>Ссылка-конфиг для DarkTunnel</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"<b>Тапни и скопируй:</b>\n\n"
-        f"<code>{dt_url}</code>\n\n"
-        f"Вставь в DarkTunnel → Конфиг"
-    )
+    NL = chr(10)
+    text = NL.join([
+        "📲 <b>КОНФИГ DarkTunnel</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "",
+        "<b>Тапни по коду ниже — он скопируется:</b>",
+        "",
+        f"<code>{dt_url}</code>",
+        "",
+        "<i>Затем открой DarkTunnel → ➕ → Импорт из буфера</i>"
+    ])
     keyboard = {'inline_keyboard': [
-        [{'text': '⬅️ К ключу', 'callback_data': f'cab_key:{key_name}'}]
+        [{'text': '🗑 Удалить сообщение', 'callback_data': f'cab_delmsg:{key_name}'}]
     ]}
     _send(token, chat_id, text, keyboard)
 
@@ -512,20 +546,38 @@ def show_promo(cfg, chat_id, user_id, msg_id=None):
 
 
 def show_referrals(cfg, chat_id, user_id, msg_id=None):
-    """Заглушка рефералов"""
+    """Реферальная программа"""
     token = cfg['BOT_TOKEN']
-    ref_link = f"https://t.me/ArsenVipKeysBot?start=ref_{user_id}"
-    text = (
-        f"👥 <b>РЕФЕРАЛЬНАЯ ПРОГРАММА</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"🎁 Пригласи друга → получи <b>+3 дня</b> к ключу!\n\n"
-        f"🔗 Твоя ссылка:\n<code>{ref_link}</code>\n\n"
-        f"📊 Приглашено: <b>0</b>\n"
-        f"🎁 Получено бонусов: <b>+0 дней</b>"
-    )
+
+    user = db.get_user(user_id)
+    ref_code = user['ref_code'] if user else 'unknown'
+    bot_username = 'ArsenVipKeysBot'
+    me = _tg(token, 'getMe')
+    if me and me.get('ok'):
+        bot_username = me['result'].get('username', bot_username)
+    ref_link = f"https://t.me/{bot_username}?start=ref_{ref_code}"
+
+    inv = db.get_ref_count(user_id)
+    earned = db.get_ref_bonus_total(user_id)
+
+    NL = chr(10)
+    text = NL.join([
+        "👥 <b>РЕФЕРАЛЬНАЯ ПРОГРАММА</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "",
+        "🎁 За каждого друга, купившего VIP-ключ на месяц:",
+        "   💰 <b>+$1</b> на твой баланс",
+        "   ⏰ <b>+5 дней</b> к твоему VIP-ключу",
+        "",
+        "🔗 <b>Твоя ссылка:</b>",
+        f"<code>{ref_link}</code>",
+        "",
+        f"📊 Приглашено: <b>{inv}</b>",
+        f"💰 Заработано: <b>${earned:.2f}</b>"
+    ])
     keyboard = {'inline_keyboard': [
-        [{'text': '📤 Поделиться', 'url': f'https://t.me/share/url?url={ref_link}&text=Забирай+бесплатный+VPN!'}],
-        [{'text': '⬅️ Назад', 'callback_data': 'cab_main'}]
+        [{'text': '📤 Поделиться', 'url': f'https://t.me/share/url?url={ref_link}&text=Забирай+VPN!'}],
+        [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
     ]}
     if msg_id:
         _edit(token, chat_id, msg_id, text, keyboard)
@@ -667,10 +719,13 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         show_cabinet(cfg, chat_id, user_id, first_name, msg_id)
         return True
     if cb_data == 'cab_keys':
-        show_my_keys(cfg, chat_id, user_id, msg_id)
+        show_my_keys(cfg, chat_id, user_id, 'all', msg_id)
         return True
-    if cb_data == 'cab_create':
-        show_create_key(cfg, chat_id, user_id, msg_id)
+    if cb_data == 'cab_keys_test':
+        show_my_keys(cfg, chat_id, user_id, 'test', msg_id)
+        return True
+    if cb_data == 'cab_keys_vip':
+        show_my_keys(cfg, chat_id, user_id, 'vip', msg_id)
         return True
     if cb_data == 'cab_balance':
         show_balance(cfg, chat_id, user_id, msg_id)
@@ -694,6 +749,11 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
     if cb_data.startswith('cab_key:'):
         key_name = cb_data.split(':', 1)[1]
         show_key_detail(cfg, chat_id, user_id, key_name, msg_id)
+        return True
+    if cb_data.startswith('cab_delmsg:'):
+        try:
+            _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg_id})
+        except: pass
         return True
     if cb_data.startswith('cab_dt:'):
         key_name = cb_data.split(':', 1)[1]

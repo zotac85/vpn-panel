@@ -176,7 +176,7 @@ def get_payload():
     return None
 
 
-def create_test_user(cfg):
+def create_test_user(cfg, tg_id=0):
     for _ in range(20):
         username = "test" + gen_random(6)
         r = subprocess.run(['id', username], capture_output=True)
@@ -211,6 +211,15 @@ echo "OK"
         r = subprocess.run(['bash','-c',bash_script], capture_output=True, text=True, timeout=30)
         if 'OK' in r.stdout:
             log.info(f"Создан тестовый: {username}")
+            try:
+                from bot_modules import db
+                exp_ts = int(time.time()) + hours * 3600
+                traffic_bytes = traffic_gb * 1073741824
+                db.create_test_key(username, tg_id, password, exp_ts,
+                                   devices=devices, traffic_limit=traffic_bytes)
+                log.info(f"Test key saved to DB: {username} (tg_id={tg_id})")
+            except Exception as e:
+                log.error(f"DB save failed: {e}")
             return username, password
         log.error(f"Ошибка создания: {r.stderr}")
         return None, None
@@ -376,7 +385,6 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         keyboard = {'inline_keyboard': [
             [{'text': '🎁 ПОЛУЧИТЬ ТЕСТ', 'callback_data': 'get_test'}],
             [{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}],
-            [{'text': '🔑 Мой ключ', 'callback_data': 'mykey'}],
             [
                 {'text': '💎 VIP-ключ', 'url': 'https://t.me/ArsenGuro'},
                 {'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}
@@ -394,18 +402,45 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
     
     else:
         # Подписан на все, но НЕ verified → надо зайти на канал
-        text = (
-            f"👋 Привет, {name}!\n\n"
-            f"⚠️ <b>Чтобы получить тестовый ключ:</b>\n\n"
-            f"1️⃣ Зайди в канал 👉 @{primary}\n"
-            f"2️⃣ Найди пост с кнопкой <b>«🎁 Получить тест»</b>\n"
-            f"3️⃣ Нажми эту кнопку — ключ придёт сюда, в бота\n\n"
-            f"💎 Есть VIP-ключи — пиши @ArsenGuro"
-        )
+        channels_all = [c.lstrip('@') for c in channels]
+        primary_clean = channels_all[0] if channels_all else primary
+        sponsors_start = channels_all[1:] if len(channels_all) > 1 else []
+
+        NL = chr(10)
+        lines2 = [
+            f"👋 Привет, {name}!",
+            "",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "🎁 <b>КАК ПОЛУЧИТЬ БЕСПЛАТНЫЙ ТЕСТ</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            f"1️⃣ Зайди в канал @{primary_clean}",
+            "2️⃣ Поставь 👍 лайки на 3 последних поста",
+            "",
+        ]
+        if sponsors_start:
+            lines2.append("3️⃣ Подпишись на спонсоров (обязательно!):")
+            lines2.append("")
+            for s in sponsors_start:
+                lines2.append(f"   📢 @{s}")
+            lines2.append("   ⚠️ Без подписки ключ не дадут")
+            lines2.append("")
+            lines2.append(f"4️⃣ Найди в @{primary_clean} пост с кнопкой")
+            lines2.append("    «🎁 Получить тест» и нажми её")
+            lines2.append("")
+            lines2.append("5️⃣ Ключ прилетит сюда, в бот")
+        else:
+            lines2.append(f"3️⃣ Найди в @{primary_clean} пост с кнопкой")
+            lines2.append("    «🎁 Получить тест» и нажми её")
+            lines2.append("")
+            lines2.append("4️⃣ Ключ прилетит сюда, в бот")
+        lines2.append("━━━━━━━━━━━━━━━━━━━━")
+        lines2.append("🎁 Тест:  8 часов · 50 ГБ · 1 устр.")
+        lines2.append("💎 VIP:   @ArsenGuro")
+        text = NL.join(lines2)
         keyboard = {'inline_keyboard': [
             [{'text': f'📢 Перейти в @{primary}', 'url': f'https://t.me/{primary}'}],
             [{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}],
-            [{'text': '🔑 Мой ключ', 'callback_data': 'mykey'}],
         ]}
         if is_admin:
             keyboard['inline_keyboard'].append([
@@ -474,7 +509,7 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None):
         if not ok:
             send_message_ttl(token, chat_id, f"⏰ Попробуй через {format_time(remaining)}.", ttl=15); return
     send_message_ttl(token, chat_id, "⏳ Создаём аккаунт...", ttl=3)
-    username, password = create_test_user(cfg)
+    username, password = create_test_user(cfg, user_id)
     if not username:
         send_message_ttl(token, chat_id, "❌ Ошибка. Попробуй позже.", ttl=15); return
     record_issue(user_id, username)
@@ -696,7 +731,7 @@ def handle_channel_test(cfg, user_id, first_name):
         return
     
     # Всё ОК — создаём аккаунт
-    username, password = create_test_user(cfg)
+    username, password = create_test_user(cfg, user_id)
     if not username:
         send_message_ttl(token, user_id, "❌ Ошибка создания. Попробуй позже.", ttl=15)
         return
@@ -1617,6 +1652,7 @@ def main():
     # Команды для ВСЕХ юзеров
     tg_request(cfg['BOT_TOKEN'], 'setMyCommands', {'commands': [
         {'command': 'start', 'description': '👋 Начать'},
+        {'command': 'cabinet', 'description': '👤 Личный кабинет'},
         {'command': 'help', 'description': '📖 Как получить ключ'}
     ]})
     
@@ -1626,6 +1662,7 @@ def main():
         tg_request(cfg['BOT_TOKEN'], 'setMyCommands', {
             'commands': [
                 {'command': 'start', 'description': '👋 Начать'},
+                {'command': 'cabinet', 'description': '👤 Личный кабинет'},
                 {'command': 'stats', 'description': '📊 Статистика'},
                 {'command': 'users', 'description': '👥 Пользователи'},
                 {'command': 'services', 'description': '⚙️ SSH WS управление'},
