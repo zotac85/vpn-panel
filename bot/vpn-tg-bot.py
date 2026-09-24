@@ -500,16 +500,6 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None):
                     {'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}
                 ]
             ]}
-            admin_id = cfg.get('ADMIN_ID', '')
-            if str(user_id) == str(admin_id):
-                new_kb['inline_keyboard'].append([
-                    {'text': '📊 Статистика', 'callback_data': 'admin_stats'},
-                    {'text': '👥 Пользователи', 'callback_data': 'admin_users_1'}
-                ])
-                new_kb['inline_keyboard'].append([
-                    {'text': '📢 Пост', 'callback_data': 'admin_post'},
-                    {'text': '📢 Каналы', 'callback_data': 'admin_channels'}
-                ])
             # Сохраняем админ-кнопки
             admin_id = cfg.get('ADMIN_ID', '')
             if str(user_id) == str(admin_id):
