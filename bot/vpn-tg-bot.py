@@ -199,6 +199,10 @@ exp_date=$(date -d "+$hours hours +2 days" +%Y-%m-%d)
 chage -E "$exp_date" "$username"
 mkdir -p /etc/UDPCustom/expire_ts
 echo $(( $(date +%s) + hours * 3600 )) > "/etc/UDPCustom/expire_ts/$username"
+# Сохраняем пароль для функции "Мой ключ"
+mkdir -p /etc/UDPCustom/passwords
+echo "$password" > "/etc/UDPCustom/passwords/$username"
+chmod 600 "/etc/UDPCustom/passwords/$username"
 echo "OK"
 '''
     try:
@@ -253,6 +257,22 @@ def send_message(token, chat_id, text, reply_markup=None, parse_mode=None):
     if reply_markup: params['reply_markup'] = reply_markup
     if parse_mode: params['parse_mode'] = parse_mode
     return tg_request(token, 'sendMessage', params)
+
+
+def send_message_ttl(token, chat_id, text, ttl=15, reply_markup=None, parse_mode=None):
+    """Отправляет сообщение и удаляет через ttl секунд"""
+    result = send_message(token, chat_id, text, reply_markup, parse_mode)
+    if result and result.get('ok'):
+        msg_id = result['result']['message_id']
+        import threading
+        def _delete():
+            import time as _t
+            _t.sleep(ttl)
+            try:
+                tg_request(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg_id})
+            except: pass
+        threading.Thread(target=_delete, daemon=True).start()
+    return result
 
 def format_time(seconds):
     h = seconds // 3600; m = (seconds % 3600) // 60
@@ -351,6 +371,7 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         )
         keyboard = {'inline_keyboard': [
             [{'text': '🎁 ПОЛУЧИТЬ ТЕСТ', 'callback_data': 'get_test'}],
+            [{'text': '🔑 Мой ключ', 'callback_data': 'mykey'}],
             [
                 {'text': '💎 VIP-ключ', 'url': 'https://t.me/ArsenGuro'},
                 {'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}
@@ -393,7 +414,28 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
                 {'text': '📢 Каналы', 'callback_data': 'admin_channels'}
             ])
     
-    send_message(token, chat_id, text, reply_markup=keyboard, parse_mode='HTML')
+    # Сохраняем message_id приветствия для авто-удаления
+    result = send_message(token, chat_id, text, reply_markup=keyboard, parse_mode='HTML')
+    if result and result.get('ok'):
+        msg_id = result['result']['message_id']
+        welcome_dir = '/etc/UDPCustom/welcome_msgs'
+        try:
+            os.makedirs(welcome_dir, exist_ok=True)
+            with open(f'{welcome_dir}/{user_id}', 'w') as f:
+                f.write(str(msg_id))
+        except: pass
+        import threading
+        def _auto_del():
+            import time as _t
+            _t.sleep(600)
+            if os.path.exists(f'{welcome_dir}/{user_id}'):
+                try:
+                    with open(f'{welcome_dir}/{user_id}') as f:
+                        saved_id = int(f.read().strip())
+                    tg_request(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': saved_id})
+                    os.remove(f'{welcome_dir}/{user_id}')
+                except: pass
+        threading.Thread(target=_auto_del, daemon=True).start()
 
 
 def handle_test(cfg, chat_id, user_id, first_name, cb_id=None):
@@ -427,11 +469,11 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None):
         cooldown_hours = int(cfg.get('COOLDOWN_HOURS','24'))
         ok, remaining = check_cooldown(user_id, cooldown_hours)
         if not ok:
-            send_message(token, chat_id, f"⏰ Попробуй через {format_time(remaining)}."); return
-    send_message(token, chat_id, "⏳ Создаём аккаунт...")
+            send_message_ttl(token, chat_id, f"⏰ Попробуй через {format_time(remaining)}.", ttl=15); return
+    send_message_ttl(token, chat_id, "⏳ Создаём аккаунт...", ttl=3)
     username, password = create_test_user(cfg)
     if not username:
-        send_message(token, chat_id, "❌ Ошибка. Попробуй позже."); return
+        send_message_ttl(token, chat_id, "❌ Ошибка. Попробуй позже.", ttl=15); return
     record_issue(user_id, username)
     domain = get_domain(); ws_port = get_ws_port(); proxy = get_random_proxy()
     connect_line = f"{domain}:{ws_port}@{username}:{password}"
@@ -443,7 +485,17 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None):
     if proxy: text += f"🛡️ Прокси: {proxy}:80\n"
     text += f"\n⏰ {cfg.get('TEST_HOURS','8')} ч | 📊 {traffic} ГБ | 💻 {devices} устр.\n\n"
     text += f"💬 @ArsenGuro\n📢 @ArsenVipKeys"
-    send_message(token, chat_id, text, parse_mode="HTML")
+    # Удаляем welcome-сообщение
+    welcome_file = f"/etc/UDPCustom/welcome_msgs/{user_id}"
+    if os.path.exists(welcome_file):
+        try:
+            with open(welcome_file) as f:
+                w_id = int(f.read().strip())
+            tg_request(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': w_id})
+            os.remove(welcome_file)
+        except: pass
+    
+    send_message_ttl(token, chat_id, text, ttl=1800, parse_mode="HTML")
 
     # Ссылка darktunnel://
     dt_url = generate_darktunnel_url(username, password, domain, ws_port, proxy, cfg)
@@ -588,10 +640,7 @@ def handle_channel_test(cfg, user_id, first_name):
         cooldown_hours = int(cfg.get('COOLDOWN_HOURS', '24'))
         ok, remaining = check_cooldown(user_id, cooldown_hours)
         if not ok:
-            tg_request(token, 'sendMessage', {
-                'chat_id': user_id,
-                'text': f"⏰ Ты уже получал тест. Попробуй через {format_time(remaining)}."
-            })
+            send_message_ttl(token, user_id, f"⏰ Ты уже получал тест. Попробуй через {format_time(remaining)}.", ttl=15)
             return
     
     # Проверяем подписку на канал СПОНСОРА (@vpnbalkan)
@@ -625,7 +674,7 @@ def handle_channel_test(cfg, user_id, first_name):
     # Всё ОК — создаём аккаунт
     username, password = create_test_user(cfg)
     if not username:
-        send_message(token, user_id, "❌ Ошибка создания. Попробуй позже.")
+        send_message_ttl(token, user_id, "❌ Ошибка создания. Попробуй позже.", ttl=15)
         return
     
     record_issue(user_id, username)
@@ -670,7 +719,16 @@ def handle_channel_test(cfg, user_id, first_name):
     
     text += f"\n💬 @ArsenGuro\n📢 @ArsenVipKeys"
     
-    send_message(token, user_id, text, parse_mode='HTML')
+    # Удаляем welcome-сообщение из лички
+    welcome_file = f"/etc/UDPCustom/welcome_msgs/{user_id}"
+    if os.path.exists(welcome_file):
+        try:
+            with open(welcome_file) as f:
+                w_id = int(f.read().strip())
+            tg_request(token, 'deleteMessage', {'chat_id': user_id, 'message_id': w_id})
+            os.remove(welcome_file)
+        except: pass
+    send_message_ttl(token, user_id, text, ttl=1800, parse_mode='HTML')
     
     # Уведомляем админа — только если это НЕ админ
     if not is_admin and admin_id:
@@ -1425,6 +1483,101 @@ def _do_delchannel(token, chat_id, args):
         send_message(token, chat_id, f"❌ Ошибка: {e}")
 
 
+def handle_mykey(cfg, chat_id, user_id):
+    """Показать последний активный ключ юзера"""
+    token = cfg['BOT_TOKEN']
+    
+    # Ищем последний ключ в bot_issued.db
+    if not os.path.exists(ISSUED_DB):
+        send_message_ttl(token, chat_id, "🔑 У тебя нет активных ключей.\n\nПолучи тест через /start", ttl=30)
+        return
+    
+    last_username = None
+    last_ts = 0
+    try:
+        with open(ISSUED_DB) as f:
+            for line in f:
+                parts = line.strip().split('|')
+                if len(parts) < 3: continue
+                if parts[0] == str(user_id):
+                    try:
+                        ts = int(parts[1])
+                        if ts > last_ts:
+                            last_ts = ts
+                            last_username = parts[2]
+                    except: pass
+    except: pass
+    
+    if not last_username:
+        send_message_ttl(token, chat_id, "🔑 У тебя нет активных ключей.\n\nПолучи тест через /start", ttl=30)
+        return
+    
+    # Проверяем что не истёк
+    ts_file = f"/etc/UDPCustom/expire_ts/{last_username}"
+    if os.path.exists(ts_file):
+        try:
+            exp_ts = int(open(ts_file).read().strip())
+            if exp_ts < int(time.time()):
+                send_message_ttl(token, chat_id, f"⏰ Твой ключ <code>{last_username}</code> истёк.\n\nПолучи новый тест через /start", ttl=30, parse_mode='HTML')
+                return
+        except: pass
+    
+    # Читаем пароль
+    pwd_file = f"/etc/UDPCustom/passwords/{last_username}"
+    if not os.path.exists(pwd_file):
+        send_message_ttl(token, chat_id,
+            f"⚠️ <b>Информация о пароле недоступна</b>\n\n"
+            f"Логин: <code>{last_username}</code>\n\n"
+            f"Это старый ключ (до обновления).\n"
+            f"Получи новый тест через /start 👇",
+            ttl=30, parse_mode='HTML')
+        return
+    
+    try:
+        password = open(pwd_file).read().strip()
+    except:
+        send_message_ttl(token, chat_id, "❌ Ошибка чтения пароля", ttl=30)
+        return
+    
+    # Формируем данные
+    domain = get_domain()
+    ws_port = get_ws_port()
+    proxy = get_random_proxy()
+    dt_url = generate_darktunnel_url(last_username, password, domain, ws_port, proxy, cfg)
+    
+    # Остаток времени
+    if os.path.exists(ts_file):
+        try:
+            exp_ts = int(open(ts_file).read().strip())
+            left = exp_ts - int(time.time())
+            if left > 0:
+                h = left // 3600
+                m = (left % 3600) // 60
+                time_left = f"{h}ч {m}мин"
+            else:
+                time_left = "истёк"
+        except:
+            time_left = "?"
+    else:
+        time_left = "?"
+    
+    text = (
+        f"🔑 <b>Твой последний ключ</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"📱 Логин: <code>{last_username}</code>\n"
+        f"🔑 Пароль: <code>{password}</code>\n"
+        f"🌐 Сервер: {domain}\n"
+        f"🔌 Порт: {ws_port}\n"
+    )
+    if proxy:
+        text += f"🛡️ Прокси: {proxy}:80\n"
+    text += f"⏰ Осталось: {time_left}\n"
+    if dt_url:
+        text += f"\n🔗 <b>Ссылка-конфиг:</b>\n<code>{dt_url}</code>"
+    
+    send_message_ttl(token, chat_id, text, ttl=1800, parse_mode='HTML')
+
+
 def main():
     cfg = load_config()
     if not cfg.get('BOT_TOKEN'):
@@ -1553,6 +1706,9 @@ def main():
                             'text': manage_text,
                             'parse_mode': 'HTML'
                         })
+                    elif cb_data == 'mykey':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        handle_mykey(cfg, cb['message']['chat']['id'], cb_user_id)
                     elif cb_data == 'admin_newuser':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         instructions = (
