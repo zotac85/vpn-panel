@@ -319,7 +319,9 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         return
     
     primary = channels[0].lstrip('@')
-    verified = force_verified if force_verified is not None else is_verified(user_id)
+    # verified=True только если пришёл по deep-link из канала (force_verified=True)
+    # Обычный /start всегда показывает "Перейди в канал"
+    verified = True if force_verified is True else False
     admin_id = cfg.get('ADMIN_ID', '')
     is_admin = str(user_id) == str(admin_id)
     
