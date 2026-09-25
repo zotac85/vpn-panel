@@ -400,6 +400,41 @@ def get_all_user_keys(tg_id, active_only=False):
 # ТЕСТ / CLI
 # ═══════════════════════════════════════════════════════════════
 
+
+
+
+# ═══════════════════════════════════════════════════════════════
+# PENDING ACTIONS (что бот ждёт от юзера)
+# ═══════════════════════════════════════════════════════════════
+
+PENDING_DIR = "/etc/UDPCustom/pending"
+
+
+def set_pending(user_id, action):
+    try:
+        os.makedirs(PENDING_DIR, exist_ok=True)
+        with open(f"{PENDING_DIR}/{user_id}", 'w') as f:
+            f.write(action)
+    except Exception as e:
+        db_log.error(f"set_pending: {e}")
+
+
+def get_pending(user_id):
+    path = f"{PENDING_DIR}/{user_id}"
+    if os.path.exists(path):
+        try:
+            with open(path) as f:
+                return f.read().strip()
+        except: pass
+    return None
+
+
+def clear_pending(user_id):
+    try:
+        os.remove(f"{PENDING_DIR}/{user_id}")
+    except: pass
+
+
 if __name__ == '__main__':
     print("=== Подключение ===")
     print(f"DB: {DB_PATH}")

@@ -527,17 +527,26 @@ def show_balance(cfg, chat_id, user_id, msg_id=None):
 
 
 def show_promo(cfg, chat_id, user_id, msg_id=None):
-    """Заглушка промокода"""
+    """Экран промокода у юзера"""
     token = cfg['BOT_TOKEN']
-    text = (
-        f"🎫 <b>ПРОМОКОД</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"⚠️ Раздел скоро будет доступен.\n\n"
-        f"Следи за анонсами в канале @ArsenVipKeys"
-    )
+    NL = chr(10)
+    lines = [
+        "🎫 <b>ПРОМОКОД</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "",
+        "🎁 Есть промокод?",
+        "Введи его и получи бонус",
+        "к своим активным ключам!",
+        "",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "📢 Промокоды публикуем в канале",
+        "💬 Не работает? @ArsenGuro"
+    ]
+    text = NL.join(lines)
     keyboard = {'inline_keyboard': [
+        [{'text': '✏️ Ввести промокод', 'callback_data': 'cab_promo_input'}],
         [{'text': '📢 Наш канал', 'url': 'https://t.me/ArsenVipKeys'}],
-        [{'text': '⬅️ Назад', 'callback_data': 'cab_main'}]
+        [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
     ]}
     if msg_id:
         _edit(token, chat_id, msg_id, text, keyboard)
@@ -732,6 +741,26 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         return True
     if cb_data == 'cab_promo':
         show_promo(cfg, chat_id, user_id, msg_id)
+        return True
+    if cb_data == 'cab_promo_input':
+        NL = chr(10)
+        text = NL.join([
+            "✏️ <b>ВВОД ПРОМОКОДА</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "Отправь промокод следующим сообщением",
+            "(одним словом, без пробелов)",
+            "",
+            "Например: <code>NEWYEAR</code>"
+        ])
+        _edit(token, chat_id, msg_id, text, {'inline_keyboard': [
+            [{'text': '⬅️ Отмена', 'callback_data': 'cab_promo'}]
+        ]})
+        try:
+            from bot_modules import db as _db
+            _db.set_pending(user_id, 'promo_input')
+        except Exception as e:
+            cab_log.error(f"set_pending: {e}")
         return True
     if cb_data == 'cab_refs':
         show_referrals(cfg, chat_id, user_id, msg_id)

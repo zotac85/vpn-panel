@@ -85,6 +85,37 @@ def tg_send_document(token, chat_id, file_path, caption=None):
         log.error(f"sendDocument error: {e}")
         return None
 
+SMART_DIR = "/etc/UDPCustom/smart_chat"
+
+def smart_send(token, chat_id, text, reply_markup=None, parse_mode='HTML'):
+    """Отправляет сообщение, удаляя предыдущее сообщение бота в этом чате."""
+    try:
+        os.makedirs(SMART_DIR, exist_ok=True)
+        path = f"{SMART_DIR}/{chat_id}"
+        # Удаляем предыдущее
+        if os.path.exists(path):
+            try:
+                old_id = int(open(path).read().strip())
+                tg_request(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': old_id})
+            except: pass
+            try: os.remove(path)
+            except: pass
+        # Отправляем новое
+        params = {'chat_id': chat_id, 'text': text, 'disable_web_page_preview': True}
+        if parse_mode: params['parse_mode'] = parse_mode
+        if reply_markup: params['reply_markup'] = reply_markup
+        result = tg_request(token, 'sendMessage', params)
+        # Запоминаем id
+        if result and result.get('ok'):
+            try:
+                with open(path, 'w') as f:
+                    f.write(str(result['result']['message_id']))
+            except: pass
+        return result
+    except Exception as e:
+        log.error(f"smart_send error: {e}")
+        return None
+
 def gen_random(length=8):
     return ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(length))
 
@@ -438,10 +469,18 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         lines2.append("🎁 Тест:  8 часов · 50 ГБ · 1 устр.")
         lines2.append("💎 VIP:   @ArsenGuro")
         text = NL.join(lines2)
-        keyboard = {'inline_keyboard': [
-            [{'text': f'📢 Перейти в @{primary}', 'url': f'https://t.me/{primary}'}],
-            [{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}],
-        ]}
+        sponsors_start = [c.lstrip('@') for c in channels[1:]]
+        kb_start = []
+        for i in range(0, len(sponsors_start), 2):
+            row = [{'text': f'📢 @{sponsors_start[i]}', 'url': f'https://t.me/{sponsors_start[i]}'}]
+            if i + 1 < len(sponsors_start):
+                row.append({'text': f'📢 @{sponsors_start[i+1]}', 'url': f'https://t.me/{sponsors_start[i+1]}'})
+            kb_start.append(row)
+        kb_start.append([
+            {'text': '📣 Реклама', 'url': 'https://t.me/ArsenGuro'},
+            {'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}
+        ])
+        keyboard = {'inline_keyboard': kb_start}
         if is_admin:
             keyboard['inline_keyboard'].append([
                 {'text': '📊 Статистика', 'callback_data': 'admin_stats'},
@@ -453,7 +492,7 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
             ])
     
     # Сохраняем message_id приветствия для авто-удаления
-    result = send_message(token, chat_id, text, reply_markup=keyboard, parse_mode='HTML')
+    result = smart_send(token, chat_id, text, reply_markup=keyboard, parse_mode='HTML')
     if result and result.get('ok'):
         msg_id = result['result']['message_id']
         welcome_dir = '/etc/UDPCustom/welcome_msgs'
@@ -516,13 +555,14 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None):
     domain = get_domain(); ws_port = get_ws_port(); proxy = get_random_proxy()
     connect_line = f"{domain}:{ws_port}@{username}:{password}"
     traffic = cfg.get('TEST_TRAFFIC_GB','50'); devices = cfg.get('TEST_DEVICES','1')
-    text = (f"🎉 Тестовый доступ готов!\n\n"
-            f"📲 Строка для DarkTunnel:\n\n<code>{connect_line}</code>\n\n"
-            f"📱 Логин: {username}\n🔑 Пароль: {password}\n"
-            f"🌐 Сервер: {domain}\n🔌 Порт: {ws_port}\n")
-    if proxy: text += f"🛡️ Прокси: {proxy}:80\n"
-    text += f"\n⏰ {cfg.get('TEST_HOURS','8')} ч | 📊 {traffic} ГБ | 💻 {devices} устр.\n\n"
-    text += f"💬 @ArsenGuro\n📢 @ArsenVipKeys"
+    text = (f"🎉 <b>ТЕСТОВЫЙ ДОСТУП ГОТОВ</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"🎁 Ключ: <code>{username}</code>\n"
+            f"⏰ Срок: {cfg.get('TEST_HOURS','8')} часов\n"
+            f"📊 Трафик: {traffic} ГБ\n"
+            f"📱 Устройств: {devices}\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"🔑 Логин, пароль и конфиг — в личном кабинете")
     # Убираем кнопку "Получить тест" из welcome-сообщения
     welcome_file = f"/etc/UDPCustom/welcome_msgs/{user_id}"
     if os.path.exists(welcome_file):
@@ -556,13 +596,11 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None):
             os.remove(welcome_file)
         except: pass
     
-    send_message_ttl(token, chat_id, text, ttl=1800, parse_mode="HTML")
-
-    # Ссылка darktunnel://
-    dt_url = generate_darktunnel_url(username, password, domain, ws_port, proxy, cfg)
-    if dt_url:
-        send_message(token, chat_id, "🔗 Ссылка-конфиг (тап → копировать):\n\n<code>" + dt_url + "</code>", parse_mode="HTML")
-
+    kb_test = {'inline_keyboard': [
+        [{'text': '📲 Получить конфиг', 'callback_data': f'cab_dt:{username}'}],
+        [{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
+    ]}
+    smart_send(token, chat_id, text, reply_markup=kb_test, parse_mode="HTML")
     if admin_id:
         from datetime import datetime
         now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -581,6 +619,91 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None):
             'parse_mode': 'HTML'
         })
     log.info(f"Выдан тест: {username}")
+
+
+def _do_newpromo(cfg, chat_id, args):
+    """Создаёт промокод: CODE DAYS USES [DATE YYYY-MM-DD]"""
+    token = cfg['BOT_TOKEN']
+    from datetime import datetime as _dt
+    try:
+        from bot_modules import db as _db
+    except Exception as e:
+        send_message(token, chat_id, 'Ошибка модуля db: ' + str(e))
+        return
+    parts = args.strip().split()
+    if len(parts) < 3:
+        send_message(token, chat_id, 'Формат: <code>CODE ДНЕЙ АКТИВАЦИЙ [ДАТА]</code>', parse_mode='HTML')
+        return
+    code = parts[0].upper()
+    if len(code) < 3 or not code.isalnum():
+        send_message(token, chat_id, 'Код: только A-Z и 0-9, минимум 3 символа')
+        return
+    try:
+        days = int(parts[1]); uses = int(parts[2])
+    except:
+        send_message(token, chat_id, 'ДНЕЙ и АКТИВАЦИЙ должны быть числами')
+        return
+    if days < 1 or uses < 1:
+        send_message(token, chat_id, 'ДНЕЙ и АКТИВАЦИЙ должны быть > 0')
+        return
+    expires_at = 0
+    if len(parts) >= 4:
+        try:
+            dt = _dt.strptime(parts[3], '%Y-%m-%d')
+            expires_at = int(dt.timestamp())
+        except:
+            send_message(token, chat_id, 'Дата должна быть YYYY-MM-DD')
+            return
+    if _db.get_promo(code):
+        send_message(token, chat_id, '⚠️ Промокод <code>' + code + '</code> уже существует!', parse_mode='HTML')
+        return
+    try:
+        _db.create_promo(code, 'days', days, max_uses=uses, expires_at=expires_at)
+    except Exception as e:
+        send_message(token, chat_id, 'Ошибка: ' + str(e))
+        return
+    lines = ['✅ <b>ПРОМОКОД СОЗДАН</b>', '━━━━━━━━━━━━━━━━━━━━', '', '🎫 Код: <code>' + code + '</code>', '⏰ Бонус: <b>+' + str(days) + ' дней</b>', '👥 Активаций: <b>' + str(uses) + '</b>']
+    if expires_at:
+        exp_str = _dt.fromtimestamp(expires_at).strftime('%d.%m.%Y')
+        lines.append('📅 До: <b>' + exp_str + '</b>')
+    else:
+        lines.append('📅 Действует: <b>бессрочно</b>')
+    send_message(token, chat_id, chr(10).join(lines), parse_mode='HTML')
+
+
+def show_admin_panel(cfg, chat_id, user_id, msg_id=None):
+    """Админ-панель"""
+    token = cfg['BOT_TOKEN']
+    admin_id = cfg.get('ADMIN_ID', '')
+    if str(user_id) != str(admin_id):
+        send_message(token, chat_id, '🚫 Только для админа.')
+        return
+    total_users = 0
+    try:
+        import sqlite3 as _sq
+        _c = _sq.connect('/etc/UDPCustom/vpn.db')
+        total_users = _c.execute('SELECT COUNT(*) FROM users').fetchone()[0]
+        _c.close()
+    except: pass
+    NLx = chr(10)
+    lines = ['⚙️ <b>АДМИН-ПАНЕЛЬ</b>', '━━━━━━━━━━━━━━━━━━━━', '', '👤 ID: <code>' + str(user_id) + '</code>', '📊 Юзеров: <b>' + str(total_users) + '</b>', '', '━━━━━━━━━━━━━━━━━━━━', 'Выбери раздел 👇']
+    text = NLx.join(lines)
+    keyboard = {'inline_keyboard': [
+        [{'text': '📊 Статистика', 'callback_data': 'admin_stats'},
+         {'text': '👥 Пользователи', 'callback_data': 'admin_users_1'}],
+        [{'text': '📢 Опубликовать', 'callback_data': 'admin_post'},
+         {'text': '📢 Каналы', 'callback_data': 'admin_channels'}],
+        [{'text': '⚙️ Сервисы', 'callback_data': 'manage_services'},
+         {'text': '🚫 Бан-лист', 'callback_data': 'admin_banlist'}],
+        [{'text': '🎫 Создать промокод', 'callback_data': 'adm_newpromo'},
+         {'text': '📨 Рассылка', 'callback_data': 'adm_broadcast'}],
+        [{'text': '💰 Начислить баланс', 'callback_data': 'admin_addbalance'}],
+        [{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
+    ]}
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': keyboard})
+    else:
+        tg_request(token, 'sendMessage', {'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': keyboard})
 
 
 def handle_help(cfg, chat_id):
@@ -1662,11 +1785,8 @@ def main():
         tg_request(cfg['BOT_TOKEN'], 'setMyCommands', {
             'commands': [
                 {'command': 'start', 'description': '👋 Начать'},
+                {'command': 'admin', 'description': '⚙️ Админ-панель'},
                 {'command': 'cabinet', 'description': '👤 Личный кабинет'},
-                {'command': 'stats', 'description': '📊 Статистика'},
-                {'command': 'users', 'description': '👥 Пользователи'},
-                {'command': 'services', 'description': '⚙️ SSH WS управление'},
-                {'command': 'post', 'description': '📢 Опубликовать пост'},
                 {'command': 'help', 'description': '📖 Справка'}
             ],
             'scope': {'type': 'chat', 'chat_id': int(admin_id)}
@@ -1706,6 +1826,46 @@ def main():
                         })
                         handle_channel_test(cfg, cb_user_id, cb_first_name)
                     # Админ-кнопки
+                    elif cb_data == 'adm_main':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        show_admin_panel(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                    elif cb_data == 'adm_newpromo':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        PENDING_ACTIONS[cb_user_id] = 'newpromo'
+                        NLx = chr(10)
+                        instr = NLx.join([
+                            '🎫 <b>СОЗДАНИЕ ПРОМОКОДА</b>',
+                            '━━━━━━━━━━━━━━━━━━━━',
+                            '',
+                            'Формат:',
+                            '<code>CODE ДНЕЙ АКТИВАЦИЙ [ДАТА]</code>',
+                            '',
+                            'CODE — A-Z, 0-9, от 3 символов',
+                            'ДНЕЙ — на сколько дней продлевает',
+                            'АКТИВАЦИЙ — сколько юзеров могут активировать',
+                            'ДАТА — необязательно (YYYY-MM-DD)',
+                            '',
+                            'Примеры:',
+                            '<code>NEWYEAR 3 100</code>',
+                            '<code>SUMMER 7 50 2026-12-31</code>',
+                            '',
+                            'Отправь ответ на это сообщение 👇'
+                        ])
+                        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                            'chat_id': cb['message']['chat']['id'],
+                            'text': instr,
+                            'parse_mode': 'HTML',
+                            'reply_markup': {'force_reply': True, 'selective': True}
+                        })
+                    elif cb_data == 'adm_broadcast':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': '🚧 В разработке'})
+                    elif cb_data == 'admin_addbalance':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                            'chat_id': cb['message']['chat']['id'],
+                            'text': '💰 Формат:\n<code>/addbalance ID СУММА</code>\n\nПример:\n<code>/addbalance 1738878748 5</code>',
+                            'parse_mode': 'HTML'
+                        })
                     elif cb_data == 'admin_stats':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         handle_stats(cfg, cb['message']['chat']['id'], cb_user_id, 'keys')
@@ -1916,6 +2076,32 @@ def main():
                 msg = upd['message']; chat_id = msg['chat']['id']; user_id = msg['from']['id']; first_name = msg['from'].get('first_name','')
                 text = msg.get('text','')
                 
+                # Обработка ввода промокода
+                try:
+                    from bot_modules import db as _db
+                    pending = _db.get_pending(user_id)
+                except: pending = None
+                if pending == 'promo_input' and text and not text.startswith('/'):
+                    _db.clear_pending(user_id)
+                    code = text.strip().upper()
+                    ok, reason, value = _db.use_promo(code, user_id)
+                    if ok:
+                        # Продление = value дней
+                        msg_text = (f"🎉 <b>ПРОМОКОД АКТИВИРОВАН!</b>\n\n"
+                                    f"Код: <code>{code}</code>\n"
+                                    f"Бонус: <b>+{int(value)} дней</b> к активным ключам\n\n"
+                                    f"Проверь свои ключи в /cabinet")
+                    else:
+                        reasons = {
+                            'not_found': '❌ Промокод не найден',
+                            'expired': '⏰ Промокод истёк',
+                            'exhausted': '🚫 Промокод больше не действует',
+                            'already_used': '⚠️ Ты уже использовал этот промокод'
+                        }
+                        msg_text = reasons.get(reason, '❌ Ошибка активации')
+                    send_message(cfg['BOT_TOKEN'], chat_id, msg_text, parse_mode='HTML')
+                    continue
+
                 # Обработка ответа на ForceReply
                 if user_id in PENDING_ACTIONS and msg.get('reply_to_message'):
                     action = PENDING_ACTIONS.pop(user_id)
@@ -1923,6 +2109,8 @@ def main():
                         _do_addchannel(cfg['BOT_TOKEN'], chat_id, text)
                     elif action == 'delchannel':
                         _do_delchannel(cfg['BOT_TOKEN'], chat_id, text)
+                    elif action == 'newpromo':
+                        _do_newpromo(cfg, chat_id, text)
                     continue
                 if text.startswith('/start'):
                     # Проверяем deep link параметр (пришёл из канала)
@@ -1960,6 +2148,7 @@ def main():
                 elif text.startswith('/autopost'): handle_autopost(cfg, chat_id, user_id, text[9:].strip())
                 elif text.startswith('/restart'): handle_restart(cfg, chat_id, user_id, text[8:].strip())
                 elif text.startswith('/cabinet'): show_cabinet(cfg, chat_id, user_id, first_name)
+                elif text.startswith('/admin'): show_admin_panel(cfg, chat_id, user_id)
                 elif text.startswith('/help'): handle_help(cfg, chat_id)
         except KeyboardInterrupt: log.info("Остановка"); break
         except Exception as e: log.error(f"Ошибка в main loop: {e}"); time.sleep(5)
