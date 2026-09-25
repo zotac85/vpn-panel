@@ -125,30 +125,6 @@ fi
 mkdir -p "$PANEL_DIR/modules" /etc/UDPCustom/limits /etc/UDPCustom/traffic /etc/UDPCustom/traffic_limits
 touch /etc/UDPCustom/users.db
 
-# welcome.txt — скачиваем из configs/ (обновляем если нет)
-if [ ! -f /etc/UDPCustom/welcome.txt ] || ! grep -q "channels_list" /etc/UDPCustom/welcome.txt 2>/dev/null; then
-    [ -f /etc/UDPCustom/welcome.txt ] && cp /etc/UDPCustom/welcome.txt /etc/UDPCustom/welcome.txt.bak
-    curl -sf -o /etc/UDPCustom/welcome.txt "$REPO_URL/configs/welcome.txt"
-fi
-
-# start.txt — скачиваем из configs/
-if [ ! -f /etc/UDPCustom/start.txt ] || ! grep -q "sponsors_list" /etc/UDPCustom/start.txt 2>/dev/null; then
-    [ -f /etc/UDPCustom/start.txt ] && cp /etc/UDPCustom/start.txt /etc/UDPCustom/start.txt.bak
-    curl -sf -o /etc/UDPCustom/start.txt "$REPO_URL/configs/start.txt"
-fi
-
-# channels.txt — список каналов
-if [ ! -f /etc/UDPCustom/channels.txt ] || [ ! -s /etc/UDPCustom/channels.txt ]; then
-    [ -f /etc/UDPCustom/channels.txt ] && cp /etc/UDPCustom/channels.txt /etc/UDPCustom/channels.txt.bak
-    curl -sf -o /etc/UDPCustom/channels.txt "$REPO_URL/configs/channels.txt"
-fi
-
-# post.txt — текст поста для публикации
-if [ ! -f /etc/UDPCustom/post.txt ] || ! grep -q "DarkTunnel" /etc/UDPCustom/post.txt 2>/dev/null; then
-    [ -f /etc/UDPCustom/post.txt ] && cp /etc/UDPCustom/post.txt /etc/UDPCustom/post.txt.bak
-    curl -sf -o /etc/UDPCustom/post.txt "$REPO_URL/configs/post.txt"
-fi
-# ──────────────────────────────────────────────────────────────
 # Скачивание ВСЕХ модулей
 # ──────────────────────────────────────────────────────────────
 echo -e "\n📥 Скачивание актуальных файлов с GitHub..."
@@ -159,6 +135,7 @@ FILES_CORE=(
 )
 
 FILES_MODULES=(
+    "setup_configs.sh"
     "users.sh"
     "masterdns.sh"
     "udp.sh"
@@ -206,6 +183,9 @@ for mod in "${FILES_MODULES[@]}"; do
         echo -e "\033[0;33m⚠️  Модуль не найден: $mod\033[0m"
     fi
 done
+
+# Конфиги бота (welcome, start, channels, post)
+bash "$PANEL_DIR/modules/setup_configs.sh" "$REPO_URL"
 
 chmod +x /usr/local/bin/vpn
 
