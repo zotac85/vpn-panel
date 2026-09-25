@@ -862,6 +862,28 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
     if cb_data == 'cab_balance':
         show_balance(cfg, chat_id, user_id, msg_id)
         return True
+    if cb_data == 'cab_topup_send':
+        # Спрашиваем сколько хочет пополнить
+        NL = chr(10)
+        ask = NL.join([
+            "💵 <b>СКОЛЬКО ХОЧЕШЬ ПОПОЛНИТЬ?</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "Отправь сумму в USDT (только цифры).",
+            "",
+            "Например: <code>10</code> или <code>5.5</code>",
+            "",
+            "<i>Минимум 1 USDT</i>"
+        ])
+        _edit(token, chat_id, msg_id, ask, {'inline_keyboard': [
+            [{'text': '⬅️ Отмена', 'callback_data': 'cab_topup'}]
+        ]})
+        # Запоминаем что ждём сумму
+        try:
+            db.set_pending(user_id, 'topup_amount')
+        except Exception as e:
+            cab_log.error(f"set_pending topup: {e}")
+        return True
     if cb_data == 'cab_topup':
         NL = chr(10)
         balance = db.get_balance(user_id)
@@ -879,6 +901,7 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
             "<i>Скоро — автоплатежи (USDT)</i>"
         ])
         kb = {'inline_keyboard': [
+            [{'text': '📤 Отправить заявку админу', 'callback_data': 'cab_topup_send'}],
             [{'text': '💬 Написать @ArsenGuro', 'url': 'https://t.me/ArsenGuro'}],
             [{'text': '⬅️ К балансу', 'callback_data': 'cab_balance'}]
         ]}

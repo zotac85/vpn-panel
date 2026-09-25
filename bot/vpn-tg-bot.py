@@ -2318,6 +2318,69 @@ def main():
                     from bot_modules import db as _db
                     pending = _db.get_pending(user_id)
                 except: pending = None
+                if pending == 'topup_amount' and text and not text.startswith('/'):
+                    _db.clear_pending(user_id)
+                    # Парсим сумму
+                    try:
+                        amount = float(text.strip().replace(',', '.'))
+                    except:
+                        send_message(cfg['BOT_TOKEN'], chat_id, "❌ Отправь число. Например: <code>10</code>", parse_mode='HTML')
+                        continue
+                    if amount < 1:
+                        send_message(cfg['BOT_TOKEN'], chat_id, "❌ Минимум 1 USDT")
+                        continue
+                    if amount > 10000:
+                        send_message(cfg['BOT_TOKEN'], chat_id, "❌ Слишком большая сумма. Максимум 10000 USDT")
+                        continue
+
+                    # Отправляем заявку админу
+                    user = _db.get_user(user_id) or {}
+                    admin_id = cfg.get('ADMIN_ID', '')
+                    balance = _db.get_balance(user_id)
+                    first_name = user.get('first_name') or '—'
+                    username = user.get('username') or ''
+                    NLx = chr(10)
+                    admin_msg = NLx.join([
+                        "💵 <b>ЗАЯВКА НА ПОПОЛНЕНИЕ</b>",
+                        "━━━━━━━━━━━━━━━━━━━━",
+                        "",
+                        f"👤 Имя: <b>{first_name}</b>",
+                        f"🆔 ID: <code>{user_id}</code>",
+                        f"📱 Username: @{username}" if username else "📱 Username: —",
+                        f"💰 Текущий баланс: <b>{balance:.2f} USDT</b>",
+                        "",
+                        f"💵 Хочет пополнить: <b>{amount:.2f} USDT</b>",
+                        "",
+                        "━━━━━━━━━━━━━━━━━━━━",
+                        f"Начислить: /admin → 💰 Начислить баланс",
+                        f"Ввести: <code>{user_id} {amount:.2f}</code>"
+                    ])
+                    kb_admin = {'inline_keyboard': [
+                        [{'text': '💰 Начислить баланс', 'callback_data': 'admin_addbalance'}]
+                    ]}
+                    try:
+                        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                            'chat_id': admin_id,
+                            'text': admin_msg,
+                            'parse_mode': 'HTML',
+                            'reply_markup': kb_admin
+                        })
+                    except Exception as e:
+                        log.error(f"topup admin send: {e}")
+
+                    # Подтверждение юзеру
+                    NLx2 = chr(10)
+                    ok_text = NLx2.join([
+                        "✅ <b>ЗАЯВКА ОТПРАВЛЕНА</b>",
+                        "",
+                        f"Сумма: <b>{amount:.2f} USDT</b>",
+                        "",
+                        "Админ получил заявку и свяжется с тобой.",
+                        "Если долго нет ответа — напиши @ArsenGuro"
+                    ])
+                    send_message(cfg['BOT_TOKEN'], chat_id, ok_text, parse_mode='HTML')
+                    continue
+
                 if pending == 'promo_input' and text and not text.startswith('/'):
                     _db.clear_pending(user_id)
                     code = text.strip()
