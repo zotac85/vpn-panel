@@ -160,7 +160,7 @@ banner_template_arsen() {
 <h6><font color='red'>❌ БЕЗ ТОРРЕНТОВ ❌</font></h6>
 <h6><font color='red'>❌ БЕЗ СПАМА ❌</font></h6>
 <h6><font color='red'>❌ БЕЗ КАРДИНГА ❌</font></h6>
-<h6><font color='#F535AA'>👥 МАКС. 5 УСТРОЙСТВ 👥</font></h6>
+<h6><font color='#F535AA'>👥 МАКС. 1 УСТРОЙСТВ 👥</font></h6>
 <h6><font color='yellow'>🚫 НАРУШЕНИЕ = БАН НАВСЕГДА 🚫</font></h6>
 <h5><font color='green'>💬 Поддержка: t.me/ArsenGuro</font></h5>
 <h5><font color='cyan'>📢 Канал: t.me/ArsenVipKeys</font></h5>
@@ -201,7 +201,7 @@ banner_template_strict() {
 <h6><font color='red'>❌ Запрещён взлом и брутфорс</font></h6>
 <h6><font color='red'>❌ Запрещён торрент-трафик</font></h6>
 <h6><font color='red'>❌ Запрещён спам и кардинг</font></h6>
-<h6><font color='#F535AA'>👥 Лимит устройств: 5</font></h6>
+<h6><font color='#F535AA'>👥 Лимит устройств: 1</font></h6>
 <h6><font color='yellow'>🚫 При нарушении — бан без предупреждения</font></h6>
 <h5><font color='green'>💬 @ArsenGuro</font></h5>
 EOF
@@ -224,7 +224,7 @@ banner_template_english() {
 <h6><font color='red'>❌ NO TORRENT ❌</font></h6>
 <h6><font color='red'>❌ NO SPAMMING ❌</font></h6>
 <h6><font color='red'>❌ NO CARDING ❌</font></h6>
-<h6><font color='#F535AA'>👥 MAX LOGIN 5 DEVICE 👥</font></h6>
+<h6><font color='#F535AA'>👥 MAX LOGIN 1 DEVICE 👥</font></h6>
 <h6><font color='yellow'>🚫 VIOLATE AUTO BANNED PERMANENT 🚫</font></h6>
 <h5><font color='green'>💬 Support: t.me/ArsenGuro</font></h5>
 <h5><font color='cyan'>📢 Channel: t.me/ArsenVipKeys</font></h5>
