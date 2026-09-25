@@ -106,7 +106,10 @@ FILES_MODULES=(
 
 # Telegram-бот: всегда обновляем (с бэкапом)
 if [ -f /usr/local/bin/vpn-tg-bot.py ]; then
-    cp /usr/local/bin/vpn-tg-bot.py /usr/local/bin/vpn-tg-bot.py.bak
+    BK_TS=$(date +%F_%H%M)
+    cp /usr/local/bin/vpn-tg-bot.py "/usr/local/bin/vpn-tg-bot.py.bak_${BK_TS}"
+    # Оставляем только последние 5 бэкапов
+    ls -t /usr/local/bin/vpn-tg-bot.py.bak_* 2>/dev/null | tail -n +6 | xargs -r rm -f
 fi
 curl -sf -o /usr/local/bin/vpn-tg-bot.py "$REPO_URL/bot/vpn-tg-bot.py"
 chmod +x /usr/local/bin/vpn-tg-bot.py
