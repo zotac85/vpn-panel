@@ -484,6 +484,121 @@ def get_all_user_ids():
     return [r['tg_id'] for r in rows]
 
 
+
+
+# ═══════════════════════════════════════════════════════════════
+# АВТОСОЗДАНИЕ СХЕМЫ
+# ═══════════════════════════════════════════════════════════════
+
+def init_schema():
+    """Создаёт все таблицы если их нет."""
+    schema = """
+    CREATE TABLE IF NOT EXISTS users (
+        tg_id INTEGER PRIMARY KEY,
+        first_name TEXT,
+        username TEXT,
+        registered_at INTEGER,
+        verified_until INTEGER DEFAULT 0,
+        balance REAL DEFAULT 0,
+        ref_code TEXT UNIQUE,
+        ref_by INTEGER DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS test_keys (
+        login TEXT PRIMARY KEY,
+        tg_id INTEGER,
+        password TEXT,
+        created_at INTEGER,
+        expires_at INTEGER,
+        devices INTEGER DEFAULT 1,
+        traffic_used INTEGER DEFAULT 0,
+        traffic_limit INTEGER DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_test_tg  ON test_keys(tg_id);
+    CREATE INDEX IF NOT EXISTS idx_test_exp ON test_keys(expires_at);
+    CREATE TABLE IF NOT EXISTS vip_keys (
+        login TEXT PRIMARY KEY,
+        tg_id INTEGER,
+        password TEXT,
+        created_at INTEGER,
+        expires_at INTEGER,
+        devices INTEGER DEFAULT 1,
+        traffic_used INTEGER DEFAULT 0,
+        traffic_limit INTEGER DEFAULT 0,
+        tariff TEXT,
+        price_paid REAL DEFAULT 0,
+        paid_via TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_vip_tg  ON vip_keys(tg_id);
+    CREATE INDEX IF NOT EXISTS idx_vip_exp ON vip_keys(expires_at);
+    CREATE TABLE IF NOT EXISTS referrals (
+        invited_id INTEGER PRIMARY KEY,
+        inviter_id INTEGER,
+        ts INTEGER,
+        first_purchase INTEGER DEFAULT 0,
+        bonus_paid INTEGER DEFAULT 0,
+        test_bonus_paid INTEGER DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_ref_inviter ON referrals(inviter_id);
+    CREATE TABLE IF NOT EXISTS promo_codes (
+        code TEXT PRIMARY KEY,
+        type TEXT,
+        value REAL,
+        uses_left INTEGER,
+        max_uses INTEGER,
+        created_at INTEGER,
+        expires_at INTEGER DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS promo_used (
+        code TEXT,
+        tg_id INTEGER,
+        ts INTEGER,
+        PRIMARY KEY (code, tg_id)
+    );
+    CREATE TABLE IF NOT EXISTS payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tg_id INTEGER,
+        amount REAL,
+        currency TEXT DEFAULT 'USDT',
+        method TEXT,
+        status TEXT,
+        external_id TEXT,
+        meta TEXT,
+        created_at INTEGER,
+        paid_at INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_pay_tg ON payments(tg_id);
+    CREATE INDEX IF NOT EXISTS idx_pay_st ON payments(status);
+    CREATE TABLE IF NOT EXISTS broadcasts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        text TEXT NOT NULL,
+        status TEXT DEFAULT 'draft',
+        total INTEGER DEFAULT 0,
+        sent_ok INTEGER DEFAULT 0,
+        sent_fail INTEGER DEFAULT 0,
+        created_at INTEGER,
+        started_at INTEGER DEFAULT 0,
+        finished_at INTEGER DEFAULT 0
+    );
+    """
+    try:
+        with _conn() as conn:
+            conn.executescript(schema)
+            conn.commit()
+        db_log.info("init_schema: OK")
+        return True
+    except Exception as e:
+        db_log.error(f"init_schema error: {e}")
+        return False
+
+
+try:
+    _check = query_one("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+    if not _check:
+        init_schema()
+except Exception:
+    pass
+
+
 if __name__ == '__main__':
     print("=== Подключение ===")
     print(f"DB: {DB_PATH}")
