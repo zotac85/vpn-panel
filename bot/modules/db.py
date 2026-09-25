@@ -316,7 +316,7 @@ def get_payments(tg_id, limit=20):
 # ═══════════════════════════════════════════════════════════════
 
 def get_promo(code):
-    return query_one("SELECT * FROM promo_codes WHERE code=?", (code.upper(),))
+    return query_one("SELECT * FROM promo_codes WHERE code=?", (code,))
 
 
 def check_promo(code, tg_id):
@@ -337,7 +337,7 @@ def check_promo(code, tg_id):
 
 def use_promo(code, tg_id):
     """Применяет промокод: списывает использование + начисляет бонус. Возвращает (ok, msg, value)."""
-    code = code.upper()
+    code = code.strip()
     ok, reason, p = check_promo(code, tg_id)
     if not ok:
         return False, reason, None
@@ -355,8 +355,10 @@ def use_promo(code, tg_id):
     if p['type'] == 'balance':
         add_balance(tg_id, value, method='promo', meta={'code': code})
     elif p['type'] == 'days':
-        # продлеваем все активные ключи юзера
-        extend_all_keys(tg_id, int(value))
+        # продлеваем ТОЛЬКО VIP-ключи
+        cnt_ext = extend_vip_keys(tg_id, int(value))
+        if cnt_ext == 0:
+            return False, "no_vip_key", None
     # 'traffic' пока не реализован
     return True, "ok", value
 
@@ -365,7 +367,7 @@ def create_promo(code, type_, value, max_uses=1, expires_at=0):
     execute("""INSERT OR REPLACE INTO promo_codes
         (code, type, value, uses_left, max_uses, created_at, expires_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (code.upper(), type_, float(value), int(max_uses), int(max_uses),
+        (code, type_, float(value), int(max_uses), int(max_uses),
          int(time.time()), int(expires_at)))
 
 
@@ -373,16 +375,16 @@ def create_promo(code, type_, value, max_uses=1, expires_at=0):
 # УТИЛИТЫ ДЛЯ КЛЮЧЕЙ
 # ═══════════════════════════════════════════════════════════════
 
-def extend_all_keys(tg_id, days):
-    """Продлевает все активные ключи юзера на N дней."""
+def extend_vip_keys(tg_id, days):
+    """Продлевает только VIP-ключи юзера на N дней."""
     secs = int(days) * 86400
     now = int(time.time())
-    for table in ['test_keys', 'vip_keys']:
-        rows = query(f"SELECT login, expires_at FROM {table} WHERE tg_id=?", (int(tg_id),))
-        for r in rows:
-            base = r['expires_at'] if r['expires_at'] and r['expires_at'] > now else now
-            execute(f"UPDATE {table} SET expires_at=? WHERE login=?",
-                    (base + secs, r['login']))
+    rows = query("SELECT login, expires_at FROM vip_keys WHERE tg_id=?", (int(tg_id),))
+    for r in rows:
+        base = r['expires_at'] if r['expires_at'] and r['expires_at'] > now else now
+        execute("UPDATE vip_keys SET expires_at=? WHERE login=?",
+                (base + secs, r['login']))
+    return len(rows)
 
 
 def get_all_user_keys(tg_id, active_only=False):

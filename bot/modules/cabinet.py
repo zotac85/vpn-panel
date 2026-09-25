@@ -10,6 +10,7 @@ import urllib.request
 from bot_modules import db
 
 # ─── Пути ───
+SMART_DIR = "/etc/UDPCustom/smart_chat"
 ISSUED_DB = "/etc/UDPCustom/bot_issued.db"
 PASSWORDS_DIR = "/etc/UDPCustom/passwords"
 EXPIRE_DIR = "/etc/UDPCustom/expire_ts"
@@ -50,10 +51,33 @@ def _tg(token, method, params=None, timeout=35):
 
 
 def _send(token, chat_id, text, reply_markup=None, parse_mode='HTML'):
-    params = {'chat_id': chat_id, 'text': text, 'disable_web_page_preview': True, 'parse_mode': parse_mode}
-    if reply_markup:
-        params['reply_markup'] = reply_markup
-    return _tg(token, 'sendMessage', params)
+    """Отправляет сообщение, удаляя предыдущее (умный чат)."""
+    try:
+        os.makedirs(SMART_DIR, exist_ok=True)
+        path = f"{SMART_DIR}/{chat_id}"
+        if os.path.exists(path):
+            try:
+                old_id = int(open(path).read().strip())
+                _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': old_id})
+            except: pass
+            try: os.remove(path)
+            except: pass
+        params = {'chat_id': chat_id, 'text': text, 'disable_web_page_preview': True, 'parse_mode': parse_mode}
+        if reply_markup:
+            params['reply_markup'] = reply_markup
+        result = _tg(token, 'sendMessage', params)
+        if result and result.get('ok'):
+            try:
+                with open(path, 'w') as f:
+                    f.write(str(result['result']['message_id']))
+            except: pass
+        return result
+    except Exception as e:
+        cab_log.error(f"_send smart error: {e}")
+        params = {'chat_id': chat_id, 'text': text, 'disable_web_page_preview': True, 'parse_mode': parse_mode}
+        if reply_markup:
+            params['reply_markup'] = reply_markup
+        return _tg(token, 'sendMessage', params)
 
 
 def _edit(token, chat_id, msg_id, text, reply_markup=None):

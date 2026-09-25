@@ -639,7 +639,7 @@ def _do_newpromo(cfg, chat_id, args):
     if len(parts) < 3:
         send_message(token, chat_id, 'Формат: <code>CODE ДНЕЙ АКТИВАЦИЙ [ДАТА]</code>', parse_mode='HTML')
         return
-    code = parts[0].upper()
+    code = parts[0].strip()
     if len(code) < 3 or not code.isalnum():
         send_message(token, chat_id, 'Код: только A-Z и 0-9, минимум 3 символа')
         return
@@ -788,7 +788,7 @@ def handle_help(cfg, chat_id):
          {'text': '👤 Кабинет', 'callback_data': 'cab_main'}],
         [{'text': f'📢 Перейти в @{primary}', 'url': f'https://t.me/{primary}'}]
     ]}
-    send_message(token, chat_id, text, reply_markup=keyboard, parse_mode='HTML')
+    smart_send(token, chat_id, text, reply_markup=keyboard, parse_mode='HTML')
 
 
 
@@ -1993,7 +1993,7 @@ def main():
                         code = cb_data.split(':', 1)[1]
                         try:
                             from bot_modules import db as _db
-                            _db.execute('DELETE FROM promo_codes WHERE code=?', (code.upper(),))
+                            _db.execute('DELETE FROM promo_codes WHERE code=?', (code,))
                             tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
                                 'callback_query_id': cb['id'],
                                 'text': '✅ ' + code + ' удалён'
@@ -2226,20 +2226,21 @@ def main():
                 except: pending = None
                 if pending == 'promo_input' and text and not text.startswith('/'):
                     _db.clear_pending(user_id)
-                    code = text.strip().upper()
+                    code = text.strip()
                     ok, reason, value = _db.use_promo(code, user_id)
                     if ok:
                         # Продление = value дней
                         msg_text = (f"🎉 <b>ПРОМОКОД АКТИВИРОВАН!</b>\n\n"
                                     f"Код: <code>{code}</code>\n"
-                                    f"Бонус: <b>+{int(value)} дней</b> к активным ключам\n\n"
+                                    f"Бонус: <b>+{int(value)} дней</b> к VIP-ключу\n\n"
                                     f"Проверь свои ключи в /cabinet")
                     else:
                         reasons = {
                             'not_found': '❌ Промокод не найден',
                             'expired': '⏰ Промокод истёк',
                             'exhausted': '🚫 Промокод больше не действует',
-                            'already_used': '⚠️ Ты уже использовал этот промокод'
+                            'already_used': '⚠️ Ты уже использовал этот промокод',
+                            'no_vip_key': '⚠️ У тебя нет активного VIP-ключа.\n\nПромокод даёт дни только к VIP. Купи VIP: @ArsenGuro'
                         }
                         msg_text = reasons.get(reason, '❌ Ошибка активации')
                     send_message(cfg['BOT_TOKEN'], chat_id, msg_text, parse_mode='HTML')
