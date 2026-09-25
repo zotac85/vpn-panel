@@ -116,6 +116,8 @@ mkdir -p /usr/local/bin/bot_modules
 curl -sf -o /usr/local/bin/bot_modules/__init__.py "$REPO_URL/bot/modules/__init__.py"
 curl -sf -o /usr/local/bin/bot_modules/admin.py "$REPO_URL/bot/modules/admin.py"
 curl -sf -o /usr/local/bin/bot_modules/autopost.py "$REPO_URL/bot/modules/autopost.py"
+curl -sf -o /usr/local/bin/bot_modules/cabinet.py "$REPO_URL/bot/modules/cabinet.py"
+curl -sf -o /usr/local/bin/bot_modules/db.py "$REPO_URL/bot/modules/db.py"
 
 for item in "${FILES_CORE[@]}"; do
     src="${item%%:*}"
