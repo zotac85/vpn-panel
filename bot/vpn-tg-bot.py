@@ -953,7 +953,8 @@ def _do_addbalance(cfg, chat_id, args):
 
 
 def _do_newpromo(cfg, chat_id, args):
-    """Создаёт промокод: CODE DAYS USES [DATE YYYY-MM-DD]"""
+    """Создаёт промокод. Формат: CODE [days|balance] N USES [DATE]
+    Старый формат: CODE N USES [DATE] (по умолчанию days)"""
     token = cfg['BOT_TOKEN']
     from datetime import datetime as _dt
     try:
@@ -963,45 +964,77 @@ def _do_newpromo(cfg, chat_id, args):
         return
     parts = args.strip().split()
     if len(parts) < 3:
-        send_message(token, chat_id, 'Формат: <code>CODE ДНЕЙ АКТИВАЦИЙ [ДАТА]</code>', parse_mode='HTML')
+        send_message(token, chat_id, 'Формат: <code>CODE days|balance N АКТИВАЦИЙ [ДАТА]</code>', parse_mode='HTML')
         return
     code = parts[0].strip()
     if len(code) < 3 or not code.isalnum():
-        send_message(token, chat_id, 'Код: только A-Z и 0-9, минимум 3 символа')
+        send_message(token, chat_id, 'Код: только A-Z, a-z и 0-9, минимум 3 символа')
         return
+
+    promo_type = 'days'
+    if parts[1].lower() in ('days', 'balance'):
+        promo_type = parts[1].lower()
+        parts = [parts[0]] + parts[2:]
+        if len(parts) < 3:
+            send_message(token, chat_id, 'После типа нужно указать N и АКТИВАЦИЙ', parse_mode='HTML')
+            return
+
     try:
-        days = int(parts[1]); uses = int(parts[2])
+        value = float(parts[1].replace(',', '.'))
+        uses = int(parts[2])
     except:
-        send_message(token, chat_id, 'ДНЕЙ и АКТИВАЦИЙ должны быть числами')
+        send_message(token, chat_id, 'N и АКТИВАЦИЙ должны быть числами')
         return
-    if days < 1 or uses < 1:
-        send_message(token, chat_id, 'ДНЕЙ и АКТИВАЦИЙ должны быть > 0')
+
+    if value <= 0 or uses < 1:
+        send_message(token, chat_id, 'N и АКТИВАЦИЙ должны быть > 0')
         return
+
+    if promo_type == 'days' and value != int(value):
+        send_message(token, chat_id, 'Для типа days — целое число дней')
+        return
+
     expires_at = 0
     if len(parts) >= 4:
+        date_str = parts[3].replace('.', '-').replace('/', '-')
         try:
-            dt = _dt.strptime(parts[3], '%Y-%m-%d')
+            dt = _dt.strptime(date_str, '%Y-%m-%d')
             expires_at = int(dt.timestamp())
         except:
-            send_message(token, chat_id, 'Дата должна быть YYYY-MM-DD')
+            send_message(token, chat_id, 'Дата должна быть YYYY-MM-DD (можно с точками)')
             return
+
     if _db.get_promo(code):
         send_message(token, chat_id, '⚠️ Промокод <code>' + code + '</code> уже существует!', parse_mode='HTML')
         return
+
     try:
-        _db.create_promo(code, 'days', days, max_uses=uses, expires_at=expires_at)
+        _db.create_promo(code, promo_type, value, max_uses=uses, expires_at=expires_at)
     except Exception as e:
         send_message(token, chat_id, 'Ошибка: ' + str(e))
         return
-    lines = ['✅ <b>ПРОМОКОД СОЗДАН</b>', '━━━━━━━━━━━━━━━━━━━━', '', '🎫 Код: <code>' + code + '</code>', '⏰ Бонус: <b>+' + str(days) + ' дней</b>', '👥 Активаций: <b>' + str(uses) + '</b>']
+
+    if promo_type == 'days':
+        bonus_str = '⏰ Бонус: <b>+' + str(int(value)) + ' дней</b> к VIP-ключу'
+    else:
+        bonus_str = '💰 Бонус: <b>+' + f'{value:.2f}' + ' USDT</b> на баланс'
+
+    NL = chr(10)
+    lines = [
+        '✅ <b>ПРОМОКОД СОЗДАН</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        '🎫 Код: <code>' + code + '</code>',
+        '📦 Тип: <b>' + promo_type + '</b>',
+        bonus_str,
+        '👥 Активаций: <b>' + str(uses) + '</b>'
+    ]
     if expires_at:
         exp_str = _dt.fromtimestamp(expires_at).strftime('%d.%m.%Y')
         lines.append('📅 До: <b>' + exp_str + '</b>')
     else:
         lines.append('📅 Действует: <b>бессрочно</b>')
-    send_message(token, chat_id, chr(10).join(lines), parse_mode='HTML')
-
-
+    send_message(token, chat_id, NL.join(lines), parse_mode='HTML')
 def show_promo_list(cfg, chat_id, user_id, msg_id=None):
     """Список промокодов для админа"""
     token = cfg['BOT_TOKEN']
@@ -1037,7 +1070,13 @@ def show_promo_list(cfg, chat_id, user_id, msg_id=None):
             else:
                 status = '🟢 активен'
             lines.append(f'🎁 <code>{r["code"]}</code> — {status}')
-            lines.append(f'   +{int(r["value"])} дней · {r["uses_left"]}/{r["max_uses"]} активаций')
+            # Форматируем значение в зависимости от типа
+            t_type = r.get('type') or 'days'
+            if t_type == 'balance':
+                bonus_str = f'+{float(r["value"]):.2f} USDT'
+            else:
+                bonus_str = f'+{int(r["value"])} дней'
+            lines.append(f'   {bonus_str} · {r["uses_left"]}/{r["max_uses"]} активаций')
             if r['expires_at']:
                 exp_str = _dt.fromtimestamp(r['expires_at']).strftime('%d.%m.%Y')
                 lines.append(f'   📅 до {exp_str}')
@@ -2270,17 +2309,31 @@ def main():
                             '🎫 <b>СОЗДАНИЕ ПРОМОКОДА</b>',
                             '━━━━━━━━━━━━━━━━━━━━',
                             '',
-                            'Формат:',
-                            '<code>CODE ДНЕЙ АКТИВАЦИЙ [ДАТА]</code>',
+                            '📦 <b>Формат:</b>',
+                            '<code>CODE ТИП N АКТИВАЦИЙ [ДАТА]</code>',
                             '',
-                            'CODE — A-Z, 0-9, от 3 символов',
-                            'ДНЕЙ — на сколько дней продлевает',
-                            'АКТИВАЦИЙ — сколько юзеров могут активировать',
+                            'CODE — буквы/цифры, от 3 символов',
+                            'ТИП — <b>days</b> или <b>balance</b>',
+                            'N — сколько даёт',
+                            'АКТИВАЦИЙ — сколько юзеров',
                             'ДАТА — необязательно (YYYY-MM-DD)',
                             '',
-                            'Примеры:',
-                            '<code>NEWYEAR 3 100</code>',
-                            '<code>SUMMER 7 50 2026-12-31</code>',
+                            '━━━━━━━━━━━━━━━━━━━━',
+                            '📋 <b>Примеры:</b>',
+                            '',
+                            '🎁 <b>Промокод на дни:</b>',
+                            '<code>WINTER days 3 100</code>',
+                            '   → +3 дня к VIP, 100 активаций',
+                            '',
+                            '💰 <b>Промокод на USDT:</b>',
+                            '<code>BONUS balance 1 50</code>',
+                            '   → +1 USDT на баланс, 50 активаций',
+                            '',
+                            '📅 <b>С датой окончания:</b>',
+                            '<code>SUMMER days 7 50 2026-12-31</code>',
+                            '',
+                            '━━━━━━━━━━━━━━━━━━━━',
+                            '⚠️ Регистр букв важен!',
                             '',
                             'Отправь ответ на это сообщение 👇'
                         ])
@@ -2689,9 +2742,21 @@ def main():
                                     log.info(f"Referral: {user_id} → {inviter['tg_id']} (code={ref_code})")
                                     # Уведомляем пригласившего
                                     try:
+                                        ref_name = msg['from'].get('first_name', '') or 'Юзер'
+                                        ref_uname = msg['from'].get('username', '') or ''
+                                        ref_handle = f"@{ref_uname}" if ref_uname else f"id{user_id}"
+                                        NLx = chr(10)
+                                        notif = NLx.join([
+                                            "👥 <b>НОВЫЙ РЕФЕРАЛ!</b>",
+                                            "",
+                                            f"👤 <b>{ref_name}</b> · {ref_handle}",
+                                            "",
+                                            "🎁 +3 дня когда получит тест",
+                                            "💵 +1 USDT когда купит VIP"
+                                        ])
                                         tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
                                             'chat_id': inviter['tg_id'],
-                                            'text': f"👥 <b>НОВЫЙ РЕФЕРАЛ!</b>\n\nПо твоей ссылке пришёл новый юзер.\n\nПолучишь <b>+3 дня</b> когда он получит тест и <b>+1 USDT</b> когда купит VIP.",
+                                            'text': notif,
                                             'parse_mode': 'HTML'
                                         })
                                     except: pass
