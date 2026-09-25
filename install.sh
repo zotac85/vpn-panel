@@ -25,6 +25,22 @@ systemctl enable cron >/dev/null 2>&1
 systemctl start cron >/dev/null 2>&1
 
 # ──────────────────────────────────────────────────────────────
+# git и curl (нужны для обновления бота)
+# ──────────────────────────────────────────────────────────────
+if ! command -v git >/dev/null 2>&1; then
+    echo "→ Установка git..."
+    apt update -qq >/dev/null 2>&1
+    apt install -y git >/dev/null 2>&1
+    echo -e "\033[0;32m✅  Git установлен\033[0m"
+fi
+if ! command -v curl >/dev/null 2>&1; then
+    echo "→ Установка curl..."
+    apt update -qq >/dev/null 2>&1
+    apt install -y curl >/dev/null 2>&1
+    echo -e "\033[0;32m✅  Curl установлен\033[0m"
+fi
+
+# ──────────────────────────────────────────────────────────────
 # UTF-8 локаль (для корректной работы nano с русским текстом)
 # ──────────────────────────────────────────────────────────────
 if ! locale | grep -q "UTF-8"; then
