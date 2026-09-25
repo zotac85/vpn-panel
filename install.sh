@@ -37,19 +37,72 @@ if [ -d "$PANEL_DIR" ] || [ -f "/usr/local/bin/vpn" ]; then
     echo -e "\033[1;33mОбнаружена ранее установленная панель.\033[0m"
     echo ""
     echo " 1) 🔄 Обновить скрипты и модули (базы и настройки сохранятся)"
-    echo " 2) ⚙️ Переустановить полностью (сброс конфигурации)"
+    echo " 2) 🤖 Обновить только Telegram-бота (быстро, без сервисов)"
+    echo " 3) ⚙️ Переустановить полностью (сброс конфигурации)"
     echo " 0) 🚪 Отмена"
     echo ""
-    read -p "Выберите действие [0-2]: " choice
-
+    read -p "Выберите действие [0-3]: " choice
     case $choice in
         1) echo -e "\n🔄 Обновление компонентов панели..." ;;
         2)
+            echo -e "\n🤖 Обновление Telegram-бота..."
+            REPO_DIR="/root/vpn-panel-sync"
+            if [ ! -d "$REPO_DIR" ]; then
+                echo -e "\033[0;31m❌ Репо не найдено: $REPO_DIR\033[0m"
+                exit 1
+            fi
+            cd "$REPO_DIR" || exit 1
+            echo "→ git pull..."
+            git pull origin main 2>&1 | tail -3 || true
+            if [ ! -f "$REPO_DIR/bot/vpn-tg-bot.py" ]; then
+                echo -e "\033[0;31m❌ Нет bot/vpn-tg-bot.py в репо\033[0m"
+                exit 1
+            fi
+            BK_TS=$(date +%F_%H%M)
+            if [ -f /usr/local/bin/vpn-tg-bot.py ]; then
+                cp /usr/local/bin/vpn-tg-bot.py "/usr/local/bin/vpn-tg-bot.py.bak_${BK_TS}"
+                echo "→ Бэкап: vpn-tg-bot.py.bak_${BK_TS}"
+                ls -t /usr/local/bin/vpn-tg-bot.py.bak_* 2>/dev/null | tail -n +6 | xargs -r rm -f
+            fi
+            echo "→ Копирование..."
+            cp "$REPO_DIR/bot/vpn-tg-bot.py" /usr/local/bin/vpn-tg-bot.py
+            chmod +x /usr/local/bin/vpn-tg-bot.py
+            mkdir -p /usr/local/bin/bot_modules
+            for f in __init__.py admin.py autopost.py cabinet.py db.py; do
+                if [ -f "$REPO_DIR/bot/modules/$f" ]; then
+                    cp "$REPO_DIR/bot/modules/$f" "/usr/local/bin/bot_modules/$f"
+                    echo "   ✓ $f"
+                fi
+            done
+            echo "→ Проверка синтаксиса..."
+            if ! python3 -m py_compile /usr/local/bin/vpn-tg-bot.py; then
+                echo -e "\033[0;31m❌ Синтаксическая ошибка!\033[0m"
+                exit 1
+            fi
+            for f in admin.py autopost.py cabinet.py db.py; do
+                if [ -f "/usr/local/bin/bot_modules/$f" ]; then
+                    python3 -m py_compile "/usr/local/bin/bot_modules/$f" || exit 1
+                fi
+            done
+            echo "   ✓ OK"
+            echo "→ Перезапуск vpn-tg-bot.service..."
+            systemctl restart vpn-tg-bot 2>/dev/null || true
+            sleep 2
+            if systemctl is-active --quiet vpn-tg-bot; then
+                echo -e "\033[0;32m✅ Бот обновлён и запущен\033[0m"
+            else
+                echo -e "\033[0;31m⚠️  Сервис не запустился. Смотри: tail -30 /var/log/vpn-tg-bot.log\033[0m"
+                exit 1
+            fi
+            echo ""
+            exit 0
+            ;;
+        3)
             echo -e "\n⚠️ Полная переустановка..."
             rm -rf "$PANEL_DIR"
             rm -f /usr/local/bin/vpn
             ;;
-        *) echo -e "\n❌ Операция отменена."; exit 0 ;;
+        *) echo -e "\n❌  Операция отменена."; exit 0 ;;
     esac
 fi
 
