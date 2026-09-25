@@ -227,7 +227,12 @@ sed -i "/^${{username}}[[:space:]]\\+hard[[:space:]]\\+maxlogins/d" /etc/securit
 echo "$username hard maxlogins $devices" >> /etc/security/limits.conf
 mkdir -p /etc/UDPCustom/traffic_limits /etc/UDPCustom/traffic
 bytes=$((traffic_gb * 1073741824)); echo "$bytes" > "/etc/UDPCustom/traffic_limits/$username"; echo "0" > "/etc/UDPCustom/traffic/$username"
-uid=$(id -u "$username"); iptables -C VPN_TRAFFIC -m owner --uid-owner "$uid" -j RETURN 2>/dev/null || iptables -A VPN_TRAFFIC -m owner --uid-owner "$uid" -j RETURN
+uid=$(id -u "$username")
+if iptables -L VPN_TRAFFIC -n >/dev/null 2>&1; then
+    iptables -C VPN_TRAFFIC -m owner --uid-owner "$uid" -j RETURN 2>/dev/null || iptables -A VPN_TRAFFIC -m owner --uid-owner "$uid" -j RETURN 2>/dev/null || true
+else
+    echo "WARN: chain VPN_TRAFFIC missing" >&2
+fi
 exp_date=$(date -d "+$hours hours +2 days" +%Y-%m-%d)
 chage -E "$exp_date" "$username"
 mkdir -p /etc/UDPCustom/expire_ts
@@ -671,6 +676,66 @@ def _do_newpromo(cfg, chat_id, args):
     send_message(token, chat_id, chr(10).join(lines), parse_mode='HTML')
 
 
+def show_promo_list(cfg, chat_id, user_id, msg_id=None):
+    """Список промокодов для админа"""
+    token = cfg['BOT_TOKEN']
+    if str(user_id) != str(cfg.get('ADMIN_ID', '')):
+        send_message(token, chat_id, '🚫 Только для админа.')
+        return
+    try:
+        from bot_modules import db as _db
+    except Exception as e:
+        send_message(token, chat_id, 'Ошибка db: ' + str(e))
+        return
+
+    import time as _t
+    from datetime import datetime as _dt
+    rows = _db.query('SELECT code, type, value, uses_left, max_uses, expires_at FROM promo_codes ORDER BY created_at DESC')
+    NL = chr(10)
+    if not rows:
+        text = NL.join(['🎫 <b>ПРОМОКОДЫ</b>', '━━━━━━━━━━━━━━━━━━━━', '', '❌ Пока нет промокодов'])
+        kb = {'inline_keyboard': [
+            [{'text': '➕ Создать промокод', 'callback_data': 'adm_newpromo'}],
+            [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
+        ]}
+    else:
+        now = int(_t.time())
+        lines = [f'🎫 <b>ПРОМОКОДЫ ({len(rows)})</b>', '━━━━━━━━━━━━━━━━━━━━', '']
+        for r in rows:
+            is_expired = r['expires_at'] and r['expires_at'] < now
+            is_used = r['uses_left'] == 0
+            if is_expired:
+                status = '⏰ истёк'
+            elif is_used:
+                status = '🚫 исчерпан'
+            else:
+                status = '🟢 активен'
+            lines.append(f'🎁 <code>{r["code"]}</code> — {status}')
+            lines.append(f'   +{int(r["value"])} дней · {r["uses_left"]}/{r["max_uses"]} активаций')
+            if r['expires_at']:
+                exp_str = _dt.fromtimestamp(r['expires_at']).strftime('%d.%m.%Y')
+                lines.append(f'   📅 до {exp_str}')
+            else:
+                lines.append('   📅 бессрочно')
+            lines.append('')
+        text = NL.join(lines)
+
+        kb_list = []
+        for r in rows[:10]:
+            kb_list.append([{'text': f'🗑 {r["code"]}', 'callback_data': f'adm_promo_del:{r["code"]}'}])
+        kb_list.append([
+            {'text': '➕ Создать промокод', 'callback_data': 'adm_newpromo'},
+            {'text': '🔄 Обновить', 'callback_data': 'adm_promo_list'}
+        ])
+        kb_list.append([{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}])
+        kb = {'inline_keyboard': kb_list}
+
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
+
+
 def show_admin_panel(cfg, chat_id, user_id, msg_id=None):
     """Админ-панель"""
     token = cfg['BOT_TOKEN']
@@ -695,7 +760,7 @@ def show_admin_panel(cfg, chat_id, user_id, msg_id=None):
          {'text': '📢 Каналы', 'callback_data': 'admin_channels'}],
         [{'text': '⚙️ Сервисы', 'callback_data': 'manage_services'},
          {'text': '🚫 Бан-лист', 'callback_data': 'admin_banlist'}],
-        [{'text': '🎫 Создать промокод', 'callback_data': 'adm_newpromo'},
+        [{'text': '🎫 Промокоды', 'callback_data': 'adm_promo_list'},
          {'text': '📨 Рассылка', 'callback_data': 'adm_broadcast'}],
         [{'text': '💰 Начислить баланс', 'callback_data': 'admin_addbalance'}],
         [{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
@@ -703,7 +768,7 @@ def show_admin_panel(cfg, chat_id, user_id, msg_id=None):
     if msg_id:
         tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': keyboard})
     else:
-        tg_request(token, 'sendMessage', {'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': keyboard})
+        smart_send(token, chat_id, text, reply_markup=keyboard, parse_mode='HTML')
 
 
 def handle_help(cfg, chat_id):
@@ -1094,6 +1159,7 @@ def handle_stats(cfg, chat_id, user_id, mode='keys', msg_id=None):
                 ])
     
     keyboard['inline_keyboard'].append([{'text': '🔄 Обновить', 'callback_data': f'admin_stats_{mode}'}])
+    keyboard['inline_keyboard'].append([{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}])
     
     # Отправка или редактирование
     if msg_id:
@@ -1159,20 +1225,30 @@ def handle_unban(cfg, chat_id, user_id, args):
     log.info(f"UNBAN: {target} by admin")
 
 
-def handle_banlist(cfg, chat_id, user_id):
+def handle_banlist(cfg, chat_id, user_id, msg_id=None):
     token = cfg['BOT_TOKEN']
     admin_id = cfg.get('ADMIN_ID', '')
     if str(user_id) != str(admin_id):
         return
     if not os.path.exists(BLACKLIST) or os.path.getsize(BLACKLIST) == 0:
-        send_message(token, chat_id, "📋 Чёрный список пуст")
+        kb = {'inline_keyboard': [[{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]]}
+        if msg_id:
+            tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': "📋 Чёрный список пуст", 'reply_markup': kb})
+        else:
+            send_message(token, chat_id, "📋 Чёрный список пуст", reply_markup=kb)
         return
     with open(BLACKLIST) as f:
         banned = [l.strip() for l in f if l.strip()]
     text = f"🚫 <b>Чёрный список ({len(banned)}):</b>\n\n"
     for b in banned[-30:]:
         text += f"  • <code>{b}</code>\n"
-    send_message(token, chat_id, text, parse_mode='HTML')
+    kb = {'inline_keyboard': [
+        [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
+    ]}
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        send_message(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
 
 
 VERIFIED_DB = "/etc/UDPCustom/verified_users.db"
@@ -1243,7 +1319,7 @@ def get_users_stats():
     return users
 
 
-def handle_users(cfg, chat_id, user_id, page=1):
+def handle_users(cfg, chat_id, user_id, page=1, msg_id=None):
     """Список юзеров с пагинацией"""
     token = cfg['BOT_TOKEN']
     admin_id = cfg.get('ADMIN_ID', '')
@@ -1304,13 +1380,23 @@ def handle_users(cfg, chat_id, user_id, page=1):
         {'text': '🚫 Бан-лист', 'callback_data': 'admin_banlist'},
         {'text': '🔄 Обновить', 'callback_data': f'admin_users_{page}'}
     ])
+    keyboard['inline_keyboard'].append([{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}])
     
-    tg_request(token, 'sendMessage', {
-        'chat_id': chat_id,
-        'text': text,
-        'reply_markup': keyboard,
-        'parse_mode': 'HTML'
-    })
+    if msg_id:
+        tg_request(token, 'editMessageText', {
+            'chat_id': chat_id,
+            'message_id': msg_id,
+            'text': text,
+            'reply_markup': keyboard,
+            'parse_mode': 'HTML'
+        })
+    else:
+        tg_request(token, 'sendMessage', {
+            'chat_id': chat_id,
+            'text': text,
+            'reply_markup': keyboard,
+            'parse_mode': 'HTML'
+        })
 
 
 def handle_cleanup(cfg, chat_id, user_id):
@@ -1480,7 +1566,7 @@ def handle_payload(cfg, chat_id, user_id):
         send_message(token, chat_id, f"❌ Ошибка: {e}")
 
 
-def handle_services(cfg, chat_id, user_id):
+def handle_services(cfg, chat_id, user_id, msg_id=None):
     """SSH WS управление: статус + кнопки"""
     token = cfg['BOT_TOKEN']
     if not is_admin(cfg, user_id):
@@ -1521,15 +1607,25 @@ def handle_services(cfg, chat_id, user_id):
          {'text': '🔒 Прокси', 'callback_data': 'manage_proxies'},
          {'text': '📦 Payload', 'callback_data': 'manage_payload'}],
         [{'text': '🔄 Перезапустить WS', 'callback_data': 'restart_ws'}],
-        [{'text': '🔄 Обновить', 'callback_data': 'manage_services'}]
+        [{'text': '🔄 Обновить', 'callback_data': 'manage_services'}],
+        [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
     ]}
     
-    tg_request(token, 'sendMessage', {
-        'chat_id': chat_id,
-        'text': text,
-        'parse_mode': 'HTML',
-        'reply_markup': keyboard
-    })
+    if msg_id:
+        tg_request(token, 'editMessageText', {
+            'chat_id': chat_id,
+            'message_id': msg_id,
+            'text': text,
+            'parse_mode': 'HTML',
+            'reply_markup': keyboard
+        })
+    else:
+        tg_request(token, 'sendMessage', {
+            'chat_id': chat_id,
+            'text': text,
+            'parse_mode': 'HTML',
+            'reply_markup': keyboard
+        })
 
 
 def handle_restart(cfg, chat_id, user_id, args):
@@ -1554,7 +1650,7 @@ def handle_restart(cfg, chat_id, user_id, args):
 CHANNELS_FILE = "/etc/UDPCustom/channels.txt"
 
 
-def handle_channels(cfg, chat_id, user_id):
+def handle_channels(cfg, chat_id, user_id, msg_id=None):
     """Список каналов с ролями"""
     token = cfg['BOT_TOKEN']
     if not is_admin(cfg, user_id):
@@ -1562,7 +1658,11 @@ def handle_channels(cfg, chat_id, user_id):
     
     channels = get_channels()
     if not channels:
-        send_message(token, chat_id, "📢 <b>Каналов нет.</b>\n\n<i>Добавить: /addchannel @name</i>", parse_mode='HTML')
+        kb = {'inline_keyboard': [[{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]]}
+        if msg_id:
+            tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': "📢 <b>Каналов нет.</b>\n\n<i>Добавить: /addchannel @name</i>", 'reply_markup': kb, 'parse_mode': 'HTML'})
+        else:
+            send_message(token, chat_id, "📢 <b>Каналов нет.</b>\n\n<i>Добавить: /addchannel @name</i>", reply_markup=kb, parse_mode='HTML')
         return
     
     text = f"📢 <b>Каналы ({len(channels)}):</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -1576,8 +1676,14 @@ def handle_channels(cfg, chat_id, user_id):
     text += f"\n━━━━━━━━━━━━━━━━━━━━\n"
     text += f"<i>Добавить: /addchannel @name</i>\n"
     text += f"<i>Удалить: /delchannel N</i>"
+    kb = {'inline_keyboard': [
+        [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
+    ]}
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        send_message(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
     
-    send_message(token, chat_id, text, parse_mode='HTML')
 
 
 PENDING_ACTIONS = {}
@@ -1851,12 +1957,53 @@ def main():
                             '',
                             'Отправь ответ на это сообщение 👇'
                         ])
+                        smart_send(cfg['BOT_TOKEN'], cb['message']['chat']['id'], instr, reply_markup={'force_reply': True, 'selective': True}, parse_mode='HTML')
                         tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
                             'chat_id': cb['message']['chat']['id'],
-                            'text': instr,
+                            'text': '<i>Передумал? Жми кнопку ниже</i>',
                             'parse_mode': 'HTML',
-                            'reply_markup': {'force_reply': True, 'selective': True}
+                            'reply_markup': {'inline_keyboard': [
+                                [{'text': '⬅️ Отмена', 'callback_data': 'adm_main'}]
+                            ]}
                         })
+                    elif cb_data == 'adm_promo_list':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        show_promo_list(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                    elif cb_data.startswith('adm_promo_del:'):
+                        code = cb_data.split(':', 1)[1]
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        NLx = chr(10)
+                        text = NLx.join([
+                            '🗑 <b>УДАЛИТЬ ПРОМОКОД ' + code + '?</b>',
+                            '',
+                            'Действие необратимо.'
+                        ])
+                        kb = {'inline_keyboard': [
+                            [{'text': '✅ Да, удалить', 'callback_data': 'adm_promo_delok:' + code}],
+                            [{'text': '⬅️ Отмена', 'callback_data': 'adm_promo_list'}]
+                        ]}
+                        tg_request(cfg['BOT_TOKEN'], 'editMessageText', {
+                            'chat_id': cb['message']['chat']['id'],
+                            'message_id': cb['message']['message_id'],
+                            'text': text,
+                            'parse_mode': 'HTML',
+                            'reply_markup': kb
+                        })
+                    elif cb_data.startswith('adm_promo_delok:'):
+                        code = cb_data.split(':', 1)[1]
+                        try:
+                            from bot_modules import db as _db
+                            _db.execute('DELETE FROM promo_codes WHERE code=?', (code.upper(),))
+                            tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
+                                'callback_query_id': cb['id'],
+                                'text': '✅ ' + code + ' удалён'
+                            })
+                        except Exception as e:
+                            tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
+                                'callback_query_id': cb['id'],
+                                'text': '❌ Ошибка: ' + str(e)
+                            })
+                        show_promo_list(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
                     elif cb_data == 'adm_broadcast':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': '🚧 В разработке'})
                     elif cb_data == 'admin_addbalance':
@@ -1868,7 +2015,7 @@ def main():
                         })
                     elif cb_data == 'admin_stats':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
-                        handle_stats(cfg, cb['message']['chat']['id'], cb_user_id, 'keys')
+                        handle_stats(cfg, cb['message']['chat']['id'], cb_user_id, 'keys', cb['message']['message_id'])
                     elif cb_data == 'admin_stats_keys':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         handle_stats(cfg, cb['message']['chat']['id'], cb_user_id, 'keys', cb['message']['message_id'])
@@ -1876,7 +2023,7 @@ def main():
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         handle_stats(cfg, cb['message']['chat']['id'], cb_user_id, 'traffic', cb['message']['message_id'])
                     elif cb_data == 'admin_banlist':
-                        handle_banlist(cfg, cb['message']['chat']['id'], cb_user_id)
+                        handle_banlist(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
                     elif cb_data == 'admin_post':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         # Подменю управления постом
@@ -1906,14 +2053,10 @@ def main():
                                 {'text': '⏰ Каждые 12ч', 'callback_data': 'autopost_12'}
                             ],
                             [{'text': '📅 Настроить время', 'callback_data': 'autopost_time'}],
-                            [{'text': '🔄 Обновить', 'callback_data': 'admin_post'}]
+                            [{'text': '🔄 Обновить', 'callback_data': 'admin_post'}],
+                            [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
                         ]}
-                        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
-                            'chat_id': cb['message']['chat']['id'],
-                            'text': text,
-                            'parse_mode': 'HTML',
-                            'reply_markup': keyboard
-                        })
+                        smart_send(cfg['BOT_TOKEN'], cb['message']['chat']['id'], text, reply_markup=keyboard, parse_mode='HTML')
                     elif cb_data == 'post_now':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         post_to_channel(cfg, cb['message']['chat']['id'], cb_user_id)
@@ -1938,7 +2081,7 @@ def main():
                         })
                     elif cb_data == 'manage_services':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
-                        handle_services(cfg, cb['message']['chat']['id'], cb_user_id)
+                        handle_services(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
                     elif cb_data == 'manage_domain':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         handle_domain(cfg, cb['message']['chat']['id'], cb_user_id)
@@ -1965,7 +2108,7 @@ def main():
                             })
                     elif cb_data == 'admin_channels':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
-                        handle_channels(cfg, cb['message']['chat']['id'], cb_user_id)
+                        handle_channels(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
                     elif cb_data == 'admin_manage':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
                             'callback_query_id': cb['id']
@@ -2037,7 +2180,7 @@ def main():
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
                             'callback_query_id': cb['id']
                         })
-                        handle_users(cfg, cb['message']['chat']['id'], cb_user_id, pg)
+                        handle_users(cfg, cb['message']['chat']['id'], cb_user_id, pg, cb['message']['message_id'])
                     elif cb_data == 'noop':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
                             'callback_query_id': cb['id']
