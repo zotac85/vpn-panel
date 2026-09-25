@@ -452,6 +452,38 @@ def clear_pending(user_id):
     except: pass
 
 
+
+
+# ═══════════════════════════════════════════════════════════════
+# BROADCASTS
+# ═══════════════════════════════════════════════════════════════
+
+def create_broadcast(text):
+    """Создаёт черновик рассылки. Возвращает id."""
+    return execute("""INSERT INTO broadcasts
+        (text, status, created_at) VALUES (?, 'draft', ?)""",
+        (text, int(time.time())))
+
+
+def get_broadcast(bid):
+    return query_one("SELECT * FROM broadcasts WHERE id=?", (int(bid),))
+
+
+def update_broadcast(bid, **fields):
+    """Обновляет поля рассылки."""
+    if not fields:
+        return
+    cols = ', '.join(f"{k}=?" for k in fields.keys())
+    vals = list(fields.values()) + [int(bid)]
+    execute(f"UPDATE broadcasts SET {cols} WHERE id=?", tuple(vals))
+
+
+def get_all_user_ids():
+    """Все tg_id юзеров для рассылки."""
+    rows = query("SELECT tg_id FROM users WHERE tg_id > 0")
+    return [r['tg_id'] for r in rows]
+
+
 if __name__ == '__main__':
     print("=== Подключение ===")
     print(f"DB: {DB_PATH}")

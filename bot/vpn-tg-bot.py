@@ -876,6 +876,149 @@ def _do_vip_purchase(cfg, cb, tg_id, idx):
         log.error(f"ref purchase call error: {e}")
 
 
+def _do_broadcast_preview(cfg, chat_id, text):
+    """Сохраняет текст и показывает превью"""
+    token = cfg['BOT_TOKEN']
+    try:
+        from bot_modules import db as _db
+    except Exception as e:
+        send_message(token, chat_id, f"❌ Ошибка db: {e}")
+        return
+
+    # Считаем юзеров
+    total = len(_db.get_all_user_ids())
+    if total == 0:
+        send_message(token, chat_id, "❌ Нет юзеров для рассылки")
+        return
+
+    # Сохраняем черновик
+    bid = _db.create_broadcast(text)
+    if not bid:
+        send_message(token, chat_id, "❌ Не удалось создать черновик")
+        return
+
+    NL = chr(10)
+    preview = NL.join([
+        "📨 <b>ПРЕВЬЮ РАССЫЛКИ</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "",
+        text,
+        "",
+        "━━━━━━━━━━━━━━━━━━━━",
+        f"👥 Получателей: <b>{total}</b>",
+        f"⏱ Отправка: пауза 1 мин между сообщениями",
+        f"🕐 Время: ~{total} мин (~{total//60} ч)",
+        "",
+        "Подтверди отправку:"
+    ])
+    kb = {'inline_keyboard': [
+        [{'text': '✅ Отправить', 'callback_data': f'broadcast_send:{bid}'}],
+        [{'text': '✏️ Изменить', 'callback_data': 'adm_broadcast'},
+         {'text': '❌ Отмена', 'callback_data': 'adm_main'}]
+    ]}
+    send_message(token, chat_id, preview, reply_markup=kb, parse_mode='HTML')
+
+
+def _do_broadcast_send(cfg, cb, bid):
+    """Запускает рассылку в фоне"""
+    token = cfg['BOT_TOKEN']
+    chat_id = cb['message']['chat']['id']
+    msg_id = cb['message']['message_id']
+    cb_id = cb['id']
+
+    try:
+        from bot_modules import db as _db
+    except Exception as e:
+        tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': f'Ошибка: {e}', 'show_alert': True})
+        return
+
+    bc = _db.get_broadcast(bid)
+    if not bc:
+        tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': '❌ Рассылка не найдена', 'show_alert': True})
+        return
+    if bc['status'] not in ('draft',):
+        tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': f"⚠️ Статус: {bc['status']}", 'show_alert': True})
+        return
+
+    user_ids = _db.get_all_user_ids()
+    total = len(user_ids)
+
+    _db.update_broadcast(bid, status='running', total=total, started_at=int(time.time()))
+    tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': f'🚀 Запущено! {total} юзеров', 'show_alert': False})
+
+    NL = chr(10)
+    text = bc['text']
+    text_ok = NL.join([
+        "📨 <b>РАССЫЛКА ЗАПУЩЕНА</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "",
+        f"👥 Получателей: <b>{total}</b>",
+        f"⏱ Пауза: 1 мин",
+        f"🕐 Примерно: ~{total} мин",
+        "",
+        "<i>Отчёт придёт по завершении</i>"
+    ])
+    tg_request(token, 'editMessageText', {
+        'chat_id': chat_id,
+        'message_id': msg_id,
+        'text': text_ok,
+        'parse_mode': 'HTML'
+    })
+
+    # Фоновый поток
+    import threading
+    def _worker():
+        import time as _t
+        ok = 0; fail = 0
+        for i, uid in enumerate(user_ids):
+            try:
+                r = tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                    'chat_id': uid,
+                    'text': text,
+                    'parse_mode': 'HTML',
+                    'disable_web_page_preview': True
+                })
+                if r and r.get('ok'):
+                    ok += 1
+                else:
+                    fail += 1
+            except Exception as e:
+                fail += 1
+                log.error(f"broadcast send {uid}: {e}")
+            # Обновляем прогресс каждые 10
+            if (i+1) % 10 == 0:
+                try:
+                    _db.update_broadcast(bid, sent_ok=ok, sent_fail=fail)
+                except: pass
+            # Пауза 1 мин между сообщениями (кроме последнего)
+            if i < len(user_ids) - 1:
+                _t.sleep(60)
+        # Финал
+        _db.update_broadcast(bid, status='done', sent_ok=ok, sent_fail=fail, finished_at=int(_t.time()))
+        NL2 = chr(10)
+        report = NL2.join([
+            "✅ <b>РАССЫЛКА ЗАВЕРШЕНА</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            f"👥 Всего: <b>{total}</b>",
+            f"✅ Доставлено: <b>{ok}</b>",
+            f"❌ Ошибок: <b>{fail}</b>",
+            "",
+            "<i>Ошибки = юзеры заблокировали бота или удалили аккаунт</i>"
+        ])
+        try:
+            tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                'chat_id': chat_id,
+                'text': report,
+                'parse_mode': 'HTML'
+            })
+        except: pass
+        log.info(f"Broadcast #{bid} done: ok={ok}, fail={fail}")
+
+    threading.Thread(target=_worker, daemon=True).start()
+    log.info(f"Broadcast #{bid} started by admin, total={total}")
+
+
 def _do_addbalance(cfg, chat_id, args):
     """Начисляет баланс: ID СУММА [КОММЕНТАРИЙ]"""
     token = cfg['BOT_TOKEN']
@@ -2384,8 +2527,37 @@ def main():
                                 'text': '❌ Ошибка: ' + str(e)
                             })
                         show_promo_list(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                    elif cb_data.startswith('broadcast_send:'):
+                        try:
+                            bid = int(cb_data.split(':', 1)[1])
+                        except:
+                            bid = 0
+                        if bid > 0:
+                            _do_broadcast_send(cfg, cb, bid)
+                        continue
                     elif cb_data == 'adm_broadcast':
-                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': '🚧 В разработке'})
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        PENDING_ACTIONS[cb_user_id] = 'broadcast_text'
+                        NLx = chr(10)
+                        instr = NLx.join([
+                            '📨 <b>РАССЫЛКА</b>',
+                            '━━━━━━━━━━━━━━━━━━━━',
+                            '',
+                            'Отправь текст, который уйдёт всем юзерам.',
+                            '',
+                            '📝 <b>Поддерживается HTML:</b>',
+                            '• <code>&lt;b&gt;жирный&lt;/b&gt;</code>',
+                            '• <code>&lt;i&gt;курсив&lt;/i&gt;</code>',
+                            '• <code>&lt;code&gt;моноширинный&lt;/code&gt;</code>',
+                            '• <code>&lt;a href="url"&gt;ссылка&lt;/a&gt;</code>',
+                            '',
+                            '⚠️ Перед отправкой покажу превью.',
+                            '',
+                            'Отправь ответ на это сообщение 👇'
+                        ])
+                        smart_send(cfg['BOT_TOKEN'], cb['message']['chat']['id'], instr,
+                                   reply_markup={'force_reply': True, 'selective': True},
+                                   parse_mode='HTML')
                     elif cb_data == 'admin_addbalance':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         PENDING_ACTIONS[cb_user_id] = 'addbalance'
@@ -2725,6 +2897,8 @@ def main():
                         _do_newpromo(cfg, chat_id, text)
                     elif action == 'addbalance':
                         _do_addbalance(cfg, chat_id, text)
+                    elif action == 'broadcast_text':
+                        _do_broadcast_preview(cfg, chat_id, text)
                     continue
                 if text.startswith('/start'):
                     # Обработка реферальной ссылки
