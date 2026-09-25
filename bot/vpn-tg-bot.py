@@ -497,46 +497,23 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         for ch in not_sub:
             keyboard['inline_keyboard'].append([{'text': f'📢 @{ch}', 'url': f'https://t.me/{ch}'}])
         keyboard['inline_keyboard'].append([{'text': '✅ Я подписался → Проверить', 'callback_data': 'check_verified'}])
-        keyboard['inline_keyboard'].append([
-            {'text': '💎 VIP-ключ', 'url': 'https://t.me/ArsenGuro'},
-            {'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}
-        ])
-        if is_admin:
-            keyboard['inline_keyboard'].append([
-                {'text': '📊 Статистика', 'callback_data': 'admin_stats'},
-                {'text': '👥 Пользователи', 'callback_data': 'admin_users_1'}
-            ])
-            keyboard['inline_keyboard'].append([
-                {'text': '📢 Пост', 'callback_data': 'admin_post'},
-                {'text': '📢 Каналы', 'callback_data': 'admin_channels'}
-            ])
     
     elif verified:
         # Подписан на все + verified → кнопка получить тест
         text = (
             f"👋 Привет, {name}!\n\n"
-            f"🎁 Можешь получить тестовый ключ\n\n"
-            f"📱 8 часов | 📊 50 ГБ | 💻 1 устройство\n"
-            f"🇩🇪 Сервер Германия\n\n"
-            f"👇 Жми кнопку ниже"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "🎁 <b>ТЕСТОВЫЙ КЛЮЧ ДОСТУПЕН</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━\n\n"
+            "✅ Подписка подтверждена\n\n"
+            "📱 8 часов   |   📊 50 ГБ   |   💻 1 устр.\n"
+            "🇫🇮 Сервер: Финляндия\n\n"
+            "👇 Жми кнопку и получай 🔑"
         )
         keyboard = {'inline_keyboard': [
             [{'text': '🎁 ПОЛУЧИТЬ ТЕСТ', 'callback_data': 'get_test'}],
             [{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}],
-            [
-                {'text': '💎 VIP-ключ', 'url': 'https://t.me/ArsenGuro'},
-                {'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}
-            ]
         ]}
-        if is_admin:
-            keyboard['inline_keyboard'].append([
-                {'text': '📊 Статистика', 'callback_data': 'admin_stats'},
-                {'text': '👥 Пользователи', 'callback_data': 'admin_users_1'}
-            ])
-            keyboard['inline_keyboard'].append([
-                {'text': '📢 Пост', 'callback_data': 'admin_post'},
-                {'text': '📢 Каналы', 'callback_data': 'admin_channels'}
-            ])
     
     else:
         # Подписан на все, но НЕ verified → надо зайти на канал
@@ -549,29 +526,38 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
             f"👋 Привет, {name}!",
             "",
             "━━━━━━━━━━━━━━━━━━━━",
-            "🎁 <b>КАК ПОЛУЧИТЬ БЕСПЛАТНЫЙ ТЕСТ</b>",
+            "🎁 <b>БЕСПЛАТНЫЙ ТЕСТ-КЛЮЧ</b>",
             "━━━━━━━━━━━━━━━━━━━━",
             "",
-            f"1️⃣ Зайди в канал @{primary_clean}",
-            "2️⃣ Поставь 👍 лайки на 3 последних поста",
+            "Как получить 👇",
+            "",
+            f"1️⃣ Перейди в наш канал: @{primary_clean}",
             "",
         ]
         if sponsors_start:
-            lines2.append("3️⃣ Подпишись на спонсоров (обязательно!):")
+            lines2.append("2️⃣ Подпишись на спонсоров:")
             lines2.append("")
             for s in sponsors_start:
                 lines2.append(f"   📢 @{s}")
-            lines2.append("   ⚠️ Без подписки ключ не дадут")
             lines2.append("")
-            lines2.append(f"4️⃣ Найди в @{primary_clean} пост с кнопкой")
-            lines2.append("    «🎁 Получить тест» и нажми её")
+            lines2.append("3️⃣ Найди в канале пост с кнопкой")
+            lines2.append("   «🎁 Получить тест» — нажми её")
             lines2.append("")
-            lines2.append("5️⃣ Ключ прилетит сюда, в бот")
+            lines2.append("4️⃣ Прояви активность на постах")
+            lines2.append("   (лайки, реакции — это важно!)")
+            lines2.append("")
+            lines2.append("5️⃣ После этого кнопка появится")
+            lines2.append("   здесь, в боте — жми и получай 🔑")
         else:
-            lines2.append(f"3️⃣ Найди в @{primary_clean} пост с кнопкой")
-            lines2.append("    «🎁 Получить тест» и нажми её")
+            lines2.append("2️⃣ Найди пост с кнопкой")
+            lines2.append("   «🎁 Получить тест» — нажми её")
             lines2.append("")
-            lines2.append("4️⃣ Ключ прилетит сюда, в бот")
+            lines2.append("3️⃣ Прояви активность на постах")
+            lines2.append("   (лайки, реакции — это важно!)")
+            lines2.append("")
+            lines2.append("4️⃣ После этого кнопка появится")
+            lines2.append("   здесь, в боте — жми и получай 🔑")
+        lines2.append("")
         lines2.append("━━━━━━━━━━━━━━━━━━━━")
         lines2.append("🎁 Тест:  8 часов · 50 ГБ · 1 устр.")
         lines2.append("💎 VIP:   @ArsenGuro")
@@ -588,15 +574,6 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
             {'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}
         ])
         keyboard = {'inline_keyboard': kb_start}
-        if is_admin:
-            keyboard['inline_keyboard'].append([
-                {'text': '📊 Статистика', 'callback_data': 'admin_stats'},
-                {'text': '👥 Пользователи', 'callback_data': 'admin_users_1'}
-            ])
-            keyboard['inline_keyboard'].append([
-                {'text': '📢 Пост', 'callback_data': 'admin_post'},
-                {'text': '📢 Каналы', 'callback_data': 'admin_channels'}
-            ])
     
     # Сохраняем message_id приветствия для авто-удаления
     result = smart_send(token, chat_id, text, reply_markup=keyboard, parse_mode='HTML')
@@ -680,22 +657,9 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None):
             # Новая клавиатура без "Получить тест"
             new_kb = {'inline_keyboard': [
                 [{'text': '🔑 Мой ключ', 'callback_data': 'mykey'}],
-                [
-                    {'text': '💎 VIP-ключ', 'url': 'https://t.me/ArsenGuro'},
-                    {'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}
-                ]
             ]}
             # Сохраняем админ-кнопки
             admin_id = cfg.get('ADMIN_ID', '')
-            if str(user_id) == str(admin_id):
-                new_kb['inline_keyboard'].append([
-                    {'text': '📊 Статистика', 'callback_data': 'admin_stats'},
-                    {'text': '👥 Пользователи', 'callback_data': 'admin_users_1'}
-                ])
-                new_kb['inline_keyboard'].append([
-                    {'text': '📢 Пост', 'callback_data': 'admin_post'},
-                    {'text': '📢 Каналы', 'callback_data': 'admin_channels'}
-                ])
             tg_request(token, 'editMessageReplyMarkup', {
                 'chat_id': chat_id,
                 'message_id': w_id,
@@ -1657,10 +1621,6 @@ def handle_channel_test(cfg, user_id, first_name):
                 w_id = int(f.read().strip())
             new_kb = {'inline_keyboard': [
                 [{'text': '🔑 Мой ключ', 'callback_data': 'mykey'}],
-                [
-                    {'text': '💎 VIP-ключ', 'url': 'https://t.me/ArsenGuro'},
-                    {'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}
-                ]
             ]}
             tg_request(token, 'editMessageReplyMarkup', {
                 'chat_id': user_id,
