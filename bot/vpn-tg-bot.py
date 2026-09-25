@@ -9,7 +9,7 @@ from datetime import datetime
 
 # Подключаем модуль администраторов
 sys.path.insert(0, '/usr/local/bin')
-from bot_modules.admin import get_admins, is_admin, handle_addadmin, handle_deladmin, handle_admins, handle_newuser
+from bot_modules.admin import get_admins, is_admin, handle_addadmin, handle_deladmin, handle_admins
 from bot_modules.autopost import handle_autopost, start_autopost_thread, load_autopost_config
 from bot_modules.cabinet import show_cabinet, handle_cabinet_callback
 
@@ -263,17 +263,51 @@ echo "OK"
         log.error(f"Exception: {e}")
         return None, None
 
-def create_vip_user(cfg, tg_id, days, price, traffic_gb, devices):
+def _validate_vip_name(name):
+    """Проверяет что имя валидно: a-z, 0-9, _ (5-15 символов). Возвращает (ok, msg_or_name)."""
+    import re as _re
+    name = name.strip().lower()
+    if len(name) < 5:
+        return False, "Минимум 5 символов"
+    if len(name) > 15:
+        return False, "Максимум 15 символов"
+    if not _re.match(r'^[a-z0-9_]+$', name):
+        return False, "Только латиница (a-z), цифры и _ (подчёркивание)"
+    return True, name
+
+
+def _make_vip_login(name):
+    """Создаёт уникальный логин vip_<name> или vip_<name>_N."""
+    login = f"vip_{name}"
+    import subprocess as _sp
+    def _exists(l):
+        r = _sp.run(['id', l], capture_output=True)
+        return r.returncode == 0
+    if not _exists(login):
+        return login
+    for i in range(2, 100):
+        candidate = f"{login}_{i}"
+        if len(candidate) <= 24 and not _exists(candidate):
+            return candidate
+    import secrets as _sec
+    return f"vip_{name}_{''.join(_sec.choice('0123456789') for _ in range(4))}"
+
+
+def create_vip_user(cfg, tg_id, days, price, traffic_gb, devices, custom_login=None):
     """Создаёт VIP-юзера: Linux-юзер vip_<tg_id>_<rnd> + запись в vip_keys."""
     import secrets as _sec, string as _str
-    # Генерим логин
-    suffix = ''.join(_sec.choice(_str.ascii_lowercase + _str.digits) for _ in range(4))
-    username = f"vip_{tg_id}_{suffix}"
-    # Проверяем что не занят
-    r = subprocess.run(['id', username], capture_output=True)
-    if r.returncode == 0:
-        return None, None
-    # Пароль 12 символов
+    if custom_login:
+        username = custom_login
+        r = subprocess.run(['id', username], capture_output=True)
+        if r.returncode == 0:
+            log.error(f"create_vip_user: логин {username} уже занят")
+            return None, None
+    else:
+        suffix = ''.join(_sec.choice(_str.ascii_lowercase + _str.digits) for _ in range(4))
+        username = f"vip_{tg_id}_{suffix}"
+        r = subprocess.run(['id', username], capture_output=True)
+        if r.returncode == 0:
+            return None, None
     alphabet = _str.ascii_letters + _str.digits
     password = ''.join(_sec.choice(alphabet) for _ in range(12))
 
@@ -787,6 +821,21 @@ def _do_vip_purchase(cfg, cb, tg_id, idx):
         tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': f'Ошибка: {e}', 'show_alert': True})
         return
 
+    # Читаем сохранённое имя из pending
+    custom_name = None
+    try:
+        pending = _db.get_pending(tg_id)
+        if pending and pending.startswith('vip_ready:'):
+            parts_p = pending.split(':', 2)
+            if len(parts_p) >= 3:
+                custom_name = parts_p[2]
+            _db.clear_pending(tg_id)
+    except: pass
+
+    if not custom_name:
+        tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': '❌ Сначала введи имя ключа', 'show_alert': True})
+        return
+
     tariffs = _parse_vip_tariffs(cfg)
     if idx < 1 or idx > len(tariffs):
         tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': '❌ Тариф не найден', 'show_alert': True})
@@ -808,7 +857,9 @@ def _do_vip_purchase(cfg, cb, tg_id, idx):
         return
 
     # Создаём ключ
-    username, password = create_vip_user(cfg, tg_id, t['days'], t['price'], t['gb'], t['devices'])
+    # Формируем логин из имени
+    full_login = _make_vip_login(custom_name)
+    username, password = create_vip_user(cfg, tg_id, t['days'], t['price'], t['gb'], t['devices'], custom_login=full_login)
     if not username:
         # Возвращаем деньги
         try:
@@ -1828,84 +1879,281 @@ def get_users_stats():
     return users
 
 
-def handle_users(cfg, chat_id, user_id, page=1, msg_id=None):
-    """Список юзеров с пагинацией"""
+def show_users_menu(cfg, chat_id, user_id, msg_id=None):
+    """Главный экран управления юзерами"""
     token = cfg['BOT_TOKEN']
-    admin_id = cfg.get('ADMIN_ID', '')
-    if str(user_id) != str(admin_id):
+    if str(user_id) != str(cfg.get('ADMIN_ID', '')):
         send_message(token, chat_id, "🚫 Только для админа.")
         return
-    
-    users = get_users_stats()
-    if not users:
-        send_message(token, chat_id, "📋 Список пуст.")
+    try:
+        from bot_modules import db as _db
+    except Exception as e:
+        send_message(token, chat_id, f"Ошибка db: {e}")
         return
-    
-    per_page = 20
-    total = len(users)
-    total_pages = (total + per_page - 1) // per_page
+
+    now = int(time.time())
+    # TG-юзеры
+    tg_total = _db.query_one("SELECT COUNT(*) as n FROM users")['n']
+    # Тестовые
+    test_total = _db.query_one("SELECT COUNT(*) as n FROM test_keys")['n']
+    test_active = _db.query_one("SELECT COUNT(*) as n FROM test_keys WHERE expires_at=0 OR expires_at > ?", (now,))['n']
+    # VIP
+    vip_total = _db.query_one("SELECT COUNT(*) as n FROM vip_keys")['n']
+    vip_active = _db.query_one("SELECT COUNT(*) as n FROM vip_keys WHERE expires_at=0 OR expires_at > ?", (now,))['n']
+
+    NL = chr(10)
+    lines_txt = [
+        "👥 <b>УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "",
+        f"👤 TG-юзеров: <b>{tg_total}</b>",
+        "",
+        f"🎁 Тестовые ключи: <b>{test_total}</b>",
+        f"     🟢 активных: <b>{test_active}</b>",
+        "",
+        f"💎 VIP-ключи: <b>{vip_total}</b>",
+        f"     🟢 активных: <b>{vip_active}</b>",
+        "",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "Выбери раздел 👇"
+    ]
+    text = NL.join(lines_txt)
+
+    kb = {'inline_keyboard': [
+        [{'text': f'🎁 Тестовые ({test_total})', 'callback_data': 'adm_users_test:1'},
+         {'text': f'💎 VIP ({vip_total})', 'callback_data': 'adm_users_vip:1'}],
+        [{'text': f'👤 TG-юзеры ({tg_total})', 'callback_data': 'adm_users_tg:1'}],
+        [{'text': '🗑️ Удалить истёкших', 'callback_data': 'admin_cleanup'}],
+        [{'text': '🚫 Бан-лист', 'callback_data': 'admin_banlist'}],
+        [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
+    ]}
+
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
+
+
+def _fmt_key_row(key, kind):
+    """Форматирует одну строку ключа."""
+    now = int(time.time())
+    exp = key.get('expires_at') or 0
+    if exp == 0:
+        t = "♾ бессрочно"
+    elif exp > now:
+        left = exp - now
+        h = left // 3600
+        if h < 24:
+            t = f"{h}ч"
+        else:
+            t = f"{h//24}д"
+    else:
+        t = "❌ истёк"
+    used = key.get('traffic_used') or 0
+    limit = key.get('traffic_limit') or 0
+    def human(b):
+        try: b = int(b)
+        except: return "0"
+        if b >= 1073741824: return f"{b/1073741824:.1f}G"
+        if b >= 1048576: return f"{b/1048576:.0f}M"
+        if b >= 1024: return f"{b/1024:.0f}K"
+        return f"{b}B"
+    traffic = f"{human(used)}/{human(limit)}" if limit > 0 else f"{human(used)}/∞"
+    icon = "💎" if kind == 'vip' else "🎁"
+    tg_id = key.get('tg_id') or 0
+    return f"{icon} <code>{key['login']}</code>", f"   ⏰ {t} · 📊 {traffic} · 👤 <code>{tg_id}</code>"
+
+
+def show_users_test(cfg, chat_id, user_id, page=1, msg_id=None):
+    """Список тестовых ключей"""
+    token = cfg['BOT_TOKEN']
+    if str(user_id) != str(cfg.get('ADMIN_ID', '')):
+        return
+    try:
+        from bot_modules import db as _db
+    except: return
+
+    per_page = 5
+    now = int(time.time())
+    total = _db.query_one("SELECT COUNT(*) as n FROM test_keys")['n']
+    total_pages = max(1, (total + per_page - 1) // per_page)
     if page < 1: page = 1
     if page > total_pages: page = total_pages
-    
-    start = (page - 1) * per_page
-    end = min(start + per_page, total)
-    
-    active = sum(1 for u in users if not u['expired'])
-    expired = total - active
-    
-    text = f"👥 <b>Пользователи</b> (стр. {page}/{total_pages})\n"
-    text += f"Всего: <b>{total}</b> | Активных: <b>{active}</b> | Истёкших: <b>{expired}</b>\n\n"
-    
-    for u in users[start:end]:
-        icon = "🟢" if not u['expired'] else "🔴"
-        name = u['name']
-        if u['exp_ts']:
-            left = u['exp_ts'] - int(time.time())
-            if left > 0:
-                h = left // 3600
-                if h < 24:
-                    time_left = f"{h}ч"
-                else:
-                    time_left = f"{h//24}д"
-            else:
-                time_left = "истёк"
-        else:
-            time_left = "∞"
-        text += f"{icon} <code>{name}</code> — {time_left}\n"
-    
-    keyboard = {'inline_keyboard': []}
-    nav_row = []
-    if page > 1:
-        nav_row.append({'text': '◀', 'callback_data': f'admin_users_{page-1}'})
-    nav_row.append({'text': f'{page}/{total_pages}', 'callback_data': 'noop'})
-    if page < total_pages:
-        nav_row.append({'text': '▶', 'callback_data': f'admin_users_{page+1}'})
-    keyboard['inline_keyboard'].append(nav_row)
-    keyboard['inline_keyboard'].append([
-        {'text': '➕ Добавить юзера', 'callback_data': 'admin_newuser'},
-        {'text': '🗑️ Удалить истёкших', 'callback_data': 'admin_cleanup'}
-    ])
-    keyboard['inline_keyboard'].append([
-        {'text': '🚫 Бан-лист', 'callback_data': 'admin_banlist'},
-        {'text': '🔄 Обновить', 'callback_data': f'admin_users_{page}'}
-    ])
-    keyboard['inline_keyboard'].append([{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}])
-    
-    if msg_id:
-        tg_request(token, 'editMessageText', {
-            'chat_id': chat_id,
-            'message_id': msg_id,
-            'text': text,
-            'reply_markup': keyboard,
-            'parse_mode': 'HTML'
-        })
+    offset = (page - 1) * per_page
+
+    keys = _db.query("SELECT * FROM test_keys ORDER BY created_at DESC LIMIT ? OFFSET ?", (per_page, offset))
+
+    NL = chr(10)
+    lines_txt = [
+        "🎁 <b>ТЕСТОВЫЕ КЛЮЧИ</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        f"<i>Стр. {page}/{total_pages} · всего {total}</i>",
+        ""
+    ]
+    if not keys:
+        lines_txt.append("<i>Пусто</i>")
     else:
-        tg_request(token, 'sendMessage', {
-            'chat_id': chat_id,
-            'text': text,
-            'reply_markup': keyboard,
-            'parse_mode': 'HTML'
-        })
+        for k in keys:
+            head, sub = _fmt_key_row(k, 'test')
+            lines_txt.append(head)
+            lines_txt.append(sub)
+            lines_txt.append("")
+    text = NL.join(lines_txt)
+
+    nav = []
+    if page > 1:
+        nav.append({'text': '◀', 'callback_data': f'adm_users_test:{page-1}'})
+    nav.append({'text': f'{page}/{total_pages}', 'callback_data': 'noop'})
+    if page < total_pages:
+        nav.append({'text': '▶', 'callback_data': f'adm_users_test:{page+1}'})
+
+    kb = {'inline_keyboard': []}
+    if nav: kb['inline_keyboard'].append(nav)
+    kb['inline_keyboard'].append([
+        {'text': '🎁 Тестовые', 'callback_data': 'adm_users_test:1'},
+        {'text': '💎 VIP', 'callback_data': 'adm_users_vip:1'}
+    ])
+    kb['inline_keyboard'].append([
+        {'text': '⬅️ К разделам', 'callback_data': 'adm_users_menu'}
+    ])
+
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
+
+
+def show_users_vip(cfg, chat_id, user_id, page=1, msg_id=None):
+    """Список VIP-ключей"""
+    token = cfg['BOT_TOKEN']
+    if str(user_id) != str(cfg.get('ADMIN_ID', '')):
+        return
+    try:
+        from bot_modules import db as _db
+    except: return
+
+    per_page = 5
+    total = _db.query_one("SELECT COUNT(*) as n FROM vip_keys")['n']
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    if page < 1: page = 1
+    if page > total_pages: page = total_pages
+    offset = (page - 1) * per_page
+
+    keys = _db.query("SELECT * FROM vip_keys ORDER BY created_at DESC LIMIT ? OFFSET ?", (per_page, offset))
+
+    NL = chr(10)
+    lines_txt = [
+        "💎 <b>VIP-КЛЮЧИ</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        f"<i>Стр. {page}/{total_pages} · всего {total}</i>",
+        ""
+    ]
+    if not keys:
+        lines_txt.append("<i>Пусто</i>")
+    else:
+        for k in keys:
+            head, sub = _fmt_key_row(k, 'vip')
+            lines_txt.append(head)
+            lines_txt.append(sub)
+            if k.get('tariff'):
+                lines_txt.append(f"   📦 {k['tariff']} · {k.get('price_paid', 0):.2f} USDT")
+            lines_txt.append("")
+    text = NL.join(lines_txt)
+
+    nav = []
+    if page > 1:
+        nav.append({'text': '◀', 'callback_data': f'adm_users_vip:{page-1}'})
+    nav.append({'text': f'{page}/{total_pages}', 'callback_data': 'noop'})
+    if page < total_pages:
+        nav.append({'text': '▶', 'callback_data': f'adm_users_vip:{page+1}'})
+
+    kb = {'inline_keyboard': []}
+    if nav: kb['inline_keyboard'].append(nav)
+    kb['inline_keyboard'].append([
+        {'text': '🎁 Тестовые', 'callback_data': 'adm_users_test:1'},
+        {'text': '💎 VIP', 'callback_data': 'adm_users_vip:1'}
+    ])
+    kb['inline_keyboard'].append([
+        {'text': '⬅️ К разделам', 'callback_data': 'adm_users_menu'}
+    ])
+
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
+
+
+def show_users_tg(cfg, chat_id, user_id, page=1, msg_id=None):
+    """Список TG-юзеров"""
+    token = cfg['BOT_TOKEN']
+    if str(user_id) != str(cfg.get('ADMIN_ID', '')):
+        return
+    try:
+        from bot_modules import db as _db
+    except: return
+
+    per_page = 5
+    total = _db.query_one("SELECT COUNT(*) as n FROM users")['n']
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    if page < 1: page = 1
+    if page > total_pages: page = total_pages
+    offset = (page - 1) * per_page
+
+    users_list = _db.query("SELECT * FROM users ORDER BY registered_at DESC LIMIT ? OFFSET ?", (per_page, offset))
+
+    NL = chr(10)
+    lines_txt = [
+        "👤 <b>TG-ЮЗЕРЫ</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        f"<i>Стр. {page}/{total_pages} · всего {total}</i>",
+        ""
+    ]
+    if not users_list:
+        lines_txt.append("<i>Пусто</i>")
+    else:
+        from datetime import datetime as _dt
+        for u in users_list:
+            name = u.get('first_name') or '—'
+            uname = u.get('username') or ''
+            handle = f"@{uname}" if uname else f"id{u['tg_id']}"
+            balance = float(u.get('balance') or 0)
+            # Считаем ключи
+            test_cnt = _db.query_one("SELECT COUNT(*) as n FROM test_keys WHERE tg_id=?", (u['tg_id'],))['n']
+            vip_cnt = _db.query_one("SELECT COUNT(*) as n FROM vip_keys WHERE tg_id=?", (u['tg_id'],))['n']
+            dt = ''
+            if u.get('registered_at'):
+                dt = _dt.fromtimestamp(u['registered_at']).strftime('%d.%m.%y')
+
+            lines_txt.append(f"👤 <b>{name}</b> · {handle}")
+            lines_txt.append(f"   🆔 <code>{u['tg_id']}</code>")
+            lines_txt.append(f"   💰 {balance:.2f} USDT · 🎁{test_cnt} 💎{vip_cnt}")
+            if dt:
+                lines_txt.append(f"   📅 {dt}")
+            lines_txt.append("")
+    text = NL.join(lines_txt)
+
+    nav = []
+    if page > 1:
+        nav.append({'text': '◀', 'callback_data': f'adm_users_tg:{page-1}'})
+    nav.append({'text': f'{page}/{total_pages}', 'callback_data': 'noop'})
+    if page < total_pages:
+        nav.append({'text': '▶', 'callback_data': f'adm_users_tg:{page+1}'})
+
+    kb = {'inline_keyboard': []}
+    if nav: kb['inline_keyboard'].append(nav)
+    kb['inline_keyboard'].append([
+        {'text': '⬅️ К разделам', 'callback_data': 'adm_users_menu'}
+    ])
+
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
+
+
+def handle_users(cfg, chat_id, user_id, page=1, msg_id=None):
+    """Алиас для совместимости — ведёт на меню юзеров"""
+    show_users_menu(cfg, chat_id, user_id, msg_id)
 
 
 def handle_cleanup(cfg, chat_id, user_id):
@@ -2750,6 +2998,31 @@ def main():
                             'show_alert': False
                         })
                         handle_cleanup(cfg, cb['message']['chat']['id'], cb_user_id)
+                    elif cb_data == 'adm_users_menu':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        show_users_menu(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                        continue
+                    elif cb_data.startswith('adm_users_test:'):
+                        try:
+                            pg = int(cb_data.split(':', 1)[1])
+                        except: pg = 1
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        show_users_test(cfg, cb['message']['chat']['id'], cb_user_id, pg, cb['message']['message_id'])
+                        continue
+                    elif cb_data.startswith('adm_users_vip:'):
+                        try:
+                            pg = int(cb_data.split(':', 1)[1])
+                        except: pg = 1
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        show_users_vip(cfg, cb['message']['chat']['id'], cb_user_id, pg, cb['message']['message_id'])
+                        continue
+                    elif cb_data.startswith('adm_users_tg:'):
+                        try:
+                            pg = int(cb_data.split(':', 1)[1])
+                        except: pg = 1
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        show_users_tg(cfg, cb['message']['chat']['id'], cb_user_id, pg, cb['message']['message_id'])
+                        continue
                     elif cb_data.startswith('admin_users_'):
                         pg = cb_data.replace('admin_users_', '')
                         try: pg = int(pg)
@@ -2801,6 +3074,51 @@ def main():
                     from bot_modules import db as _db
                     pending = _db.get_pending(user_id)
                 except: pending = None
+                if pending and pending.startswith('vip_name:') and text and not text.startswith('/'):
+                    _db.clear_pending(user_id)
+                    try:
+                        tariff_idx = int(pending.split(':', 1)[1])
+                    except:
+                        tariff_idx = 1
+                    # Валидация имени
+                    ok, result = _validate_vip_name(text)
+                    if not ok:
+                        NLx = chr(10)
+                        err_msg = NLx.join([
+                            "❌ <b>Неверное имя</b>",
+                            "",
+                            f"{result}",
+                            "",
+                            "📝 Правила:",
+                            "• Только a-z, 0-9, _",
+                            "• Минимум 5 символов",
+                            "• Максимум 15 символов",
+                            "",
+                            "Попробуй ещё раз:"
+                        ])
+                        send_message(cfg['BOT_TOKEN'], chat_id, err_msg, parse_mode='HTML')
+                        # Снова запрашиваем
+                        try:
+                            from bot_modules import db as _db2
+                            _db2.set_pending(user_id, f'vip_name:{tariff_idx}')
+                        except: pass
+                        continue
+                    name = result
+                    # Проверяем что логин свободен, иначе добавляем суффикс
+                    full_login = _make_vip_login(name)
+                    # Показываем финальное подтверждение
+                    try:
+                        from bot_modules.cabinet import show_vip_final_confirm
+                        show_vip_final_confirm(cfg, chat_id, user_id, tariff_idx, name)
+                    except Exception as e:
+                        log.error(f"show_vip_final_confirm: {e}")
+                        send_message(cfg['BOT_TOKEN'], chat_id, f"❌ Ошибка: {e}")
+                    # Сохраняем выбранное имя (для использования при покупке)
+                    try:
+                        _db.set_pending(user_id, f'vip_ready:{tariff_idx}:{name}')
+                    except: pass
+                    continue
+
                 if pending == 'topup_amount' and text and not text.startswith('/'):
                     _db.clear_pending(user_id)
                     # Парсим сумму
@@ -2967,7 +3285,6 @@ def main():
                 elif text.startswith('/admins'): handle_admins(cfg, chat_id, user_id)
                 elif text.startswith('/addadmin'): handle_addadmin(cfg, chat_id, user_id, text[9:].strip())
                 elif text.startswith('/deladmin'): handle_deladmin(cfg, chat_id, user_id, text[9:].strip())
-                elif text.startswith('/newuser'): handle_newuser(cfg, chat_id, user_id, text[8:].strip())
                 elif text.startswith('/autopost'): handle_autopost(cfg, chat_id, user_id, text[9:].strip())
                 elif text.startswith('/restart'): handle_restart(cfg, chat_id, user_id, text[8:].strip())
                 elif text.startswith('/cabinet'): show_cabinet(cfg, chat_id, user_id, first_name)

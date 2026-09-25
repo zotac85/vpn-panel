@@ -746,7 +746,7 @@ def show_buy_vip(cfg, chat_id, user_id, msg_id=None):
 
 
 def show_vip_confirm(cfg, chat_id, user_id, tariff_idx, msg_id=None):
-    """Подтверждение покупки"""
+    """Шаг 2 — просим имя ключа (перед покупкой)"""
     token = cfg['BOT_TOKEN']
     tariffs = _parse_vip_tariffs(cfg)
     if tariff_idx < 1 or tariff_idx > len(tariffs):
@@ -755,6 +755,7 @@ def show_vip_confirm(cfg, chat_id, user_id, tariff_idx, msg_id=None):
     t = tariffs[tariff_idx - 1]
     balance = db.get_balance(user_id)
 
+    # Проверяем хватает ли баланса
     if balance < t['price']:
         diff = t['price'] - balance
         NL = chr(10)
@@ -762,6 +763,7 @@ def show_vip_confirm(cfg, chat_id, user_id, tariff_idx, msg_id=None):
             "⚠️ <b>НЕ ХВАТАЕТ БАЛАНСА</b>",
             "━━━━━━━━━━━━━━━━━━━━",
             "",
+            f"Тариф: <b>{t['days']} дней</b> · {t['gb']} ГБ",
             f"Стоимость: <b>{t['price']:.2f} USDT</b>",
             f"У тебя: <b>{balance:.2f} USDT</b>",
             f"Не хватает: <b>{diff:.2f} USDT</b>",
@@ -775,10 +777,61 @@ def show_vip_confirm(cfg, chat_id, user_id, tariff_idx, msg_id=None):
         _edit(token, chat_id, msg_id, text, kb)
         return
 
+    # Всё ок — просим имя
+    NL = chr(10)
+    text = NL.join([
+        "💎 <b>ПОКУПКА VIP — ИМЯ КЛЮЧА</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "",
+        f"📦 Тариф: <b>{t['days']} дней</b>",
+        f"📊 Трафик: <b>{t['gb']} ГБ</b>",
+        f"📱 Устройств: <b>{t['devices']}</b>",
+        f"💵 Цена: <b>{t['price']:.2f} USDT</b>",
+        f"💰 Баланс: <b>{balance:.2f} USDT</b>",
+        "",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "✏️ <b>Придумай имя для ключа</b>",
+        "",
+        "Чтобы отличать ключи (если будет несколько).",
+        "",
+        "📝 Правила:",
+        "• Только латиница: <b>a-z, 0-9, _</b>",
+        "• Минимум 5 символов",
+        "",
+        "Пример: <code>my_phone</code>, <code>for_mom</code>",
+        "",
+        "Логин будет: <code>vip_имя</code>"
+    ])
+    kb = {'inline_keyboard': [
+        [{'text': '⬅️ Отмена', 'callback_data': 'cab_buy_vip'}]
+    ]}
+    _edit(token, chat_id, msg_id, text, kb)
+    # Просим ввести имя через ForceReply + запоминаем pending
+    try:
+        db.set_pending(user_id, f'vip_name:{tariff_idx}')
+    except Exception as e:
+        cab_log.error(f"set_pending vip_name: {e}")
+    _send(token, chat_id, "✏️ Напиши имя ключа ответом на это сообщение 👇",
+          {'force_reply': True, 'selective': True})
+
+
+def show_vip_final_confirm(cfg, chat_id, user_id, tariff_idx, name, msg_id=None):
+    """Финальное подтверждение после ввода имени"""
+    token = cfg['BOT_TOKEN']
+    tariffs = _parse_vip_tariffs(cfg)
+    if tariff_idx < 1 or tariff_idx > len(tariffs):
+        _send(token, chat_id, "❌ Тариф не найден")
+        return
+    t = tariffs[tariff_idx - 1]
+    balance = db.get_balance(user_id)
+
     NL = chr(10)
     text = NL.join([
         "💎 <b>ПОДТВЕРДИ ПОКУПКУ</b>",
         "━━━━━━━━━━━━━━━━━━━━",
+        "",
+        f"👤 Имя: <b>{name}</b>",
+        f"📱 Логин: <code>vip_{name}</code>",
         "",
         f"📦 Тариф: <b>{t['days']} дней</b>",
         f"📊 Трафик: <b>{t['gb']} ГБ</b>",
@@ -788,16 +841,19 @@ def show_vip_confirm(cfg, chat_id, user_id, tariff_idx, msg_id=None):
         f"💰 Баланс после: <b>{balance - t['price']:.2f} USDT</b>",
         "",
         "━━━━━━━━━━━━━━━━━━━━",
-        "Подтверждаешь покупку?"
+        "Подтверждаешь?"
     ])
     kb = {'inline_keyboard': [
         [{'text': f"✅ Купить за {t['price']:.0f} USDT", 'callback_data': f'cab_vip_confirm:{tariff_idx}'}],
-        [{'text': '⬅️ Отмена', 'callback_data': 'cab_buy_vip'}]
+        [{'text': '✏️ Изменить имя', 'callback_data': f'cab_vip_buy:{tariff_idx}'}],
+        [{'text': '❌ Отмена', 'callback_data': 'cab_buy_vip'}]
     ]}
     if msg_id:
         _edit(token, chat_id, msg_id, text, kb)
     else:
         _send(token, chat_id, text, kb)
+
+
 
 
 def show_referrals(cfg, chat_id, user_id, msg_id=None):
