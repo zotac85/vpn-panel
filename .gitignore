@@ -1,0 +1,5 @@
+# Локальные бэкапы
+*.bak_*
+modules.bak_*/
+*.pyc
+__pycache__/
