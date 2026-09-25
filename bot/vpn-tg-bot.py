@@ -807,6 +807,132 @@ def _ref_test_bonus(cfg, invited_id):
     except: pass
 
 
+def _do_key_delete(cfg, cb, tg_id, key_name):
+    """Удаляет ключ: userdel + чистка файлов + возврат баланса для VIP."""
+    token = cfg['BOT_TOKEN']
+    chat_id = cb['message']['chat']['id']
+    msg_id = cb['message']['message_id']
+    cb_id = cb['id']
+
+    try:
+        from bot_modules import db as _db
+    except Exception as e:
+        tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': f'Ошибка: {e}', 'show_alert': True})
+        return
+
+    # Ищем ключ
+    key = _db.get_test_key(key_name)
+    kind = 'test'
+    if not key:
+        key = _db.get_vip_key(key_name)
+        kind = 'vip'
+    if not key or int(key['tg_id']) != int(tg_id):
+        tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': '❌ Ключ не найден', 'show_alert': True})
+        return
+
+    now = int(time.time())
+    exp = key['expires_at'] or 0
+    created = key['created_at'] or now
+
+    # Расчёт возврата для VIP (комиссия 20%)
+    refund = 0.0
+    if kind == 'vip':
+        price = float(key.get('price_paid') or 0)
+        total_secs = max(1, exp - created) if exp > 0 else 0
+        left_secs = max(0, exp - now) if exp > 0 else 0
+        if total_secs > 0 and price > 0:
+            refund = round(price * (left_secs / total_secs) * 0.8, 2)
+
+    # Удаляем Linux-юзера и файлы
+    import subprocess as _sp
+    try:
+        _sp.run(['userdel', '-f', key_name], capture_output=True, timeout=10)
+    except Exception as e:
+        log.error(f"userdel {key_name}: {e}")
+
+    # Чистим файлы
+    for p in [f"/etc/UDPCustom/limits/{key_name}",
+              f"/etc/UDPCustom/expire_ts/{key_name}",
+              f"/etc/UDPCustom/traffic/{key_name}",
+              f"/etc/UDPCustom/traffic_limits/{key_name}",
+              f"/etc/UDPCustom/passwords/{key_name}"]:
+        try:
+            if os.path.exists(p): os.remove(p)
+        except: pass
+
+    # Убираем из users.db (текстовый файл)
+    try:
+        _sp.run(['sed', '-i', f'/^{key_name}$/d', '/etc/UDPCustom/users.db'], capture_output=True)
+    except: pass
+
+    # Убираем maxlogins из limits.conf
+    try:
+        _sp.run(['sed', '-i', f'/^{key_name} .*maxlogins/d', '/etc/security/limits.conf'], capture_output=True)
+    except: pass
+
+    # Убираем iptables-правило (по uid, но uid уже удалён — пробуем очистить)
+    try:
+        # Не можем получить uid удалённого юзера — просто пропускаем
+        pass
+    except: pass
+
+    # Удаляем из БД
+    if kind == 'vip':
+        _db.execute("DELETE FROM vip_keys WHERE login=?", (key_name,))
+    else:
+        _db.execute("DELETE FROM test_keys WHERE login=?", (key_name,))
+
+    # Возврат баланса для VIP
+    if refund > 0:
+        _db.add_balance(tg_id, refund, method='manual',
+                        meta={'comment': f'Возврат за удаление {key_name}'})
+
+    # Ответ юзеру
+    new_balance = _db.get_balance(tg_id)
+    NL = chr(10)
+    lines = [
+        "✅ <b>КЛЮЧ УДАЛЁН</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "",
+        f"📱 Логин: <code>{key_name}</code>",
+    ]
+    if refund > 0:
+        lines.append("")
+        lines.append(f"💵 Возврат: <b>+{refund:.2f} USDT</b>")
+        lines.append(f"💰 Баланс: <b>{new_balance:.2f} USDT</b>")
+    lines.append("")
+    lines.append("━━━━━━━━━━━━━━━━━━━━")
+
+    kb = {'inline_keyboard': [
+        [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'}],
+        [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
+    ]}
+    tg_request(token, 'editMessageText', {
+        'chat_id': chat_id,
+        'message_id': msg_id,
+        'text': NL.join(lines),
+        'parse_mode': 'HTML',
+        'reply_markup': kb
+    })
+    tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': '✅ Удалено'})
+
+    # Уведомление админу
+    admin_id = cfg.get('ADMIN_ID', '')
+    if admin_id:
+        user = _db.get_user(tg_id) or {}
+        NL2 = chr(10)
+        a_msg = NL2.join([
+            "🗑 <b>УДАЛЕНИЕ КЛЮЧА</b>",
+            "",
+            f"👤 {user.get('first_name') or '—'} (ID {tg_id})",
+            f"📱 Ключ: <code>{key_name}</code> ({kind})",
+            f"💵 Возврат: <b>{refund:.2f} USDT</b>"
+        ])
+        tg_request(token, 'sendMessage', {'chat_id': admin_id, 'text': a_msg, 'parse_mode': 'HTML'})
+
+    log.info(f"Key deleted: {key_name} ({kind}) by tg={tg_id}, refund={refund}")
+
+
 def _do_vip_purchase(cfg, cb, tg_id, idx):
     """Покупка VIP за баланс. cb — callback_query."""
     token = cfg['BOT_TOKEN']
@@ -2960,6 +3086,10 @@ def main():
                     elif cb_data == 'mykey':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         handle_mykey(cfg, cb['message']['chat']['id'], cb_user_id)
+                    elif cb_data.startswith('cab_key_delok:'):
+                        key_name = cb_data.split(':', 1)[1]
+                        _do_key_delete(cfg, cb, cb_user_id, key_name)
+                        continue
                     elif cb_data.startswith('cab_vip_confirm:'):
                         try:
                             idx = int(cb_data.split(':', 1)[1])

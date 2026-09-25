@@ -256,6 +256,28 @@ def get_payload():
     return ""
 
 
+def _format_config_name(username):
+    """Красивое имя для DarkTunnel."""
+    u = username.lower()
+    if u.startswith('test'):
+        try:
+            row = db.query_one("SELECT created_at FROM test_keys WHERE login=?", (username,))
+            if row and row.get('created_at'):
+                from datetime import datetime as _dt
+                date_str = _dt.fromtimestamp(row['created_at']).strftime('%d.%m')
+                return f"🎁 TEST VPN ⭐ {date_str}"
+        except: pass
+        suffix = username[4:]
+        return f"🎁 TEST VPN ⭐ {suffix}" if suffix else "🎁 TEST VPN"
+    if u.startswith('vip_'):
+        suffix = username[4:]
+        parts = suffix.split('_')
+        if len(parts) > 1 and parts[0].isdigit():
+            suffix = parts[-1]
+        return f"💎 VIP ArsenVpn ⭐ {suffix}" if suffix else "💎 VIP ArsenVpn"
+    return f"⭐ {username}"
+
+
 def make_darktunnel_url(username, password, domain, ws_port, proxy):
     """Генерирует darktunnel:// ссылку"""
     if not (username and password and domain):
@@ -273,7 +295,7 @@ def make_darktunnel_url(username, password, domain, ws_port, proxy):
 
     config = {
         "type": "SSH",
-        "name": "ArsenVipKeys_" + username,
+        "name": _format_config_name(username),
         "sshTunnelConfig": {
             "sshConfig": {
                 "host": domain,
@@ -351,7 +373,7 @@ def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
 
 
 def show_my_keys(cfg, chat_id, user_id, kind='all', msg_id=None):
-    """Короткий список активных ключей. kind: 'all' | 'test' | 'vip'"""
+    """Короткий список активных ключей с кнопкой удаления. kind: 'all' | 'test' | 'vip'"""
     token = cfg['BOT_TOKEN']
 
     test_keys = db.get_test_keys(user_id, active_only=True)
@@ -359,18 +381,53 @@ def show_my_keys(cfg, chat_id, user_id, kind='all', msg_id=None):
 
     if kind == 'test':
         items = [('test', k) for k in test_keys]
+        title = "🎁 ТЕСТОВЫЕ КЛЮЧИ"
     elif kind == 'vip':
         items = [('vip', k) for k in vip_keys]
+        title = "💎 VIP-КЛЮЧИ"
     else:
         items = [('test', k) for k in test_keys] + [('vip', k) for k in vip_keys]
+        title = "🔑 МОИ КЛЮЧИ"
 
     NL = chr(10)
-    lines = ["🔑 <b>МОИ КЛЮЧИ</b>", "━━━━━━━━━━━━━━━━━━━━", ""]
+    lines = [f"{title} ({len(items)})", "━━━━━━━━━━━━━━━━━━━━", ""]
     if not items:
-        lines.append("❌ Нет активных ключей.")
+        lines.append("❌ Нет активных ключей")
         lines.append("")
-        lines.append("🎁 Получить тест — через канал")
-        lines.append("💎 Купить VIP — @ArsenGuro")
+        # Читаем каналы
+        channels = []
+        try:
+            with open("/etc/UDPCustom/channels.txt") as f:
+                channels = [l.strip().lstrip('@') for l in f if l.strip() and not l.startswith('#')]
+        except: pass
+        primary = channels[0] if channels else "ArsenVipKeys"
+        sponsors = channels[1:] if len(channels) > 1 else []
+        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        lines.append("🎁 <b>КАК ПОЛУЧИТЬ БЕСПЛАТНЫЙ ТЕСТ</b>")
+        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        lines.append("")
+        lines.append(f"1️⃣ Зайди в канал @{primary}")
+        lines.append("2️⃣ Поставь 👍 лайки на 3 последних поста")
+        lines.append("")
+        if sponsors:
+            lines.append("3️⃣ Подпишись на спонсоров (обязательно!):")
+            lines.append("")
+            for s in sponsors:
+                lines.append(f"   📢 @{s}")
+            lines.append("   ⚠️ Без подписки ключ не дадут")
+            lines.append("")
+            lines.append(f"4️⃣ Найди в @{primary} пост с кнопкой")
+            lines.append("   «🎁 Получить тест» и нажми её")
+            lines.append("")
+            lines.append("5️⃣ Ключ прилетит сюда, в бот")
+        else:
+            lines.append(f"3️⃣ Найди в @{primary} пост с кнопкой")
+            lines.append("   «🎁 Получить тест» и нажми её")
+            lines.append("")
+            lines.append("4️⃣ Ключ прилетит сюда, в бот")
+        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        lines.append("🎁 Тест:  8 часов · 50 ГБ · 1 устр.")
+        lines.append("💎 VIP:   @ArsenGuro")
     else:
         for kk, k in items:
             if k['expires_at'] == 0:
@@ -378,17 +435,18 @@ def show_my_keys(cfg, chat_id, user_id, kind='all', msg_id=None):
             else:
                 left = k['expires_at'] - int(time.time())
                 t = _human_time(left) if left > 0 else "❌ истёк"
-            icon = "💎" if kk == 'vip' else "🎁"
             used = _human_bytes(k['traffic_used'])
             if k['traffic_limit'] > 0:
                 limit = _human_bytes(k['traffic_limit'])
                 traffic_str = f"{used} / {limit}"
             else:
                 traffic_str = f"{used} / ∞"
+            icon = "💎" if kk == 'vip' else "🎁"
+            name_line = k.get('client_name') or ''
             lines.append(f"{icon} <b>{k['login']}</b>")
             lines.append(f"     ⏰ {t} · 📊 {traffic_str}")
             lines.append("")
-        lines.append("<i>Тапни по ключу ниже — детали и конфиг</i>")
+        lines.append("<i>Тапни по ключу — детали и конфиг</i>")
     text = NL.join(lines)
 
     keyboard = {'inline_keyboard': []}
@@ -406,15 +464,17 @@ def show_my_keys(cfg, chat_id, user_id, kind='all', msg_id=None):
             {'text': f"🎁 Тестовые ({len(test_keys)})", 'callback_data': 'cab_keys_test'},
             {'text': f"💎 VIP ({len(vip_keys)})", 'callback_data': 'cab_keys_vip'}
         ])
-    if kind != 'all':
-        keyboard['inline_keyboard'].append([
-            {'text': '📋 Все ключи', 'callback_data': 'cab_keys'}
-        ])
-    for kk, k in items[:10]:
-        icon = "💎" if kk == 'vip' else "🎁"
-        keyboard['inline_keyboard'].append([
-            {'text': f"{icon} {k['login']}", 'callback_data': f"cab_key:{k['login']}"}
-        ])
+        if kind != 'all':
+            keyboard['inline_keyboard'].append([
+                {'text': '📋 Все ключи', 'callback_data': 'cab_keys'}
+            ])
+        # Кнопки: ключ + удалить в одном ряду
+        for kk, k in items[:10]:
+            icon = "💎" if kk == 'vip' else "🎁"
+            keyboard['inline_keyboard'].append([
+                {'text': f"{icon} {k['login']}", 'callback_data': f"cab_key:{k['login']}"},
+                {'text': '🗑', 'callback_data': f"cab_key_del:{k['login']}"}
+            ])
     keyboard['inline_keyboard'].append([
         {'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}
     ])
@@ -423,6 +483,172 @@ def show_my_keys(cfg, chat_id, user_id, kind='all', msg_id=None):
         _edit(token, chat_id, msg_id, text, keyboard)
     else:
         _send(token, chat_id, text, keyboard)
+
+
+def show_key_delete_confirm(cfg, chat_id, user_id, key_name, msg_id=None):
+    """Подтверждение удаления ключа с расчётом возврата"""
+    token = cfg['BOT_TOKEN']
+
+    # Ищем ключ
+    key = db.get_test_key(key_name)
+    kind = 'test'
+    if not key:
+        key = db.get_vip_key(key_name)
+        kind = 'vip'
+    if not key or int(key['tg_id']) != int(user_id):
+        _send(token, chat_id, "❌ Ключ не найден")
+        return
+
+    now = int(time.time())
+    exp = key['expires_at'] or 0
+    created = key['created_at'] or now
+
+    # Считаем остаток
+    if exp == 0:
+        left_days = None
+    elif exp > now:
+        left_days = (exp - now) / 86400
+    else:
+        left_days = 0
+
+    # Считаем возврат для VIP
+    refund = 0.0
+    if kind == 'vip':
+        price = float(key.get('price_paid') or 0)
+        total_secs = max(1, exp - created) if exp > 0 else 0
+        left_secs = max(0, exp - now) if exp > 0 else 0
+        if total_secs > 0 and price > 0:
+            refund = price * (left_secs / total_secs)
+            refund = round(refund, 2)
+
+    NL = chr(10)
+    icon = "💎" if kind == 'vip' else "🎁"
+    lines = [
+        "🗑 <b>УДАЛИТЬ КЛЮЧ?</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "",
+        f"{icon} Логин: <code>{key_name}</code>",
+    ]
+    if exp > 0 and left_days is not None:
+        if left_days >= 1:
+            lines.append(f"⏰ Осталось: <b>{left_days:.0f} дней</b>")
+        else:
+            hours = int(left_days * 24)
+            lines.append(f"⏰ Осталось: <b>{hours} ч</b>")
+    elif exp == 0:
+        lines.append("⏰ Срок: <b>бессрочно</b>")
+
+    if kind == 'vip':
+        lines.append(f"💰 Куплено за: <b>{float(key.get('price_paid') or 0):.2f} USDT</b>")
+        lines.append("")
+        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        if refund > 0:
+            lines.append(f"💵 Возврат на баланс: <b>{refund:.2f} USDT</b>")
+            lines.append(f"<i>(пропорционально остатку срока)</i>")
+        else:
+            lines.append("💵 Возврат: <b>0.00 USDT</b>")
+    else:
+        lines.append("")
+        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        lines.append("⚠️ <i>Тестовые ключи бесплатны — возврат не положен</i>")
+
+    lines.append("")
+    lines.append("━━━━━━━━━━━━━━━━━━━━")
+    lines.append("Это действие нельзя отменить.")
+    text = NL.join(lines)
+
+    btn_text = f"✅ Удалить" + (f" (+{refund:.2f} USDT)" if refund > 0 else "")
+    kb = {'inline_keyboard': [
+        [{'text': btn_text, 'callback_data': f'cab_key_delok:{key_name}'}],
+        [{'text': '⬅️ Отмена', 'callback_data': 'cab_keys'}]
+    ]}
+    if msg_id:
+        _edit(token, chat_id, msg_id, text, kb)
+    else:
+        _send(token, chat_id, text, kb)
+
+
+def show_key_delete_confirm(cfg, chat_id, user_id, key_name, msg_id=None):
+    """Подтверждение удаления ключа с расчётом возврата"""
+    token = cfg['BOT_TOKEN']
+
+    # Ищем ключ
+    key = db.get_test_key(key_name)
+    kind = 'test'
+    if not key:
+        key = db.get_vip_key(key_name)
+        kind = 'vip'
+    if not key or int(key['tg_id']) != int(user_id):
+        _send(token, chat_id, "❌ Ключ не найден")
+        return
+
+    now = int(time.time())
+    exp = key['expires_at'] or 0
+    created = key['created_at'] or now
+
+    # Считаем остаток
+    if exp == 0:
+        left_days = None
+    elif exp > now:
+        left_days = (exp - now) / 86400
+    else:
+        left_days = 0
+
+    # Считаем возврат для VIP
+    refund = 0.0
+    if kind == 'vip':
+        price = float(key.get('price_paid') or 0)
+        total_secs = max(1, exp - created) if exp > 0 else 0
+        left_secs = max(0, exp - now) if exp > 0 else 0
+        if total_secs > 0 and price > 0:
+            refund = price * (left_secs / total_secs)
+            refund = round(refund, 2)
+
+    NL = chr(10)
+    icon = "💎" if kind == 'vip' else "🎁"
+    lines = [
+        "🗑 <b>УДАЛИТЬ КЛЮЧ?</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "",
+        f"{icon} Логин: <code>{key_name}</code>",
+    ]
+    if exp > 0 and left_days is not None:
+        if left_days >= 1:
+            lines.append(f"⏰ Осталось: <b>{left_days:.0f} дней</b>")
+        else:
+            hours = int(left_days * 24)
+            lines.append(f"⏰ Осталось: <b>{hours} ч</b>")
+    elif exp == 0:
+        lines.append("⏰ Срок: <b>бессрочно</b>")
+
+    if kind == 'vip':
+        lines.append(f"💰 Куплено за: <b>{float(key.get('price_paid') or 0):.2f} USDT</b>")
+        lines.append("")
+        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        if refund > 0:
+            lines.append(f"💵 Возврат на баланс: <b>{refund:.2f} USDT</b>")
+            lines.append(f"<i>(пропорционально остатку срока)</i>")
+        else:
+            lines.append("💵 Возврат: <b>0.00 USDT</b>")
+    else:
+        lines.append("")
+        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        lines.append("⚠️ <i>Тестовые ключи бесплатны — возврат не положен</i>")
+
+    lines.append("")
+    lines.append("━━━━━━━━━━━━━━━━━━━━")
+    lines.append("Это действие нельзя отменить.")
+    text = NL.join(lines)
+
+    btn_text = f"✅ Удалить" + (f" (+{refund:.2f} USDT)" if refund > 0 else "")
+    kb = {'inline_keyboard': [
+        [{'text': btn_text, 'callback_data': f'cab_key_delok:{key_name}'}],
+        [{'text': '⬅️ Отмена', 'callback_data': 'cab_keys'}]
+    ]}
+    if msg_id:
+        _edit(token, chat_id, msg_id, text, kb)
+    else:
+        _send(token, chat_id, text, kb)
 
 
 def show_key_detail(cfg, chat_id, user_id, key_name, msg_id=None):
@@ -1188,6 +1414,14 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         _edit(token, chat_id, msg_id,
               "🏠 <b>Выход из кабинета</b>\n\nНапиши /start для возврата в главное меню.",
               {'inline_keyboard': []})
+        return True
+    if cb_data.startswith('cab_key_del:'):
+        key_name = cb_data.split(':', 1)[1]
+        show_key_delete_confirm(cfg, chat_id, user_id, key_name, msg_id)
+        return True
+    if cb_data.startswith('cab_key_del:'):
+        key_name = cb_data.split(':', 1)[1]
+        show_key_delete_confirm(cfg, chat_id, user_id, key_name, msg_id)
         return True
     if cb_data.startswith('cab_key:'):
         key_name = cb_data.split(':', 1)[1]
