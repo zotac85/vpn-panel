@@ -306,9 +306,14 @@ def mark_payment_paid(payment_id):
             (int(time.time()), int(payment_id)))
 
 
-def get_payments(tg_id, limit=20):
-    return query("SELECT * FROM payments WHERE tg_id=? ORDER BY created_at DESC LIMIT ?",
-                 (int(tg_id), int(limit)))
+def get_payments(tg_id, limit=10, offset=0):
+    return query("SELECT * FROM payments WHERE tg_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                 (int(tg_id), int(limit), int(offset)))
+
+
+def count_payments(tg_id):
+    r = query_one("SELECT COUNT(*) as n FROM payments WHERE tg_id=?", (int(tg_id),))
+    return r['n'] if r else 0
 
 
 # ═══════════════════════════════════════════════════════════════

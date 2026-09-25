@@ -626,6 +626,82 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None):
     log.info(f"Выдан тест: {username}")
 
 
+def _do_addbalance(cfg, chat_id, args):
+    """Начисляет баланс: ID СУММА [КОММЕНТАРИЙ]"""
+    token = cfg['BOT_TOKEN']
+    try:
+        from bot_modules import db as _db
+    except Exception as e:
+        send_message(token, chat_id, f"❌ Ошибка db: {e}")
+        return
+
+    parts = args.strip().split(maxsplit=2)
+    if len(parts) < 2:
+        send_message(token, chat_id, "❌ Формат: <code>ID СУММА [КОММЕНТАРИЙ]</code>", parse_mode='HTML')
+        return
+    if not parts[0].isdigit():
+        send_message(token, chat_id, "❌ ID должен быть числом")
+        return
+    target_id = int(parts[0])
+    try:
+        amount = float(parts[1].replace(',', '.'))
+    except:
+        send_message(token, chat_id, "❌ СУММА должна быть числом (можно с минусом)")
+        return
+    if amount == 0:
+        send_message(token, chat_id, "❌ Сумма не может быть 0")
+        return
+    comment = parts[2] if len(parts) > 2 else ""
+
+    # Проверяем что юзер есть
+    user = _db.get_user(target_id)
+    if not user:
+        send_message(token, chat_id, f"❌ Юзер <code>{target_id}</code> не найден в БД", parse_mode='HTML')
+        return
+
+    # Начисляем
+    new_balance = _db.add_balance(target_id, amount, method='manual',
+                                  meta={'comment': comment, 'by_admin': chat_id})
+    # Если это первая покупка через баланс - обработаем позже (см. mark_first_purchase)
+
+    NL = chr(10)
+    sign = "+" if amount >= 0 else ""
+    lines = [
+        "✅ <b>БАЛАНС ОБНОВЛЁН</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "",
+        f"👤 Юзер: <code>{target_id}</code>",
+        f"💵 Изменение: <b>{sign}{amount:.2f} USDT</b>",
+        f"💰 Новый баланс: <b>{new_balance:.2f} USDT</b>"
+    ]
+    if comment:
+        lines.append(f"💬 Комментарий: {comment}")
+    send_message(token, chat_id, NL.join(lines), parse_mode='HTML')
+
+    # Уведомляем юзера
+    if amount >= 0:
+        u_msg = NL.join([
+            "💰 <b>БАЛАНС ПОПОЛНЕН</b>",
+            "",
+            f"Зачислено: <b>+{amount:.2f} USDT</b>",
+            f"Баланс: <b>{new_balance:.2f} USDT</b>"
+        ])
+    else:
+        u_msg = NL.join([
+            "⚠️ <b>СПИСАНИЕ С БАЛАНСА</b>",
+            "",
+            f"Списано: <b>{amount:.2f} USDT</b>",
+            f"Баланс: <b>{new_balance:.2f} USDT</b>"
+        ])
+    try:
+        tg_request(token, 'sendMessage', {
+            'chat_id': target_id,
+            'text': u_msg,
+            'parse_mode': 'HTML'
+        })
+    except: pass
+
+
 def _do_newpromo(cfg, chat_id, args):
     """Создаёт промокод: CODE DAYS USES [DATE YYYY-MM-DD]"""
     token = cfg['BOT_TOKEN']
@@ -2008,11 +2084,29 @@ def main():
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': '🚧 В разработке'})
                     elif cb_data == 'admin_addbalance':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
-                        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
-                            'chat_id': cb['message']['chat']['id'],
-                            'text': '💰 Формат:\n<code>/addbalance ID СУММА</code>\n\nПример:\n<code>/addbalance 1738878748 5</code>',
-                            'parse_mode': 'HTML'
-                        })
+                        PENDING_ACTIONS[cb_user_id] = 'addbalance'
+                        NLx = chr(10)
+                        instr = NLx.join([
+                            '💰 <b>НАЧИСЛЕНИЕ БАЛАНСА</b>',
+                            '━━━━━━━━━━━━━━━━━━━━',
+                            '',
+                            'Формат:',
+                            '<code>ID СУММА [КОММЕНТАРИЙ]</code>',
+                            '',
+                            'ID — Telegram ID юзера',
+                            'СУММА — USDT (можно с минусом для списания)',
+                            'КОММЕНТАРИЙ — необязательно',
+                            '',
+                            'Примеры:',
+                            '<code>1738878748 5</code>',
+                            '<code>1738878748 -3 штраф</code>',
+                            '<code>1738878748 10 бонус за активность</code>',
+                            '',
+                            'Отправь ответ на это сообщение 👇'
+                        ])
+                        smart_send(cfg['BOT_TOKEN'], cb['message']['chat']['id'], instr,
+                                   reply_markup={'force_reply': True, 'selective': True},
+                                   parse_mode='HTML')
                     elif cb_data == 'admin_stats':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         handle_stats(cfg, cb['message']['chat']['id'], cb_user_id, 'keys', cb['message']['message_id'])
@@ -2255,6 +2349,8 @@ def main():
                         _do_delchannel(cfg['BOT_TOKEN'], chat_id, text)
                     elif action == 'newpromo':
                         _do_newpromo(cfg, chat_id, text)
+                    elif action == 'addbalance':
+                        _do_addbalance(cfg, chat_id, text)
                     continue
                 if text.startswith('/start'):
                     # Проверяем deep link параметр (пришёл из канала)

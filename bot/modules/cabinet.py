@@ -379,8 +379,14 @@ def show_my_keys(cfg, chat_id, user_id, kind='all', msg_id=None):
                 left = k['expires_at'] - int(time.time())
                 t = _human_time(left) if left > 0 else "❌ истёк"
             icon = "💎" if kk == 'vip' else "🎁"
+            used = _human_bytes(k['traffic_used'])
+            if k['traffic_limit'] > 0:
+                limit = _human_bytes(k['traffic_limit'])
+                traffic_str = f"{used} / {limit}"
+            else:
+                traffic_str = f"{used} / ∞"
             lines.append(f"{icon} <b>{k['login']}</b>")
-            lines.append(f"     ⏰ {t}")
+            lines.append(f"     ⏰ {t} · 📊 {traffic_str}")
             lines.append("")
         lines.append("<i>Тапни по ключу ниже — детали и конфиг</i>")
     text = NL.join(lines)
@@ -531,23 +537,116 @@ def show_darktunnel_url(cfg, chat_id, user_id, key_name, msg_id=None):
 
 
 def show_balance(cfg, chat_id, user_id, msg_id=None):
-    """Заглушка баланса"""
+    """Экран баланса с последними 5 операциями"""
     token = cfg['BOT_TOKEN']
-    text = (
-        f"💰 <b>БАЛАНС</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"💵 Текущий баланс: <b>0.00 USDT</b>\n\n"
-        f"⚠️ Пополнение скоро будет доступно.\n"
-        f"Пока что VIP-ключи выдаются вручную — пиши @ArsenGuro"
-    )
-    keyboard = {'inline_keyboard': [
-        [{'text': '💬 Написать админу', 'url': 'https://t.me/ArsenGuro'}],
-        [{'text': '⬅️ Назад', 'callback_data': 'cab_main'}]
+    balance = db.get_balance(user_id)
+    payments = db.get_payments(user_id, limit=5, offset=0)
+
+    NL = chr(10)
+    lines = [
+        "💰 <b>БАЛАНС</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "",
+        f"💵 Текущий баланс: <b>{balance:.2f} USDT</b>",
+    ]
+    if payments:
+        lines.append("")
+        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        lines.append("📊 <b>Последние операции</b>")
+        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        lines.append("")
+        for p in payments:
+            amt = float(p['amount'])
+            sign = "+" if amt >= 0 else ""
+            icon = "🟢" if amt >= 0 else "🔴"
+            method = p.get('method') or 'manual'
+            labels = {
+                'manual': 'Пополнение от админа',
+                'referral_bonus': 'Реферальный бонус',
+                'promo': 'Промокод',
+                'purchase': 'Покупка',
+                'usdt': 'USDT-платёж'
+            }
+            label = labels.get(method, method)
+            from datetime import datetime as _dt
+            dt = _dt.fromtimestamp(p['created_at']).strftime('%d.%m.%Y %H:%M')
+            lines.append(f"{icon} <b>{sign}{amt:.2f} USDT</b>")
+            lines.append(f"   {label}")
+            lines.append(f"   <i>{dt}</i>")
+            lines.append("")
+    else:
+        lines.append("")
+        lines.append("<i>Пока операций нет</i>")
+
+    text = NL.join(lines)
+
+    kb = {'inline_keyboard': [
+        [{'text': '💵 Пополнить', 'callback_data': 'cab_topup'},
+         {'text': '📜 Вся история', 'callback_data': 'cab_hist:1'}],
+        [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
     ]}
     if msg_id:
-        _edit(token, chat_id, msg_id, text, keyboard)
+        _edit(token, chat_id, msg_id, text, kb)
     else:
-        _send(token, chat_id, text, keyboard)
+        _send(token, chat_id, text, kb)
+
+
+def show_balance_history(cfg, chat_id, user_id, page=1, msg_id=None):
+    """Полная история платежей с пагинацией"""
+    token = cfg['BOT_TOKEN']
+    per_page = 10
+    total = db.count_payments(user_id)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    if page < 1: page = 1
+    if page > total_pages: page = total_pages
+    offset = (page - 1) * per_page
+    payments = db.get_payments(user_id, limit=per_page, offset=offset)
+
+    NL = chr(10)
+    lines = [
+        f"📜 <b>ИСТОРИЯ ОПЕРАЦИЙ</b>",
+        f"━━━━━━━━━━━━━━━━━━━━",
+        f"<i>Стр. {page}/{total_pages} · всего {total}</i>",
+        ""
+    ]
+    if not payments:
+        lines.append("<i>История пуста</i>")
+    else:
+        from datetime import datetime as _dt
+        labels = {
+            'manual': 'Пополнение',
+            'referral_bonus': 'Реферальный бонус',
+            'promo': 'Промокод',
+            'purchase': 'Покупка',
+            'usdt': 'USDT-платёж'
+        }
+        for p in payments:
+            amt = float(p['amount'])
+            sign = "+" if amt >= 0 else ""
+            icon = "🟢" if amt >= 0 else "🔴"
+            label = labels.get(p.get('method'), p.get('method', '—'))
+            dt = _dt.fromtimestamp(p['created_at']).strftime('%d.%m.%y %H:%M')
+            lines.append(f"{icon} <b>{sign}{amt:.2f} USDT</b> · {label}")
+            lines.append(f"   <i>{dt}</i>")
+            lines.append("")
+    text = NL.join(lines)
+
+    # Навигация
+    nav = []
+    if page > 1:
+        nav.append({'text': '◀', 'callback_data': f'cab_hist:{page-1}'})
+    nav.append({'text': f'{page}/{total_pages}', 'callback_data': 'noop'})
+    if page < total_pages:
+        nav.append({'text': '▶', 'callback_data': f'cab_hist:{page+1}'})
+    kb = {'inline_keyboard': []}
+    if nav:
+        kb['inline_keyboard'].append(nav)
+    kb['inline_keyboard'].append([{'text': '⬅️ К балансу', 'callback_data': 'cab_balance'}])
+
+    if msg_id:
+        _edit(token, chat_id, msg_id, text, kb)
+    else:
+        _send(token, chat_id, text, kb)
 
 
 def show_promo(cfg, chat_id, user_id, msg_id=None):
@@ -762,6 +861,35 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         return True
     if cb_data == 'cab_balance':
         show_balance(cfg, chat_id, user_id, msg_id)
+        return True
+    if cb_data == 'cab_topup':
+        NL = chr(10)
+        balance = db.get_balance(user_id)
+        text = NL.join([
+            "💵 <b>ПОПОЛНЕНИЕ БАЛАНСА</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            f"Твой баланс: <b>{balance:.2f} USDT</b>",
+            "",
+            "Для пополнения напиши админу:",
+            "👉 @ArsenGuro",
+            "",
+            f"Укажи свой ID: <code>{user_id}</code>",
+            "",
+            "<i>Скоро — автоплатежи (USDT)</i>"
+        ])
+        kb = {'inline_keyboard': [
+            [{'text': '💬 Написать @ArsenGuro', 'url': 'https://t.me/ArsenGuro'}],
+            [{'text': '⬅️ К балансу', 'callback_data': 'cab_balance'}]
+        ]}
+        _edit(token, chat_id, msg_id, text, kb)
+        return True
+    if cb_data.startswith('cab_hist:'):
+        try:
+            page = int(cb_data.split(':', 1)[1])
+        except:
+            page = 1
+        show_balance_history(cfg, chat_id, user_id, page, msg_id)
         return True
     if cb_data == 'cab_promo':
         show_promo(cfg, chat_id, user_id, msg_id)
