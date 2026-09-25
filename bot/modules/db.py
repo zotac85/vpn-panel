@@ -269,6 +269,16 @@ def get_ref_list(inviter_id):
                     ORDER BY r.ts DESC""", (int(inviter_id),))
 
 
+def mark_test_bonus(invited_id):
+    """Вызывается когда реферал получил тест. Возвращает inviter_id если нужно платить (+3 дня)."""
+    invited_id = int(invited_id)
+    row = query_one("SELECT * FROM referrals WHERE invited_id=?", (invited_id,))
+    if not row or row.get('test_bonus_paid'):
+        return None
+    execute("UPDATE referrals SET test_bonus_paid=1 WHERE invited_id=?", (invited_id,))
+    return row['inviter_id']
+
+
 def mark_first_purchase(tg_id):
     """Вызывается при первой покупке юзера. Возвращает inviter_id если надо платить бонус."""
     tg_id = int(tg_id)

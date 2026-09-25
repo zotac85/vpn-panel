@@ -336,7 +336,7 @@ def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
 
     keyboard = {'inline_keyboard': [
         [{'text': f'🔑 Мои ключи ({active_count})', 'callback_data': 'cab_keys'},
-         {'text': '💎 Купить VIP', 'url': 'https://t.me/ArsenGuro'}],
+         {'text': '💎 Купить VIP', 'callback_data': 'cab_buy_vip'}],
         [{'text': '💰 Баланс', 'callback_data': 'cab_balance'},
          {'text': '🎫 Промокод', 'callback_data': 'cab_promo'}],
         [{'text': '👥 Рефералы', 'callback_data': 'cab_refs'},
@@ -399,7 +399,7 @@ def show_my_keys(cfg, chat_id, user_id, kind='all', msg_id=None):
             {'text': '🎁 Получить тест', 'url': f'https://t.me/{bot_u}?start=go'}
         ])
         keyboard['inline_keyboard'].append([
-            {'text': '💎 Купить VIP', 'url': 'https://t.me/ArsenGuro'}
+            {'text': '💎 Купить VIP', 'callback_data': 'cab_buy_vip'}
         ])
     else:
         keyboard['inline_keyboard'].append([
@@ -677,8 +677,131 @@ def show_promo(cfg, chat_id, user_id, msg_id=None):
         _send(token, chat_id, text, keyboard)
 
 
+def _parse_vip_tariffs(cfg):
+    """Парсит VIP_TARIFFS из конфига. Возвращает список dict."""
+    raw = cfg.get('VIP_TARIFFS', '10|2|100|1,30|5|300|1,90|13|900|1')
+    tariffs = []
+    for item in raw.split(','):
+        parts = item.strip().split('|')
+        if len(parts) < 4:
+            continue
+        try:
+            tariffs.append({
+                'days': int(parts[0]),
+                'price': float(parts[1]),
+                'gb': int(parts[2]),
+                'devices': int(parts[3])
+            })
+        except:
+            continue
+    return tariffs
+
+
+def show_buy_vip(cfg, chat_id, user_id, msg_id=None):
+    """Экран покупки VIP-ключа с выбором тарифа"""
+    token = cfg['BOT_TOKEN']
+    tariffs = _parse_vip_tariffs(cfg)
+    balance = db.get_balance(user_id)
+
+    NL = chr(10)
+    lines = [
+        "💎 <b>КУПИТЬ VIP-КЛЮЧ</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "",
+        f"💰 Твой баланс: <b>{balance:.2f} USDT</b>",
+        "",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "📋 <b>Тарифы:</b>",
+        ""
+    ]
+    kb_rows = []
+    for i, t in enumerate(tariffs, 1):
+        can_buy = balance >= t['price']
+        mark = "✅" if can_buy else "❌"
+        lines.append(f"{mark} <b>{t['days']} дней</b> — {t['price']:.0f} USDT")
+        lines.append(f"   📊 {t['gb']} ГБ · 📱 {t['devices']} устр.")
+        lines.append("")
+        kb_rows.append([{
+            'text': f"💎 {t['days']}д — {t['price']:.0f} USDT",
+            'callback_data': f'cab_vip_buy:{i}'
+        }])
+
+    if any(balance < t['price'] for t in tariffs):
+        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        lines.append("⚠️ Не хватает баланса? Пополни:")
+        lines.append("<i>Нажми «💵 Пополнить» ниже</i>")
+
+    text = NL.join(lines)
+
+    kb_rows.append([
+        {'text': '💵 Пополнить', 'callback_data': 'cab_topup'},
+        {'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}
+    ])
+    kb = {'inline_keyboard': kb_rows}
+
+    if msg_id:
+        _edit(token, chat_id, msg_id, text, kb)
+    else:
+        _send(token, chat_id, text, kb)
+
+
+def show_vip_confirm(cfg, chat_id, user_id, tariff_idx, msg_id=None):
+    """Подтверждение покупки"""
+    token = cfg['BOT_TOKEN']
+    tariffs = _parse_vip_tariffs(cfg)
+    if tariff_idx < 1 or tariff_idx > len(tariffs):
+        _send(token, chat_id, "❌ Тариф не найден")
+        return
+    t = tariffs[tariff_idx - 1]
+    balance = db.get_balance(user_id)
+
+    if balance < t['price']:
+        diff = t['price'] - balance
+        NL = chr(10)
+        text = NL.join([
+            "⚠️ <b>НЕ ХВАТАЕТ БАЛАНСА</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            f"Стоимость: <b>{t['price']:.2f} USDT</b>",
+            f"У тебя: <b>{balance:.2f} USDT</b>",
+            f"Не хватает: <b>{diff:.2f} USDT</b>",
+            "",
+            "Пополни баланс и попробуй снова"
+        ])
+        kb = {'inline_keyboard': [
+            [{'text': '💵 Пополнить', 'callback_data': 'cab_topup'}],
+            [{'text': '⬅️ К тарифам', 'callback_data': 'cab_buy_vip'}]
+        ]}
+        _edit(token, chat_id, msg_id, text, kb)
+        return
+
+    NL = chr(10)
+    text = NL.join([
+        "💎 <b>ПОДТВЕРДИ ПОКУПКУ</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "",
+        f"📦 Тариф: <b>{t['days']} дней</b>",
+        f"📊 Трафик: <b>{t['gb']} ГБ</b>",
+        f"📱 Устройств: <b>{t['devices']}</b>",
+        "",
+        f"💵 Цена: <b>{t['price']:.2f} USDT</b>",
+        f"💰 Баланс после: <b>{balance - t['price']:.2f} USDT</b>",
+        "",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "Подтверждаешь покупку?"
+    ])
+    kb = {'inline_keyboard': [
+        [{'text': f"✅ Купить за {t['price']:.0f} USDT", 'callback_data': f'cab_vip_confirm:{tariff_idx}'}],
+        [{'text': '⬅️ Отмена', 'callback_data': 'cab_buy_vip'}]
+    ]}
+    if msg_id:
+        _edit(token, chat_id, msg_id, text, kb)
+    else:
+        _send(token, chat_id, text, kb)
+
+
 def show_referrals(cfg, chat_id, user_id, msg_id=None):
-    """Реферальная программа"""
+    """Реферальная программа — условия"""
     token = cfg['BOT_TOKEN']
 
     user = db.get_user(user_id)
@@ -697,24 +820,71 @@ def show_referrals(cfg, chat_id, user_id, msg_id=None):
         "👥 <b>РЕФЕРАЛЬНАЯ ПРОГРАММА</b>",
         "━━━━━━━━━━━━━━━━━━━━",
         "",
-        "🎁 За каждого друга, купившего VIP-ключ на месяц:",
-        "   💰 <b>+$1</b> на твой баланс",
-        "   ⏰ <b>+5 дней</b> к твоему VIP-ключу",
+        "🎁 <b>Награды за каждого друга:</b>",
         "",
+        "🎁 <b>+3 дня</b> к твоему VIP-ключу",
+        "    <i>— когда друг получит тестовый ключ</i>",
+        "",
+        "💵 <b>+1.00 USDT</b> на баланс",
+        "    <i>— когда друг купит VIP-ключ</i>",
+        "",
+        "━━━━━━━━━━━━━━━━━━━━",
         "🔗 <b>Твоя ссылка:</b>",
         f"<code>{ref_link}</code>",
         "",
         f"📊 Приглашено: <b>{inv}</b>",
-        f"💰 Заработано: <b>${earned:.2f}</b>"
+        f"💰 Заработано: <b>{earned:.2f} USDT</b>",
+        "",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "<i>Скопируй ссылку и отправь друзьям 👇</i>"
     ])
     keyboard = {'inline_keyboard': [
         [{'text': '📤 Поделиться', 'url': f'https://t.me/share/url?url={ref_link}&text=Забирай+VPN!'}],
+        [{'text': '📋 Мои рефералы', 'callback_data': 'cab_ref_list'}],
         [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
     ]}
     if msg_id:
         _edit(token, chat_id, msg_id, text, keyboard)
     else:
         _send(token, chat_id, text, keyboard)
+
+
+def show_ref_list(cfg, chat_id, user_id, msg_id=None):
+    """Список приглашённых рефералов"""
+    token = cfg['BOT_TOKEN']
+    refs = db.get_ref_list(user_id)
+    NL = chr(10)
+    lines = [
+        "👥 <b>МОИ РЕФЕРАЛЫ</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        f"<i>Всего: {len(refs)}</i>",
+        ""
+    ]
+    if not refs:
+        lines.append("<i>Пока никого нет</i>")
+        lines.append("")
+        lines.append("Отправь друзьям свою ссылку 👇")
+    else:
+        from datetime import datetime as _dt
+        for r in refs:
+            name = r.get('first_name') or '—'
+            uname = r.get('username') or ''
+            dt = _dt.fromtimestamp(r['ts']).strftime('%d.%m.%Y')
+            test_ok = "✅" if r.get('test_bonus_paid') else "⏳"
+            buy_ok = "✅" if r.get('bonus_paid') else "⏳"
+            handle = f"@{uname}" if uname else f"id{r['invited_id']}"
+            lines.append(f"👤 <b>{name}</b> · {handle}")
+            lines.append(f"   🎁 тест: {test_ok} · 💵 покупка: {buy_ok}")
+            lines.append(f"   <i>{dt}</i>")
+            lines.append("")
+    text = NL.join(lines)
+    kb = {'inline_keyboard': [
+        [{'text': '⬅️ К рефералам', 'callback_data': 'cab_refs'}]
+    ]}
+    if msg_id:
+        _edit(token, chat_id, msg_id, text, kb)
+    else:
+        _send(token, chat_id, text, kb)
 
 
 def show_create_key(cfg, chat_id, user_id, msg_id=None):
@@ -859,6 +1029,16 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
     if cb_data == 'cab_keys_vip':
         show_my_keys(cfg, chat_id, user_id, 'vip', msg_id)
         return True
+    if cb_data == 'cab_buy_vip':
+        show_buy_vip(cfg, chat_id, user_id, msg_id)
+        return True
+    if cb_data.startswith('cab_vip_buy:'):
+        try:
+            idx = int(cb_data.split(':', 1)[1])
+        except:
+            idx = 1
+        show_vip_confirm(cfg, chat_id, user_id, idx, msg_id)
+        return True
     if cb_data == 'cab_balance':
         show_balance(cfg, chat_id, user_id, msg_id)
         return True
@@ -939,6 +1119,9 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         return True
     if cb_data == 'cab_refs':
         show_referrals(cfg, chat_id, user_id, msg_id)
+        return True
+    if cb_data == 'cab_ref_list':
+        show_ref_list(cfg, chat_id, user_id, msg_id)
         return True
     if cb_data == 'cab_exit':
         # Возврат в /start

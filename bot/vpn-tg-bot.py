@@ -263,6 +263,74 @@ echo "OK"
         log.error(f"Exception: {e}")
         return None, None
 
+def create_vip_user(cfg, tg_id, days, price, traffic_gb, devices):
+    """Создаёт VIP-юзера: Linux-юзер vip_<tg_id>_<rnd> + запись в vip_keys."""
+    import secrets as _sec, string as _str
+    # Генерим логин
+    suffix = ''.join(_sec.choice(_str.ascii_lowercase + _str.digits) for _ in range(4))
+    username = f"vip_{tg_id}_{suffix}"
+    # Проверяем что не занят
+    r = subprocess.run(['id', username], capture_output=True)
+    if r.returncode == 0:
+        return None, None
+    # Пароль 12 символов
+    alphabet = _str.ascii_letters + _str.digits
+    password = ''.join(_sec.choice(alphabet) for _ in range(12))
+
+    days = int(days)
+    traffic_gb = int(traffic_gb)
+    devices = int(devices)
+    exp_ts = int(time.time()) + days * 86400
+    traffic_bytes = traffic_gb * 1073741824
+
+    bash_script = f'''
+set -e
+username="{username}"
+password="{password}"
+days={days}
+devices={devices}
+traffic_bytes={traffic_bytes}
+useradd -M -s /bin/false "$username"
+echo "$username:$password" | chpasswd
+echo "$username" >> /etc/UDPCustom/users.db
+sort -u -o /etc/UDPCustom/users.db /etc/UDPCustom/users.db
+mkdir -p /etc/UDPCustom/limits /etc/UDPCustom/traffic /etc/UDPCustom/traffic_limits /etc/UDPCustom/expire_ts /etc/UDPCustom/passwords
+echo "$devices" > "/etc/UDPCustom/limits/$username"
+sed -i "/^${{username}}[[:space:]]\+hard[[:space:]]\+maxlogins/d" /etc/security/limits.conf
+echo "$username hard maxlogins $devices" >> /etc/security/limits.conf
+echo "$traffic_bytes" > "/etc/UDPCustom/traffic_limits/$username"
+echo "0" > "/etc/UDPCustom/traffic/$username"
+uid=$(id -u "$username")
+if iptables -L VPN_TRAFFIC -n >/dev/null 2>&1; then
+    iptables -C VPN_TRAFFIC -m owner --uid-owner "$uid" -j RETURN 2>/dev/null || iptables -A VPN_TRAFFIC -m owner --uid-owner "$uid" -j RETURN 2>/dev/null || true
+fi
+exp_date=$(date -d "+$days days +2 days" +%Y-%m-%d)
+chage -E "$exp_date" "$username"
+echo {exp_ts} > "/etc/UDPCustom/expire_ts/$username"
+echo "$password" > "/etc/UDPCustom/passwords/$username"
+chmod 600 "/etc/UDPCustom/passwords/$username"
+echo "OK"
+'''
+    try:
+        r = subprocess.run(['bash','-c',bash_script], capture_output=True, text=True, timeout=30)
+        if 'OK' not in r.stdout:
+            log.error(f"VIP create error: {r.stderr}")
+            return None, None
+        # Запись в БД
+        try:
+            from bot_modules import db as _db
+            _db.create_vip_key(username, tg_id, password, exp_ts,
+                               devices=devices, traffic_limit=traffic_bytes,
+                               tariff=f"vip_{days}d", price_paid=price, paid_via='balance')
+        except Exception as e:
+            log.error(f"VIP DB save error: {e}")
+        log.info(f"VIP создан: {username} (tg_id={tg_id}, {days}д, ${price})")
+        return username, password
+    except Exception as e:
+        log.error(f"VIP exception: {e}")
+        return None, None
+
+
 def is_blacklisted(user_id):
     if not os.path.exists(BLACKLIST): return False
     with open(BLACKLIST) as f: return str(user_id) in f.read().split()
@@ -557,6 +625,7 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None):
     if not username:
         send_message_ttl(token, chat_id, "❌ Ошибка. Попробуй позже.", ttl=15); return
     record_issue(user_id, username)
+    _ref_test_bonus(cfg, user_id)
     domain = get_domain(); ws_port = get_ws_port(); proxy = get_random_proxy()
     connect_line = f"{domain}:{ws_port}@{username}:{password}"
     traffic = cfg.get('TEST_TRAFFIC_GB','50'); devices = cfg.get('TEST_DEVICES','1')
@@ -624,6 +693,187 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None):
             'parse_mode': 'HTML'
         })
     log.info(f"Выдан тест: {username}")
+
+
+def _ref_purchase_bonus(cfg, buyer_id, price):
+    """Когда реферал купил VIP — начисляем пригласившему $1 (разово)."""
+    try:
+        from bot_modules import db as _db
+    except Exception as e:
+        log.error(f"_ref_purchase_bonus import: {e}")
+        return
+    inviter_id = _db.mark_first_purchase(buyer_id)
+    if not inviter_id:
+        return
+    log.info(f"Ref purchase bonus: inviter={inviter_id}, buyer={buyer_id}")
+    # Начисляем $1
+    try:
+        _db.add_balance(inviter_id, 1.0, method='referral_bonus', meta={'from_user': buyer_id})
+        _db.mark_bonus_paid(buyer_id)
+    except Exception as e:
+        log.error(f"ref bonus pay error: {e}")
+        return
+    # Уведомление
+    NL = chr(10)
+    msg = NL.join([
+        "💰 <b>РЕФЕРАЛЬНЫЙ БОНУС</b>",
+        "",
+        "Твой реферал купил VIP-ключ!",
+        "",
+        "💵 <b>+1.00 USDT</b> на твой баланс",
+    ])
+    try:
+        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+            'chat_id': inviter_id,
+            'text': msg,
+            'parse_mode': 'HTML'
+        })
+    except: pass
+
+
+def _ref_test_bonus(cfg, invited_id):
+    """Когда реферал получил тест — начисляем пригласившему +3 дня к VIP."""
+    try:
+        from bot_modules import db as _db
+    except Exception as e:
+        log.error(f"_ref_test_bonus import: {e}")
+        return
+    inviter_id = _db.mark_test_bonus(invited_id)
+    if not inviter_id:
+        return
+    log.info(f"Ref test bonus: inviter={inviter_id}, invited={invited_id}")
+    # Продлеваем VIP-ключи пригласившего на 3 дня
+    extended = _db.extend_vip_keys(inviter_id, 3)
+    # Уведомление
+    NL = chr(10)
+    if extended > 0:
+        msg = NL.join([
+            "🎁 <b>РЕФЕРАЛЬНЫЙ БОНУС</b>",
+            "",
+            "Твой реферал получил тестовый ключ!",
+            "",
+            "🎁 <b>+3 дня</b> к твоему VIP-ключу",
+        ])
+    else:
+        msg = NL.join([
+            "🎁 <b>РЕФЕРАЛЬНЫЙ БОНУС</b>",
+            "",
+            "Твой реферал получил тестовый ключ!",
+            "",
+            "⚠️ У тебя нет активного VIP-ключа,",
+            "поэтому +3 дня не начислены.",
+            "Купи VIP — и бонус за следующего реферала зачтётся."
+        ])
+    try:
+        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+            'chat_id': inviter_id,
+            'text': msg,
+            'parse_mode': 'HTML'
+        })
+    except: pass
+
+
+def _do_vip_purchase(cfg, cb, tg_id, idx):
+    """Покупка VIP за баланс. cb — callback_query."""
+    token = cfg['BOT_TOKEN']
+    chat_id = cb['message']['chat']['id']
+    msg_id = cb['message']['message_id']
+    cb_id = cb['id']
+
+    try:
+        from bot_modules import db as _db
+        from bot_modules.cabinet import _parse_vip_tariffs
+    except Exception as e:
+        tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': f'Ошибка: {e}', 'show_alert': True})
+        return
+
+    tariffs = _parse_vip_tariffs(cfg)
+    if idx < 1 or idx > len(tariffs):
+        tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': '❌ Тариф не найден', 'show_alert': True})
+        return
+    t = tariffs[idx - 1]
+    price = t['price']
+
+    # Проверяем баланс ЕЩЁ РАЗ (на случай параллельной покупки)
+    balance = _db.get_balance(tg_id)
+    if balance < price:
+        tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': '❌ Недостаточно средств', 'show_alert': True})
+        return
+
+    # Списываем баланс
+    try:
+        _db.add_balance(tg_id, -price, method='purchase', meta={'tariff': f"vip_{t['days']}d", 'days': t['days']})
+    except Exception as e:
+        tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': f'Ошибка списания: {e}', 'show_alert': True})
+        return
+
+    # Создаём ключ
+    username, password = create_vip_user(cfg, tg_id, t['days'], t['price'], t['gb'], t['devices'])
+    if not username:
+        # Возвращаем деньги
+        try:
+            _db.add_balance(tg_id, price, method='manual', meta={'comment': 'Откат покупки VIP (ошибка создания)'})
+        except: pass
+        tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': '❌ Ошибка создания ключа. Баланс возвращён.', 'show_alert': True})
+        return
+
+    # Показываем успех
+    NL = chr(10)
+    text = NL.join([
+        "🎉 <b>VIP-КЛЮЧ СОЗДАН!</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "",
+        f"💎 Логин: <code>{username}</code>",
+        f"🔑 Пароль: <code>{password}</code>",
+        "",
+        f"⏰ Срок: <b>{t['days']} дней</b>",
+        f"📊 Трафик: <b>{t['gb']} ГБ</b>",
+        f"📱 Устройств: <b>{t['devices']}</b>",
+        "",
+        f"💵 Списано: <b>{price:.2f} USDT</b>",
+        f"💰 Баланс: <b>{_db.get_balance(tg_id):.2f} USDT</b>",
+        "",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "📲 Конфиг — в <b>Личном кабинете</b>"
+    ])
+    kb = {'inline_keyboard': [
+        [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'}],
+        [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
+    ]}
+    tg_request(token, 'editMessageText', {
+        'chat_id': chat_id,
+        'message_id': msg_id,
+        'text': text,
+        'parse_mode': 'HTML',
+        'reply_markup': kb
+    })
+    tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': '✅ Ключ создан!'})
+
+    # Уведомление админу
+    admin_id = cfg.get('ADMIN_ID', '')
+    if admin_id:
+        user = _db.get_user(tg_id) or {}
+        NL2 = chr(10)
+        a_msg = NL2.join([
+            "💰 <b>ПОКУПКА VIP</b>",
+            "",
+            f"👤 Имя: {user.get('first_name') or '—'}",
+            f"🆔 ID: <code>{tg_id}</code>",
+            f"📱 @{user.get('username') or '—'}",
+            "",
+            f"📦 {t['days']}д / {t['gb']}ГБ",
+            f"💵 {price:.2f} USDT",
+            f"📱 Ключ: <code>{username}</code>"
+        ])
+        tg_request(token, 'sendMessage', {'chat_id': admin_id, 'text': a_msg, 'parse_mode': 'HTML'})
+
+    log.info(f"VIP покупка: {username} | {t['days']}д | {price} USDT | tg={tg_id}")
+
+    # Реферальный бонус пригласившему (разово)
+    try:
+        _ref_purchase_bonus(cfg, tg_id, price)
+    except Exception as e:
+        log.error(f"ref purchase call error: {e}")
 
 
 def _do_addbalance(cfg, chat_id, args):
@@ -1001,6 +1251,7 @@ def handle_channel_test(cfg, user_id, first_name):
         return
     
     record_issue(user_id, username)
+    _ref_test_bonus(cfg, user_id)
     
     
     domain = get_domain()
@@ -2236,6 +2487,13 @@ def main():
                     elif cb_data == 'mykey':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         handle_mykey(cfg, cb['message']['chat']['id'], cb_user_id)
+                    elif cb_data.startswith('cab_vip_confirm:'):
+                        try:
+                            idx = int(cb_data.split(':', 1)[1])
+                        except:
+                            idx = 1
+                        _do_vip_purchase(cfg, cb, cb_user_id, idx)
+                        continue
                     elif cb_data.startswith('cab_'):
                         handle_cabinet_callback(cfg, cb_data, cb, cb_user_id, cb_first_name)
                         continue
@@ -2416,6 +2674,29 @@ def main():
                         _do_addbalance(cfg, chat_id, text)
                     continue
                 if text.startswith('/start'):
+                    # Обработка реферальной ссылки
+                    import re as _re
+                    ref_match = _re.search(r'ref_([a-zA-Z0-9]+)', text)
+                    if ref_match:
+                        ref_code = ref_match.group(1)
+                        try:
+                            from bot_modules import db as _db
+                            # Сначала создаём/обновляем юзера
+                            _db.upsert_user(user_id, first_name, msg['from'].get('username', ''))
+                            inviter = _db.find_by_ref_code(ref_code)
+                            if inviter and str(inviter['tg_id']) != str(user_id):
+                                if _db.set_ref_by(user_id, inviter['tg_id']):
+                                    log.info(f"Referral: {user_id} → {inviter['tg_id']} (code={ref_code})")
+                                    # Уведомляем пригласившего
+                                    try:
+                                        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                                            'chat_id': inviter['tg_id'],
+                                            'text': f"👥 <b>НОВЫЙ РЕФЕРАЛ!</b>\n\nПо твоей ссылке пришёл новый юзер.\n\nПолучишь <b>+3 дня</b> когда он получит тест и <b>+1 USDT</b> когда купит VIP.",
+                                            'parse_mode': 'HTML'
+                                        })
+                                    except: pass
+                        except Exception as e:
+                            log.error(f"ref_ error: {e}")
                     # Проверяем deep link параметр (пришёл из канала)
                     if 'from_channel' in text:
                         mins = int(cfg.get('VERIFIED_MINUTES', '60'))
