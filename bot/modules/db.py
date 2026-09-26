@@ -526,7 +526,9 @@ def init_schema():
         traffic_limit INTEGER DEFAULT 0,
         tariff TEXT,
         price_paid REAL DEFAULT 0,
-        paid_via TEXT
+        paid_via TEXT,
+        notified_24h INTEGER DEFAULT 0,
+        notified_1h INTEGER DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS idx_vip_tg  ON vip_keys(tg_id);
     CREATE INDEX IF NOT EXISTS idx_vip_exp ON vip_keys(expires_at);
