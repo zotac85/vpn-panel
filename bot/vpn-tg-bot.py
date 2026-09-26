@@ -1653,176 +1653,190 @@ def handle_channel_test(cfg, user_id, first_name):
     log.info(f"Выдан тест из канала: {username} (user_id={user_id})")
 
 
-def handle_stats(cfg, chat_id, user_id, mode='keys', msg_id=None):
-    """Статистика: переключение ключи/трафик"""
+def _stats_human_bytes(b):
+    try: b = int(b)
+    except: return "0 B"
+    if b >= 1073741824: return f"{b/1073741824:.1f} GB"
+    if b >= 1048576: return f"{b/1048576:.0f} MB"
+    if b >= 1024: return f"{b/1024:.0f} KB"
+    return f"{b} B"
+
+
+def _stats_human_time(sec):
+    try: sec = int(sec)
+    except: return "—"
+    if sec <= 0: return "истёк"
+    h = sec // 3600
+    if h >= 24:
+        d = h // 24
+        h = h % 24
+        return f"{d}д {h}ч"
+    return f"{h}ч"
+
+
+def handle_stats(cfg, chat_id, user_id, mode='main', msg_id=None):
+    """Статистика на БД: main | traffic"""
     token = cfg['BOT_TOKEN']
-    admin_id = cfg.get('ADMIN_ID', '')
-    if str(user_id) != str(admin_id):
+    if str(user_id) != str(cfg.get('ADMIN_ID', '')):
         send_message(token, chat_id, "🚫 Команда только для админа.")
         return
-    
-    from datetime import datetime, timedelta
-    now = datetime.now()
-    today_start = now.replace(hour=0, minute=0, second=0).timestamp()
-    week_start = (now - timedelta(days=7)).timestamp()
-    month_start = (now - timedelta(days=30)).timestamp()
-    
-    total = 0
-    today_cnt = 0
-    week_cnt = 0
-    month_cnt = 0
-    week_users = {}
-    users_all = set()
-    
-    if os.path.exists(ISSUED_DB):
-        with open(ISSUED_DB) as f:
-            for line in f:
-                parts = line.strip().split('|')
-                if len(parts) < 3: continue
-                try: ts = int(parts[1])
-                except: continue
-                uid = parts[0]
-                total += 1
-                users_all.add(uid)
-                if ts >= today_start: today_cnt += 1
-                if ts >= week_start:
-                    week_cnt += 1
-                    week_users[uid] = week_users.get(uid, 0) + 1
-                if ts >= month_start: month_cnt += 1
-    
-    # Активные
-    active = 0
-    if os.path.exists(USERS_DB):
-        now_ts = int(time.time())
-        with open(USERS_DB) as f:
-            for u in f:
-                u = u.strip()
-                if not u: continue
-                ts_file = f"{EXPIRE_DIR}/{u}"
-                if os.path.exists(ts_file):
-                    try:
-                        exp = int(open(ts_file).read().strip())
-                        if exp > now_ts: active += 1
-                    except: pass
-    
-    # Топ-5 по ключам за неделю
-    top_users = sorted([(u, c2) for u, c2 in week_users.items() if str(u) != str(admin_id)],
-                       key=lambda x: x[1], reverse=True)[:5]
-    
-    # Хелпер трафика
-    def human(b):
-        if b >= 1073741824: return f"{b/1073741824:.1f} GB"
-        if b >= 1048576: return f"{b/1048576:.0f} MB"
-        if b >= 1024: return f"{b/1024:.0f} KB"
-        return f"{b} B"
-    
-    # Топ-5 по трафику
-    traffic_data = []
-    traffic_dir = "/etc/UDPCustom/traffic"
-    if os.path.exists(traffic_dir):
-        try:
-            for fname in os.listdir(traffic_dir):
-                fpath = os.path.join(traffic_dir, fname)
-                if not os.path.isfile(fpath): continue
-                try:
-                    b = int(open(fpath).read().strip())
-                    if b > 0: traffic_data.append((fname, b))
-                except: pass
-        except: pass
-    traffic_data.sort(key=lambda x: x[1], reverse=True)
-    top_traffic = traffic_data[:5]
-    
-    # TG-ID по имени
-    user_id_by_name = {}
-    if os.path.exists(ISSUED_DB):
-        with open(ISSUED_DB) as f:
-            for line in f:
-                parts = line.strip().split('|')
-                if len(parts) >= 3:
-                    user_id_by_name[parts[2]] = parts[0]
-    
-    # ─── Формируем текст в зависимости от режима ───
-    if mode == 'keys':
-        text = (
-            f"📊 <b>СТАТИСТИКА БОТА</b>\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"📤 <b>Выдачи</b>\n"
-            f"  Всего    · <b>{total}</b>\n"
-            f"  Сегодня  · <b>{today_cnt}</b>\n"
-            f"  7 дней   · <b>{week_cnt}</b>\n"
-            f"  30 дней  · <b>{month_cnt}</b>\n\n"
-            f"👥 <b>Пользователи</b>\n"
-            f"  Уникальных · <b>{len(users_all)}</b>\n"
-            f"  Активных   · <b>{active}</b>\n\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"🏆 <b>ТОП-5 ПО КЛЮЧАМ</b> · 7 дней\n\n"
-        )
-        if top_users:
-            medals = ["🥇", "🥈", "🥉", "4.", "5."]
-            for i, (u, c2) in enumerate(top_users):
-                medal = medals[i] if i < len(medals) else f"{i+1}."
-                text += f"  {medal} <code>{u}</code> · <b>{c2}</b>\n"
+
+    try:
+        from bot_modules import db as _db
+    except Exception as e:
+        send_message(token, chat_id, f"Ошибка db: {e}")
+        return
+
+    now = int(time.time())
+    week_ago = now - 7 * 86400
+    month_ago = now - 30 * 86400
+    NL = chr(10)
+
+    if mode == 'traffic':
+        # Топ-5 по трафику (test + vip)
+        tests = _db.query("SELECT login, tg_id, traffic_used, traffic_limit, expires_at FROM test_keys WHERE traffic_used > 0 ORDER BY traffic_used DESC LIMIT 5")
+        vips  = _db.query("SELECT login, tg_id, traffic_used, traffic_limit, expires_at FROM vip_keys WHERE traffic_used > 0 ORDER BY traffic_used DESC LIMIT 5")
+        all_keys = []
+        for k in tests: k['kind'] = '🎁'; all_keys.append(k)
+        for k in vips:  k['kind'] = '💎'; all_keys.append(k)
+        all_keys.sort(key=lambda x: x.get('traffic_used') or 0, reverse=True)
+        top = all_keys[:5]
+
+        lines_txt = [
+            "📈 <b>ТОП-5 ПО ТРАФИКУ</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            ""
+        ]
+        if not top:
+            lines_txt.append("<i>Пока нет данных о трафике</i>")
         else:
-            text += "  <i>За неделю выдач не было</i>\n"
-    else:
-        text = (
-            f"📊 <b>СТАТИСТИКА БОТА</b>\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"📈 <b>ТОП-5 ПО ТРАФИКУ</b> · за всё время\n\n"
-        )
-        if top_traffic:
             medals = ["🥇", "🥈", "🥉", "4.", "5."]
-            for i, (name, b) in enumerate(top_traffic):
-                medal = medals[i] if i < len(medals) else f"{i+1}."
-                text += f"  {medal} <code>{name}</code> · <b>{human(b)}</b>\n"
-        else:
-            text += "  <i>Пока нет данных</i>\n"
-    
-    # ─── Кнопки ───
-    keyboard = {'inline_keyboard': []}
-    
-    if mode == 'keys':
-        keyboard['inline_keyboard'].append([
-            {'text': '✅ 🏆 Ключи', 'callback_data': 'noop'},
-            {'text': '📊 Трафик', 'callback_data': 'admin_stats_traffic'}
-        ])
-        # Кнопки написать для топ-ключей
-        for u, c2 in top_users[:3]:
-            keyboard['inline_keyboard'].append([
-                {'text': f'💬 Написать {u[-4:]} ({c2})', 'url': f'tg://user?id={u}'}
-            ])
+            for i, k in enumerate(top):
+                m = medals[i]
+                tg_id = k.get('tg_id') or 0
+                user = _db.get_user(tg_id) if tg_id else None
+                uname = ''
+                if user and user.get('username'):
+                    uname = f"@{user['username']}"
+                elif user and user.get('first_name'):
+                    uname = user['first_name']
+                else:
+                    uname = f"id{tg_id}" if tg_id else "—"
+                used = _stats_human_bytes(k.get('traffic_used') or 0)
+                limit = k.get('traffic_limit') or 0
+                limit_str = f" / {_stats_human_bytes(limit)}" if limit > 0 else ""
+                exp = k.get('expires_at') or 0
+                t_left = _stats_human_time(exp - now) if exp > 0 else "♾"
+
+                lines_txt.append(f"{m} {k['kind']} <code>{k['login']}</code>")
+                lines_txt.append(f"   👤 {uname}")
+                lines_txt.append(f"   📊 {used}{limit_str} · ⏰ {t_left}")
+                lines_txt.append("")
+        lines_txt.append("━━━━━━━━━━━━━━━━━━━━")
+        text = NL.join(lines_txt)
+
+        kb = {'inline_keyboard': [
+            [{'text': '📊 Общая', 'callback_data': 'admin_stats'},
+             {'text': '✅ 📈 Трафик', 'callback_data': 'noop'}],
+            [{'text': '🔄 Обновить', 'callback_data': 'admin_stats_traffic'}],
+            [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
+        ]}
     else:
-        keyboard['inline_keyboard'].append([
-            {'text': '🏆 Ключи', 'callback_data': 'admin_stats_keys'},
-            {'text': '✅ 📊 Трафик', 'callback_data': 'noop'}
-        ])
-        # Кнопки написать для топ-трафика
-        for name, b in top_traffic[:3]:
-            uid = user_id_by_name.get(name)
-            if uid:
-                keyboard['inline_keyboard'].append([
-                    {'text': f'💬 {name} ({human(b)})', 'url': f'tg://user?id={uid}'}
-                ])
-    
-    keyboard['inline_keyboard'].append([{'text': '🔄 Обновить', 'callback_data': f'admin_stats_{mode}'}])
-    keyboard['inline_keyboard'].append([{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}])
-    
-    # Отправка или редактирование
+        # Основные цифры
+        total_users = _db.query_one("SELECT COUNT(*) as n FROM users")['n']
+        new_7d = _db.query_one("SELECT COUNT(*) as n FROM users WHERE registered_at >= ?", (week_ago,))['n']
+
+        # Активные = есть хотя бы 1 активный ключ (test или vip)
+        active_users = _db.query_one("""
+            SELECT COUNT(DISTINCT tg_id) as n FROM (
+                SELECT tg_id FROM test_keys WHERE expires_at = 0 OR expires_at > ?
+                UNION
+                SELECT tg_id FROM vip_keys WHERE expires_at = 0 OR expires_at > ?
+            )""", (now, now))['n']
+
+        # Ключи
+        test_total  = _db.query_one("SELECT COUNT(*) as n FROM test_keys")['n']
+        test_active = _db.query_one("SELECT COUNT(*) as n FROM test_keys WHERE expires_at = 0 OR expires_at > ?", (now,))['n']
+        vip_total   = _db.query_one("SELECT COUNT(*) as n FROM vip_keys")['n']
+        vip_active  = _db.query_one("SELECT COUNT(*) as n FROM vip_keys WHERE expires_at = 0 OR expires_at > ?", (now,))['n']
+
+        # Финансы
+        balances_sum = _db.query_one("SELECT COALESCE(SUM(balance),0) as s FROM users")['s'] or 0
+        income_30d = _db.query_one("SELECT COALESCE(SUM(amount),0) as s FROM payments WHERE method='purchase' AND amount > 0 AND created_at >= ?", (month_ago,))['s'] or 0
+        income_all = _db.query_one("SELECT COALESCE(SUM(amount),0) as s FROM payments WHERE method='purchase' AND amount > 0")['s'] or 0
+
+        # Рефералы
+        refs_total = _db.query_one("SELECT COUNT(*) as n FROM referrals")['n']
+        ref_paid = _db.query_one("SELECT COALESCE(SUM(amount),0) as s FROM payments WHERE method='referral_bonus'")['s'] or 0
+        promo_used = _db.query_one("SELECT COUNT(*) as n FROM promo_used")['n']
+
+        # Топ-5 по балансу
+        top_balance = _db.query("""
+            SELECT tg_id, first_name, username, balance
+            FROM users WHERE balance > 0
+            ORDER BY balance DESC LIMIT 5
+        """)
+
+        lines_txt = [
+            "📊 <b>СТАТИСТИКА</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "👥 <b>ЮЗЕРЫ</b>",
+            f"   Всего: <b>{total_users}</b>",
+            f"   📅 Новых за 7д: <b>{new_7d}</b>",
+            f"   🟢 Активных: <b>{active_users}</b>",
+            "",
+            "🔑 <b>КЛЮЧИ</b>",
+            f"   🎁 Тестовых: <b>{test_total}</b> (🟢 {test_active})",
+            f"   💎 VIP: <b>{vip_total}</b> (🟢 {vip_active})",
+            "",
+            "💵 <b>ФИНАНСЫ</b>",
+            f"   На балансах: <b>{float(balances_sum):.2f} USDT</b>",
+            f"   📈 Доход 30д: <b>{float(income_30d):.2f} USDT</b>",
+            f"   💰 Всего дохода: <b>{float(income_all):.2f} USDT</b>",
+            "",
+            "👥 <b>РЕФЕРАЛЫ</b>",
+            f"   Всего: <b>{refs_total}</b>",
+            f"   💵 Выплачено: <b>{float(ref_paid):.2f} USDT</b>",
+            f"   🎫 Промо активаций: <b>{promo_used}</b>",
+            "",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "🏆 <b>ТОП-5 ПО БАЛАНСУ</b>",
+            ""
+        ]
+        if not top_balance:
+            lines_txt.append("<i>Пока ни у кого нет баланса</i>")
+        else:
+            medals = ["🥇", "🥈", "🥉", "4.", "5."]
+            for i, u in enumerate(top_balance):
+                m = medals[i]
+                name = u.get('first_name') or ''
+                uname = u.get('username') or ''
+                handle = f"@{uname}" if uname else (name or f"id{u['tg_id']}")
+                bal = float(u.get('balance') or 0)
+                lines_txt.append(f"{m} {handle} · <b>{bal:.2f} USDT</b>")
+        lines_txt.append("")
+        lines_txt.append("━━━━━━━━━━━━━━━━━━━━")
+        text = NL.join(lines_txt)
+
+        kb = {'inline_keyboard': [
+            [{'text': '✅ 📊 Общая', 'callback_data': 'noop'},
+             {'text': '📈 Трафик', 'callback_data': 'admin_stats_traffic'}],
+            [{'text': '🔄 Обновить', 'callback_data': 'admin_stats'}],
+            [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
+        ]}
+
     if msg_id:
         tg_request(token, 'editMessageText', {
             'chat_id': chat_id,
             'message_id': msg_id,
             'text': text,
             'parse_mode': 'HTML',
-            'reply_markup': keyboard
+            'reply_markup': kb
         })
     else:
-        tg_request(token, 'sendMessage', {
-            'chat_id': chat_id,
-            'text': text,
-            'parse_mode': 'HTML',
-            'reply_markup': keyboard
-        })
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
+
 
 
 def handle_ban(cfg, chat_id, user_id, args):
@@ -2919,10 +2933,10 @@ def main():
                                    parse_mode='HTML')
                     elif cb_data == 'admin_stats':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
-                        handle_stats(cfg, cb['message']['chat']['id'], cb_user_id, 'keys', cb['message']['message_id'])
+                        handle_stats(cfg, cb['message']['chat']['id'], cb_user_id, 'main', cb['message']['message_id'])
                     elif cb_data == 'admin_stats_keys':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
-                        handle_stats(cfg, cb['message']['chat']['id'], cb_user_id, 'keys', cb['message']['message_id'])
+                        handle_stats(cfg, cb['message']['chat']['id'], cb_user_id, 'main', cb['message']['message_id'])
                     elif cb_data == 'admin_stats_traffic':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         handle_stats(cfg, cb['message']['chat']['id'], cb_user_id, 'traffic', cb['message']['message_id'])

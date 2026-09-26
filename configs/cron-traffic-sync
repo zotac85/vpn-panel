@@ -1,0 +1,2 @@
+# Синхронизация трафика: файлы → БД (запускается после vpn-traffic-check)
+*/5 * * * * root sleep 30 && /usr/local/bin/vpn-traffic-sync.py
