@@ -464,15 +464,12 @@ def show_my_keys(cfg, chat_id, user_id, kind='all', msg_id=None):
             {'text': f"🎁 Тестовые ({len(test_keys)})", 'callback_data': 'cab_keys_test'},
             {'text': f"💎 VIP ({len(vip_keys)})", 'callback_data': 'cab_keys_vip'}
         ])
-        if kind != 'all':
-            keyboard['inline_keyboard'].append([
-                {'text': '📋 Все ключи', 'callback_data': 'cab_keys'}
-            ])
-        # Кнопки: ключ + удалить в одном ряду
+        # Кнопки: ключ + сброс пароля + удалить в одном ряду
         for kk, k in items[:10]:
             icon = "💎" if kk == 'vip' else "🎁"
             keyboard['inline_keyboard'].append([
                 {'text': f"{icon} {k['login']}", 'callback_data': f"cab_key:{k['login']}"},
+                {'text': '🔄', 'callback_data': f"cab_key_reset:{k['login']}"},
                 {'text': '🗑', 'callback_data': f"cab_key_del:{k['login']}"}
             ])
     keyboard['inline_keyboard'].append([
@@ -485,82 +482,34 @@ def show_my_keys(cfg, chat_id, user_id, kind='all', msg_id=None):
         _send(token, chat_id, text, keyboard)
 
 
-def show_key_delete_confirm(cfg, chat_id, user_id, key_name, msg_id=None):
-    """Подтверждение удаления ключа с расчётом возврата"""
+def show_key_reset_confirm(cfg, chat_id, user_id, key_name, msg_id=None):
+    """Подтверждение сброса пароля ключа"""
     token = cfg['BOT_TOKEN']
-
-    # Ищем ключ
-    key = db.get_test_key(key_name)
-    kind = 'test'
-    if not key:
-        key = db.get_vip_key(key_name)
-        kind = 'vip'
+    key = db.get_test_key(key_name) or db.get_vip_key(key_name)
     if not key or int(key['tg_id']) != int(user_id):
         _send(token, chat_id, "❌ Ключ не найден")
         return
 
-    now = int(time.time())
-    exp = key['expires_at'] or 0
-    created = key['created_at'] or now
-
-    # Считаем остаток
-    if exp == 0:
-        left_days = None
-    elif exp > now:
-        left_days = (exp - now) / 86400
-    else:
-        left_days = 0
-
-    # Считаем возврат для VIP
-    refund = 0.0
-    if kind == 'vip':
-        price = float(key.get('price_paid') or 0)
-        total_secs = max(1, exp - created) if exp > 0 else 0
-        left_secs = max(0, exp - now) if exp > 0 else 0
-        if total_secs > 0 and price > 0:
-            refund = price * (left_secs / total_secs)
-            refund = round(refund, 2)
-
     NL = chr(10)
-    icon = "💎" if kind == 'vip' else "🎁"
-    lines = [
-        "🗑 <b>УДАЛИТЬ КЛЮЧ?</b>",
+    text = NL.join([
+        "🔄 <b>СБРОСИТЬ ПАРОЛЬ?</b>",
         "━━━━━━━━━━━━━━━━━━━━",
         "",
-        f"{icon} Логин: <code>{key_name}</code>",
-    ]
-    if exp > 0 and left_days is not None:
-        if left_days >= 1:
-            lines.append(f"⏰ Осталось: <b>{left_days:.0f} дней</b>")
-        else:
-            hours = int(left_days * 24)
-            lines.append(f"⏰ Осталось: <b>{hours} ч</b>")
-    elif exp == 0:
-        lines.append("⏰ Срок: <b>бессрочно</b>")
-
-    if kind == 'vip':
-        lines.append(f"💰 Куплено за: <b>{float(key.get('price_paid') or 0):.2f} USDT</b>")
-        lines.append("")
-        lines.append("━━━━━━━━━━━━━━━━━━━━")
-        if refund > 0:
-            lines.append(f"💵 Возврат на баланс: <b>{refund:.2f} USDT</b>")
-            lines.append(f"<i>(пропорционально остатку срока)</i>")
-        else:
-            lines.append("💵 Возврат: <b>0.00 USDT</b>")
-    else:
-        lines.append("")
-        lines.append("━━━━━━━━━━━━━━━━━━━━")
-        lines.append("⚠️ <i>Тестовые ключи бесплатны — возврат не положен</i>")
-
-    lines.append("")
-    lines.append("━━━━━━━━━━━━━━━━━━━━")
-    lines.append("Это действие нельзя отменить.")
-    text = NL.join(lines)
-
-    btn_text = f"✅ Удалить" + (f" (+{refund:.2f} USDT)" if refund > 0 else "")
+        f"🔑 Логин: <code>{key_name}</code>",
+        f"🔐 Текущий пароль: <code>{key['password']}</code>",
+        "",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "⚠️ <b>Важно!</b>",
+        "",
+        "После сброса <b>старый пароль перестанет работать</b>.",
+        "В DarkTunnel нужно будет заново импортировать конфиг:",
+        "удали старый и добавь новый из ЛК.",
+        "",
+        "📌 Логин, срок и трафик — не изменятся."
+    ])
     kb = {'inline_keyboard': [
-        [{'text': btn_text, 'callback_data': f'cab_key_delok:{key_name}'}],
-        [{'text': '⬅️ Отмена', 'callback_data': 'cab_keys'}]
+        [{'text': '✅ Сбросить пароль', 'callback_data': f'cab_key_resetok:{key_name}'}],
+        [{'text': '⬅️ Отмена', 'callback_data': f'cab_key:{key_name}'}]
     ]}
     if msg_id:
         _edit(token, chat_id, msg_id, text, kb)
@@ -568,6 +517,74 @@ def show_key_delete_confirm(cfg, chat_id, user_id, key_name, msg_id=None):
         _send(token, chat_id, text, kb)
 
 
+def do_key_reset(cfg, chat_id, user_id, key_name, msg_id=None):
+    """Генерирует новый пароль, обновляет Linux-юзера и БД."""
+    import subprocess as _sp
+    import secrets as _sec
+    import string as _str
+
+    token = cfg['BOT_TOKEN']
+    key = db.get_test_key(key_name) or db.get_vip_key(key_name)
+    if not key or int(key['tg_id']) != int(user_id):
+        _send(token, chat_id, "❌ Ключ не найден")
+        return
+
+    # Новый пароль 12 символов
+    alphabet = _str.ascii_letters + _str.digits
+    new_password = ''.join(_sec.choice(alphabet) for _ in range(12))
+
+    # 1. Меняем пароль Linux-юзера
+    try:
+        _sp.run(['chpasswd'], input=f"{key_name}:{new_password}",
+                text=True, capture_output=True, timeout=10)
+    except Exception as e:
+        cab_log.error(f"chpasswd error: {e}")
+
+    # 2. Сохраняем в файл пароля
+    try:
+        with open(f"{PASSWORDS_DIR}/{key_name}", 'w') as f:
+            f.write(new_password)
+        import os as _os
+        _os.chmod(f"{PASSWORDS_DIR}/{key_name}", 0o600)
+    except Exception as e:
+        cab_log.error(f"password file error: {e}")
+
+    # 3. Обновляем в БД
+    try:
+        if db.get_vip_key(key_name):
+            db.execute("UPDATE vip_keys SET password=? WHERE login=?", (new_password, key_name))
+        else:
+            db.execute("UPDATE test_keys SET password=? WHERE login=?", (new_password, key_name))
+    except Exception as e:
+        cab_log.error(f"db update error: {e}")
+
+    # Показываем результат
+    NL = chr(10)
+    text = NL.join([
+        "✅ <b>ПАРОЛЬ ОБНОВЛЁН</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "",
+        f"🔑 Логин: <code>{key_name}</code>",
+        f"🔐 Новый пароль: <code>{new_password}</code>",
+        "",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "📲 <b>Что делать:</b>",
+        "1. Удали старый конфиг из DarkTunnel",
+        "2. Получи новый конфиг в ЛК",
+        "3. Импортируй и подключись"
+    ])
+    kb = {'inline_keyboard': [
+        [{'text': '📲 Получить конфиг', 'callback_data': f'cab_dt:{key_name}'}],
+        [{'text': '⬅️ К ключам', 'callback_data': 'cab_keys'}]
+    ]}
+    if msg_id:
+        _edit(token, chat_id, msg_id, text, kb)
+    else:
+        _send(token, chat_id, text, kb)
+
+    cab_log.info(f"Password reset: {key_name} by tg={user_id}")
+
+
 def show_key_delete_confirm(cfg, chat_id, user_id, key_name, msg_id=None):
     """Подтверждение удаления ключа с расчётом возврата"""
     token = cfg['BOT_TOKEN']
@@ -601,7 +618,7 @@ def show_key_delete_confirm(cfg, chat_id, user_id, key_name, msg_id=None):
         total_secs = max(1, exp - created) if exp > 0 else 0
         left_secs = max(0, exp - now) if exp > 0 else 0
         if total_secs > 0 and price > 0:
-            refund = price * (left_secs / total_secs)
+            refund = price * (left_secs / total_secs) * 0.8
             refund = round(refund, 2)
 
     NL = chr(10)
@@ -637,6 +654,10 @@ def show_key_delete_confirm(cfg, chat_id, user_id, key_name, msg_id=None):
 
     lines.append("")
     lines.append("━━━━━━━━━━━━━━━━━━━━")
+    if kind == "vip" and refund > 0:
+        lines.append("")
+        lines.append("⚠️ <b>Важно!</b> С возврата удерживается комиссия <b>20%</b>")
+        lines.append("   (это покрывает расходы на выпуск и обслуживание ключа)")
     lines.append("Это действие нельзя отменить.")
     text = NL.join(lines)
 
@@ -1284,8 +1305,21 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
     chat_id = cb['message']['chat']['id']
     msg_id = cb['message']['message_id']
 
+    # Тосты для разных callback'ов
+    _toast = None
+    if cb_data.startswith('cab_key_resetok:'):
+        _toast = '🔄 Пароль обновлён'
+    elif cb_data.startswith('cab_key_reset:'):
+        _toast = '⚠️ Подтверди сброс'
+    elif cb_data.startswith('cab_key_del:'):
+        _toast = '⚠️ Подтверди удаление'
+    elif cb_data.startswith('cab_dt:'):
+        _toast = '📲 Генерирую конфиг...'
     # Ответ на callback (убираем «крутилку»)
-    _tg(token, 'answerCallbackQuery', {'callback_query_id': cb['id']})
+    if _toast:
+        _tg(token, 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': _toast})
+    else:
+        _tg(token, 'answerCallbackQuery', {'callback_query_id': cb['id']})
 
     if cb_data == 'cab_help_instruction':
         show_help_instruction(cfg, chat_id, user_id, msg_id)
@@ -1464,9 +1498,13 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
               "🏠 <b>Выход из кабинета</b>\n\nНапиши /start для возврата в главное меню.",
               {'inline_keyboard': []})
         return True
-    if cb_data.startswith('cab_key_del:'):
+    if cb_data.startswith('cab_key_reset:'):
         key_name = cb_data.split(':', 1)[1]
-        show_key_delete_confirm(cfg, chat_id, user_id, key_name, msg_id)
+        show_key_reset_confirm(cfg, chat_id, user_id, key_name, msg_id)
+        return True
+    if cb_data.startswith('cab_key_resetok:'):
+        key_name = cb_data.split(':', 1)[1]
+        do_key_reset(cfg, chat_id, user_id, key_name, msg_id)
         return True
     if cb_data.startswith('cab_key_del:'):
         key_name = cb_data.split(':', 1)[1]

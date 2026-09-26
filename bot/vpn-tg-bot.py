@@ -214,7 +214,7 @@ def create_test_user(cfg, tg_id=0):
         if r.returncode != 0: break
     else:
         return None, None
-    password = gen_random(8)
+    password = gen_random(12)
     hours = int(cfg.get('TEST_HOURS', '8')); devices = int(cfg.get('TEST_DEVICES','1')); traffic_gb = int(cfg.get('TEST_TRAFFIC_GB','50'))
     bash_script = f'''
 set -e
