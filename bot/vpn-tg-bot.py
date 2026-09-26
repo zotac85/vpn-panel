@@ -626,7 +626,7 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None):
                 send_message(token, chat_id, text, reply_markup=keyboard)
             return
     admin_id = cfg.get('ADMIN_ID', '')
-    if str(user_id) != str(admin_id):
+    if not is_admin(cfg, user_id):
         cooldown_hours = int(cfg.get('COOLDOWN_HOURS','8'))
         ok, remaining = check_cooldown(user_id, cooldown_hours)
         if not ok:
@@ -1344,7 +1344,7 @@ def _do_newpromo(cfg, chat_id, args):
 def show_promo_list(cfg, chat_id, user_id, msg_id=None):
     """Список промокодов для админа"""
     token = cfg['BOT_TOKEN']
-    if str(user_id) != str(cfg.get('ADMIN_ID', '')):
+    if not is_admin(cfg, user_id):
         send_message(token, chat_id, '🚫 Только для админа.')
         return
     try:
@@ -1411,7 +1411,7 @@ def show_admin_panel(cfg, chat_id, user_id, msg_id=None):
     """Админ-панель"""
     token = cfg['BOT_TOKEN']
     admin_id = cfg.get('ADMIN_ID', '')
-    if str(user_id) != str(admin_id):
+    if not is_admin(cfg, user_id):
         send_message(token, chat_id, '🚫 Только для админа.')
         return
     total_users = 0
@@ -1433,7 +1433,8 @@ def show_admin_panel(cfg, chat_id, user_id, msg_id=None):
          {'text': '🚫 Бан-лист', 'callback_data': 'admin_banlist'}],
         [{'text': '🎫 Промокоды', 'callback_data': 'adm_promo_list'},
          {'text': '📨 Рассылка', 'callback_data': 'adm_broadcast'}],
-        [{'text': '💰 Начислить баланс', 'callback_data': 'admin_addbalance'}],
+        [{'text': '💰 Начислить баланс', 'callback_data': 'admin_addbalance'},
+         {'text': '👑 Админы', 'callback_data': 'adm_admins'}],
         [{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
     ]}
     if msg_id:
@@ -1470,7 +1471,7 @@ def post_to_channel(cfg, chat_id, user_id):
     admin_id = cfg.get('ADMIN_ID', '')
     
     # Только админ
-    if str(user_id) != str(admin_id):
+    if not is_admin(cfg, user_id):
         send_message(token, chat_id, "🚫 Команда только для админа.")
         return
     
@@ -1554,7 +1555,7 @@ def handle_channel_test(cfg, user_id, first_name):
     
     # Проверяем кулдаун
     admin_id = cfg.get('ADMIN_ID', '')
-    if str(user_id) != str(admin_id):
+    if not is_admin(cfg, user_id):
         cooldown_hours = int(cfg.get('COOLDOWN_HOURS', '8'))
         ok, remaining = check_cooldown(user_id, cooldown_hours)
         if not ok:
@@ -1698,7 +1699,7 @@ def _stats_human_time(sec):
 def handle_stats(cfg, chat_id, user_id, mode='main', msg_id=None):
     """Статистика на БД: main | traffic"""
     token = cfg['BOT_TOKEN']
-    if str(user_id) != str(cfg.get('ADMIN_ID', '')):
+    if not is_admin(cfg, user_id):
         send_message(token, chat_id, "🚫 Команда только для админа.")
         return
 
@@ -1863,7 +1864,7 @@ def handle_stats(cfg, chat_id, user_id, mode='main', msg_id=None):
 def handle_ban(cfg, chat_id, user_id, args):
     token = cfg['BOT_TOKEN']
     admin_id = cfg.get('ADMIN_ID', '')
-    if str(user_id) != str(admin_id):
+    if not is_admin(cfg, user_id):
         send_message(token, chat_id, "🚫 Только для админа.")
         return
     if not args:
@@ -1885,7 +1886,7 @@ def handle_ban(cfg, chat_id, user_id, args):
 def handle_unban(cfg, chat_id, user_id, args):
     token = cfg['BOT_TOKEN']
     admin_id = cfg.get('ADMIN_ID', '')
-    if str(user_id) != str(admin_id):
+    if not is_admin(cfg, user_id):
         return
     if not args:
         send_message(token, chat_id, "❌ Формат: /unban 1234567890")
@@ -1909,7 +1910,7 @@ def handle_unban(cfg, chat_id, user_id, args):
 def handle_banlist(cfg, chat_id, user_id, msg_id=None):
     token = cfg['BOT_TOKEN']
     admin_id = cfg.get('ADMIN_ID', '')
-    if str(user_id) != str(admin_id):
+    if not is_admin(cfg, user_id):
         return
     if not os.path.exists(BLACKLIST) or os.path.getsize(BLACKLIST) == 0:
         kb = {'inline_keyboard': [[{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]]}
@@ -2003,7 +2004,7 @@ def get_users_stats():
 def show_users_menu(cfg, chat_id, user_id, msg_id=None):
     """Главный экран управления юзерами"""
     token = cfg['BOT_TOKEN']
-    if str(user_id) != str(cfg.get('ADMIN_ID', '')):
+    if not is_admin(cfg, user_id):
         send_message(token, chat_id, "🚫 Только для админа.")
         return
     try:
@@ -2088,7 +2089,7 @@ def _fmt_key_row(key, kind):
 def show_users_test(cfg, chat_id, user_id, page=1, msg_id=None):
     """Список тестовых ключей"""
     token = cfg['BOT_TOKEN']
-    if str(user_id) != str(cfg.get('ADMIN_ID', '')):
+    if not is_admin(cfg, user_id):
         return
     try:
         from bot_modules import db as _db
@@ -2147,7 +2148,7 @@ def show_users_test(cfg, chat_id, user_id, page=1, msg_id=None):
 def show_users_vip(cfg, chat_id, user_id, page=1, msg_id=None):
     """Список VIP-ключей"""
     token = cfg['BOT_TOKEN']
-    if str(user_id) != str(cfg.get('ADMIN_ID', '')):
+    if not is_admin(cfg, user_id):
         return
     try:
         from bot_modules import db as _db
@@ -2207,7 +2208,7 @@ def show_users_vip(cfg, chat_id, user_id, page=1, msg_id=None):
 def show_users_tg(cfg, chat_id, user_id, page=1, msg_id=None):
     """Список TG-юзеров"""
     token = cfg['BOT_TOKEN']
-    if str(user_id) != str(cfg.get('ADMIN_ID', '')):
+    if not is_admin(cfg, user_id):
         return
     try:
         from bot_modules import db as _db
@@ -2284,7 +2285,7 @@ def handle_cleanup(cfg, chat_id, user_id):
     """Удалить всех истёкших"""
     token = cfg['BOT_TOKEN']
     admin_id = cfg.get('ADMIN_ID', '')
-    if str(user_id) != str(admin_id):
+    if not is_admin(cfg, user_id):
         send_message(token, chat_id, "🚫 Только для админа.")
         return
     
@@ -2907,6 +2908,60 @@ def main():
                         if bid > 0:
                             _do_broadcast_send(cfg, cb, bid)
                         continue
+                    elif cb_data == 'adm_admins':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        # Показываем список админов + инструкция
+                        try:
+                            from bot_modules.admin import get_admins
+                            admins = get_admins()
+                        except:
+                            admins = [str(cfg.get('ADMIN_ID', ''))]
+                        NLx = chr(10)
+                        lines = [
+                            "👑 <b>АДМИНЫ</b>",
+                            "━━━━━━━━━━━━━━━━━━━━",
+                            ""
+                        ]
+                        for i, a in enumerate(admins, 1):
+                            marker = " ⭐ (вы)" if str(a) == str(cb_user_id) else ""
+                            # Получаем имя через getChat
+                            name_info = ""
+                            try:
+                                r = tg_request(cfg['BOT_TOKEN'], 'getChat', {'chat_id': int(a)})
+                                if r and r.get('ok'):
+                                    res = r.get('result', {})
+                                    fname = res.get('first_name', '') or ''
+                                    lname = res.get('last_name', '') or ''
+                                    uname = res.get('username', '') or ''
+                                    full_name = (fname + ' ' + lname).strip()
+                                    if uname:
+                                        name_info = f" · @{uname}"
+                                    elif full_name:
+                                        name_info = f" · {full_name}"
+                            except: pass
+                            lines.append(f"<b>{i}.</b> <code>{a}</code>{name_info}{marker}")
+                        lines.append("")
+                        lines.append("━━━━━━━━━━━━━━━━━━━━")
+                        lines.append("➕ <b>Добавить:</b>")
+                        lines.append("<code>/addadmin 123456789</code>")
+                        lines.append("")
+                        lines.append("➖ <b>Удалить:</b>")
+                        lines.append("<code>/deladmin 123456789</code>")
+                        lines.append("")
+                        lines.append("📌 <b>Как узнать ID:</b>")
+                        lines.append("• Перешли сообщение юзера в @idbot")
+                        lines.append("• Или пусть откроет @userinfobot")
+                        kb = {'inline_keyboard': [
+                            [{'text': '🔄 Обновить', 'callback_data': 'adm_admins'}],
+                            [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
+                        ]}
+                        tg_request(cfg['BOT_TOKEN'], 'editMessageText', {
+                            'chat_id': cb['message']['chat']['id'],
+                            'message_id': cb['message']['message_id'],
+                            'text': NLx.join(lines),
+                            'parse_mode': 'HTML',
+                            'reply_markup': kb
+                        })
                     elif cb_data == 'adm_broadcast':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         PENDING_ACTIONS[cb_user_id] = 'broadcast_text'
