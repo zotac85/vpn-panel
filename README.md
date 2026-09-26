@@ -30,17 +30,13 @@
 
 <div align="center">
 
-### 👤 Личный кабинет
-![ЛК](screenshots/bot-lk.png)
+| 👤 Личный кабинет | 🔑 Детали ключа |
+|:--:|:--:|
+| ![ЛК](screenshots/bot-lk.png) | ![Ключ](screenshots/bot-key.png) |
 
-### 🔑 Детали ключа
-![Ключ](screenshots/bot-key.png)
-
-### ⚙️ Админ-панель
-![Админ](screenshots/bot-admin.png)
-
-### 📲 Конфиг DarkTunnel
-![DarkTunnel](screenshots/darktunnel.png)
+| ⚙️ Админ-панель | 📲 Конфиг DarkTunnel |
+|:--:|:--:|
+| ![Админ](screenshots/bot-admin.png) | ![DarkTunnel](screenshots/darktunnel.png) |
 
 </div>
 
