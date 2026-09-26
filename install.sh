@@ -498,6 +498,77 @@ fi
 systemctl restart cron 2>/dev/null || systemctl restart crond 2>/dev/null
 
 # ──────────────────────────────────────────────────────────────
+# Конфиг бота и сервис systemd
+# ──────────────────────────────────────────────────────────────
+
+# bot.conf — создаём только если нет (не перезаписываем!)
+if [ ! -f /etc/UDPCustom/bot.conf ]; then
+    echo "→ Создание /etc/UDPCustom/bot.conf из шаблона..."
+    if curl -sf -o /etc/UDPCustom/bot.conf "$REPO_URL/configs/bot.conf.template"; then
+        echo -e "\033[0;33m⚠️  ЗАПОЛНИ BOT_TOKEN и ADMIN_ID в /etc/UDPCustom/bot.conf!\033[0m"
+    else
+        # Fallback — минимальный конфиг
+        cat > /etc/UDPCustom/bot.conf << BOTCONF_EOF
+BOT_TOKEN=""
+ADMIN_ID=""
+CHANNEL_ID=""
+REQUIRE_SUBSCRIPTION="0"
+COOLDOWN_HOURS="8"
+TEST_HOURS="8"
+VERIFIED_MINUTES="60"
+TEST_DEVICES="1"
+TEST_TRAFFIC_GB="50"
+CONFIG_NAME="VPN"
+SERVER_LOCATION="🌍 Сервер"
+CONNECTED_MSG="Подключено!"
+VIP_TARIFFS="10|2|100|1,30|5|300|1,90|13|900|1"
+BOTCONF_EOF
+        echo -e "\033[0;33m⚠️  Создан минимальный bot.conf. Заполни BOT_TOKEN!\033[0m"
+    fi
+else
+    echo -e "\033[0;32m✅  bot.conf уже существует (не перезаписываем)\033[0m"
+fi
+
+# Сервис systemd — создаём только если нет
+if [ ! -f /etc/systemd/system/vpn-tg-bot.service ]; then
+    echo "→ Создание systemd-сервиса vpn-tg-bot..."
+    curl -sf -o /etc/systemd/system/vpn-tg-bot.service "$REPO_URL/configs/vpn-tg-bot.service"
+    if [ $? -ne 0 ]; then
+        # Fallback
+        cat > /etc/systemd/system/vpn-tg-bot.service << SERVICE_EOF
+[Unit]
+Description=VPN Panel Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root
+ExecStart=/usr/bin/python3 /usr/local/bin/vpn-tg-bot.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/vpn-tg-bot.log
+StandardError=append:/var/log/vpn-tg-bot.log
+
+[Install]
+WantedBy=multi-user.target
+SERVICE_EOF
+    fi
+    systemctl daemon-reload
+    echo -e "\033[0;32m✅  Сервис создан\033[0m"
+fi
+
+# Активируем автозапуск (если есть BOT_TOKEN)
+if [ -f /etc/UDPCustom/bot.conf ] && grep -q "^BOT_TOKEN=\"[^\"]" /etc/UDPCustom/bot.conf 2>/dev/null; then
+    systemctl enable vpn-tg-bot 2>/dev/null
+    echo -e "\033[0;32m✅  Автозапуск бота включён\033[0m"
+else
+    echo -e "\033[0;33m⚠️  BOT_TOKEN не задан — бот не запущен\033[0m"
+    echo -e "\033[0;33m   Заполни /etc/UDPCustom/bot.conf и запусти:\033[0m"
+    echo -e "\033[0;33m   systemctl enable --now vpn-tg-bot\033[0m"
+fi
+
+# ──────────────────────────────────────────────────────────────
 # ФИНАЛЬНАЯ ПРОВЕРКА PAM  (ИСПРАВЛЕНО)
 # ──────────────────────────────────────────────────────────────
 echo -e "\n🔍 Финальная проверка..."
