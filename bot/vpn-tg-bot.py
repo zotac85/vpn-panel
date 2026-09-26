@@ -2217,16 +2217,19 @@ def show_users_tg(cfg, chat_id, user_id, page=1, msg_id=None):
             uname = u.get('username') or ''
             handle = f"@{uname}" if uname else f"id{u['tg_id']}"
             balance = float(u.get('balance') or 0)
-            # Считаем ключи
-            test_cnt = _db.query_one("SELECT COUNT(*) as n FROM test_keys WHERE tg_id=?", (u['tg_id'],))['n']
-            vip_cnt = _db.query_one("SELECT COUNT(*) as n FROM vip_keys WHERE tg_id=?", (u['tg_id'],))['n']
+            # Считаем ключи: активные/всего
+            _now = int(time.time())
+            test_all = _db.query_one("SELECT COUNT(*) as n FROM test_keys WHERE tg_id=?", (u['tg_id'],))['n']
+            test_act = _db.query_one("SELECT COUNT(*) as n FROM test_keys WHERE tg_id=? AND (expires_at=0 OR expires_at > ?)", (u['tg_id'], _now))['n']
+            vip_all = _db.query_one("SELECT COUNT(*) as n FROM vip_keys WHERE tg_id=?", (u['tg_id'],))['n']
+            vip_act = _db.query_one("SELECT COUNT(*) as n FROM vip_keys WHERE tg_id=? AND (expires_at=0 OR expires_at > ?)", (u['tg_id'], _now))['n']
             dt = ''
             if u.get('registered_at'):
                 dt = _dt.fromtimestamp(u['registered_at']).strftime('%d.%m.%y')
-
             lines_txt.append(f"👤 <b>{name}</b> · {handle}")
             lines_txt.append(f"   🆔 <code>{u['tg_id']}</code>")
-            lines_txt.append(f"   💰 {balance:.2f} USDT · 🎁{test_cnt} 💎{vip_cnt}")
+            lines_txt.append(f"   💰 {balance:.2f} USDT")
+            lines_txt.append(f"   🎁 {test_act}/{test_all}   💎 {vip_act}/{vip_all}")
             if dt:
                 lines_txt.append(f"   📅 {dt}")
             lines_txt.append("")

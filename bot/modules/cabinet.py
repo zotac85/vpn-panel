@@ -1121,7 +1121,7 @@ def show_referrals(cfg, chat_id, user_id, msg_id=None):
         "<i>Скопируй ссылку и отправь друзьям 👇</i>"
     ])
     keyboard = {'inline_keyboard': [
-        [{'text': '📤 Поделиться', 'url': f'https://t.me/share/url?url={ref_link}&text=Забирай+VPN!'}],
+        [{'text': '📤 Поделиться', 'callback_data': 'cab_share_ref'}],
         [{'text': '📋 Мои рефералы', 'callback_data': 'cab_ref_list'}],
         [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
     ]}
@@ -1401,6 +1401,58 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         return True
     if cb_data == 'cab_refs':
         show_referrals(cfg, chat_id, user_id, msg_id)
+        return True
+    if cb_data == 'cab_share_ref':
+        # Отправляем сообщение с кнопкой — юзер должен forward-нуть
+        user = db.get_user(user_id)
+        ref_code = user['ref_code'] if user else ''
+        me = _tg(token, 'getMe')
+        bot_u = me['result'].get('username', 'ArsenVipKeysBot') if me and me.get('ok') else 'ArsenVipKeysBot'
+        ref_link = f"https://t.me/{bot_u}?start=ref_{ref_code}"
+        NL = chr(10)
+        share_msg = NL.join([
+            "📤 <b>ПОДЕЛИСЬ С ДРУЗЬЯМИ</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "👇 Перешли это сообщение друзьям",
+            "или в свой канал/группу",
+            "",
+            "🎁 За каждого друга — бонус 💰"
+        ])
+        _send(token, chat_id, share_msg)
+        # Само рекламное сообщение с кнопкой
+        NL2 = chr(10)
+        ad_text = NL2.join([
+            "⚡ <b>ArsenVipKeys — VPN который работает!</b>",
+            "",
+            "✅ Быстрое подключение",
+            "✅ Без рекламы и логов",
+            "✅ Работает на всех устройствах",
+            "✅ Поддержка 24/7",
+            "",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "🎁 <b>БЕСПЛАТНЫЙ ТЕСТ КАЖДЫЙ ДЕНЬ</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "⏰ 8 часов бесплатно",
+            "📊 50 ГБ трафика",
+            "📱 1 устройство",
+            "🇩🇪 Сервер Германия",
+            "",
+            "🔥 Хочешь ещё? Получи новый тест снова через 8 часов!",
+            "",
+            "━━━━━━━━━━━━━━━━━━━━"
+        ])
+        ad_kb = {'inline_keyboard': [
+            [{'text': '🎁 Получить ключ', 'url': ref_link}]
+        ]}
+        _tg(token, 'sendMessage', {
+            'chat_id': chat_id,
+            'text': ad_text,
+            'parse_mode': 'HTML',
+            'reply_markup': ad_kb,
+            'disable_web_page_preview': True
+        })
         return True
     if cb_data == 'cab_ref_list':
         show_ref_list(cfg, chat_id, user_id, msg_id)
