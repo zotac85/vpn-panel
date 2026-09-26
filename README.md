@@ -26,22 +26,6 @@
 
 ---
 
-## 📸 Скриншоты
-
-<div align="center">
-
-| 👤 Личный кабинет | 🔑 Детали ключа |
-|:--:|:--:|
-| ![ЛК](screenshots/bot-lk.png) | ![Ключ](screenshots/bot-key.png) |
-
-| ⚙️ Админ-панель | 📲 Конфиг DarkTunnel |
-|:--:|:--:|
-| ![Админ](screenshots/bot-admin.png) | ![DarkTunnel](screenshots/darktunnel.png) |
-
-</div>
-
----
-
 ## 🎯 Возможности
 
 ### 🤖 Telegram-бот — для клиентов
