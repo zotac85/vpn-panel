@@ -60,18 +60,18 @@ def _load_config():
 
 
 def get_admins():
-    """Список ID всех админов"""
+    """Список ID всех админов. ADMIN_ID из конфига всегда включён."""
     admins = []
     if os.path.exists(ADMINS_FILE):
         try:
             with open(ADMINS_FILE) as f:
                 admins = [l.strip() for l in f if l.strip() and not l.startswith('#')]
         except: pass
-    if not admins:
-        cfg = _load_config()
-        aid = cfg.get('ADMIN_ID', '')
-        if aid:
-            admins = [aid]
+    # ВСЕГДА добавляем ADMIN_ID из конфига (владелец)
+    cfg = _load_config()
+    aid = str(cfg.get('ADMIN_ID', '')).strip()
+    if aid and aid not in admins:
+        admins.insert(0, aid)
     return admins
 
 
