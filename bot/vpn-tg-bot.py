@@ -636,7 +636,6 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None):
     if not username:
         send_message_ttl(token, chat_id, "❌ Ошибка. Попробуй позже.", ttl=15); return
     record_issue(user_id, username)
-    _ref_test_bonus(cfg, user_id)
     domain = get_domain(); ws_port = get_ws_port(); proxy = get_random_proxy()
     connect_line = f"{domain}:{ws_port}@{username}:{password}"
     traffic = cfg.get('TEST_TRAFFIC_GB','50'); devices = cfg.get('TEST_DEVICES','1')
@@ -694,7 +693,7 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None):
 
 
 def _ref_purchase_bonus(cfg, buyer_id, price):
-    """Когда реферал купил VIP — начисляем пригласившему $1 (разово)."""
+    """Когда реферал купил VIP — начисляем пригласившему $1 + 5 дней к VIP (разово)."""
     try:
         from bot_modules import db as _db
     except Exception as e:
@@ -704,22 +703,45 @@ def _ref_purchase_bonus(cfg, buyer_id, price):
     if not inviter_id:
         return
     log.info(f"Ref purchase bonus: inviter={inviter_id}, buyer={buyer_id}")
-    # Начисляем $1
+
+    # 1. Начисляем $1 на баланс
     try:
         _db.add_balance(inviter_id, 1.0, method='referral_bonus', meta={'from_user': buyer_id})
         _db.mark_bonus_paid(buyer_id)
     except Exception as e:
-        log.error(f"ref bonus pay error: {e}")
-        return
+        log.error(f"ref bonus balance error: {e}")
+
+    # 2. Продлеваем VIP на 5 дней
+    extended = 0
+    try:
+        extended = _db.extend_vip_keys(inviter_id, 5)
+    except Exception as e:
+        log.error(f"ref bonus extend error: {e}")
+
     # Уведомление
     NL = chr(10)
-    msg = NL.join([
-        "💰 <b>РЕФЕРАЛЬНЫЙ БОНУС</b>",
-        "",
-        "Твой реферал купил VIP-ключ!",
-        "",
-        "💵 <b>+1.00 USDT</b> на твой баланс",
-    ])
+    if extended > 0:
+        msg = NL.join([
+            "💰 <b>РЕФЕРАЛЬНЫЙ БОНУС!</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "🎉 Твой реферал купил VIP-ключ!",
+            "",
+            "💵 <b>+1.00 USDT</b> на баланс",
+            "⏰ <b>+5 дней</b> к твоему VIP-ключу",
+        ])
+    else:
+        msg = NL.join([
+            "💰 <b>РЕФЕРАЛЬНЫЙ БОНУС!</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "🎉 Твой реферал купил VIP-ключ!",
+            "",
+            "💵 <b>+1.00 USDT</b> на баланс",
+            "",
+            "⚠️ +5 дней к VIP не начислены —",
+            "у тебя нет активного VIP-ключа.",
+        ])
     try:
         tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
             'chat_id': inviter_id,
@@ -1574,7 +1596,6 @@ def handle_channel_test(cfg, user_id, first_name):
         return
     
     record_issue(user_id, username)
-    _ref_test_bonus(cfg, user_id)
     
     
     domain = get_domain()
@@ -3347,11 +3368,13 @@ def main():
                                         NLx = chr(10)
                                         notif = NLx.join([
                                             "👥 <b>НОВЫЙ РЕФЕРАЛ!</b>",
+                                            "━━━━━━━━━━━━━━━━━━━━",
                                             "",
                                             f"👤 <b>{ref_name}</b> · {ref_handle}",
                                             "",
-                                            "🎁 +3 дня когда получит тест",
-                                            "💵 +1 USDT когда купит VIP"
+                                            "💎 Когда купит VIP, ты получишь:",
+                                            "   💵 +1 USDT на баланс",
+                                            "   ⏰ +5 дней к своему VIP"
                                         ])
                                         tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
                                             'chat_id': inviter['tg_id'],
