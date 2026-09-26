@@ -467,6 +467,37 @@ chmod 644 /etc/cron.d/vpn-auto-cleanup
 systemctl restart cron 2>/dev/null || systemctl restart crond 2>/dev/null
 
 # ──────────────────────────────────────────────────────────────
+# Синхронизация трафика и уведомления (новые скрипты)
+# ──────────────────────────────────────────────────────────────
+echo -e "\n📊 Установка скриптов трафика и уведомлений..."
+
+# vpn-traffic-sync.py — синхронизация файлов трафика в БД
+curl -sf -o /usr/local/bin/vpn-traffic-sync.py "$REPO_URL/bot/vpn-traffic-sync.py"
+if [ $? -eq 0 ]; then
+    chmod +x /usr/local/bin/vpn-traffic-sync.py
+    python3 -m py_compile /usr/local/bin/vpn-traffic-sync.py 2>/dev/null
+    echo "*/5 * * * * root sleep 30 && /usr/local/bin/vpn-traffic-sync.py" > /etc/cron.d/vpn-traffic-sync
+    chmod 644 /etc/cron.d/vpn-traffic-sync
+    echo -e "\033[0;32m✅  vpn-traffic-sync установлен\033[0m"
+else
+    echo -e "\033[0;33m⚠️  Не удалось скачать vpn-traffic-sync.py\033[0m"
+fi
+
+# vpn-notify-expiring.py — уведомления VIP за 24ч
+curl -sf -o /usr/local/bin/vpn-notify-expiring.py "$REPO_URL/bot/vpn-notify-expiring.py"
+if [ $? -eq 0 ]; then
+    chmod +x /usr/local/bin/vpn-notify-expiring.py
+    python3 -m py_compile /usr/local/bin/vpn-notify-expiring.py 2>/dev/null
+    echo "0 * * * * root /usr/local/bin/vpn-notify-expiring.py" > /etc/cron.d/vpn-notify-expiring
+    chmod 644 /etc/cron.d/vpn-notify-expiring
+    echo -e "\033[0;32m✅  vpn-notify-expiring установлен\033[0m"
+else
+    echo -e "\033[0;33m⚠️  Не удалось скачать vpn-notify-expiring.py\033[0m"
+fi
+
+systemctl restart cron 2>/dev/null || systemctl restart crond 2>/dev/null
+
+# ──────────────────────────────────────────────────────────────
 # ФИНАЛЬНАЯ ПРОВЕРКА PAM  (ИСПРАВЛЕНО)
 # ──────────────────────────────────────────────────────────────
 echo -e "\n🔍 Финальная проверка..."
