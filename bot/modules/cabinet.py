@@ -1217,25 +1217,39 @@ def show_create_key(cfg, chat_id, user_id, msg_id=None):
         _send(token, chat_id, text, keyboard)
 
 
+def _get_help_text():
+    """Главный экран /help"""
+    try:
+        with open('/etc/UDPCustom/help.txt') as f:
+            t = f.read().strip()
+            return t if t else None
+    except: return None
+
+
+def _get_help_instruction():
+    """Инструкция подключения"""
+    try:
+        with open('/etc/UDPCustom/help_instruction.txt') as f:
+            t = f.read().strip()
+            return t if t else None
+    except: return None
+
+
+def _get_help_faq():
+    """FAQ"""
+    try:
+        with open('/etc/UDPCustom/help_faq.txt') as f:
+            t = f.read().strip()
+            return t if t else None
+    except: return None
+
+
 def show_help_instruction(cfg, chat_id, user_id, msg_id=None):
     """Инструкция по подключению"""
     token = cfg['BOT_TOKEN']
-    text = (
-        "📖 <b>ИНСТРУКЦИЯ ПО ПОДКЛЮЧЕНИЮ</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
-        "<b>1. Скачай DarkTunnel</b>\n"
-        "Google Play: DarkTunnel - SSH DNSTT V2Ray\n\n"
-        "<b>2. Получи ключ в боте</b>\n"
-        "Зайди в канал → нажми кнопку → получи конфиг\n\n"
-        "<b>3. Скопируй darktunnel:// ссылку</b>\n"
-        "Из сообщения с ключом\n\n"
-        "<b>4. Открой DarkTunnel</b>\n"
-        "Нажми ➕ → Импорт из буфера обмена\n\n"
-        "<b>5. Нажми CONNECT</b>\n"
-        "Готово! Ты в свободном интернете 🎉\n\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "💬 Проблемы? Пиши @ArsenGuro"
-    )
+    text = _get_help_instruction()
+    if not text:
+        text = "📖 <b>Инструкция</b>\n\nОтредактируй /etc/UDPCustom/help_instruction.txt"
     keyboard = {'inline_keyboard': [
         [{'text': '⬅️ Назад', 'callback_data': 'cab_help_back'}]
     ]}
@@ -1248,24 +1262,9 @@ def show_help_instruction(cfg, chat_id, user_id, msg_id=None):
 def show_help_faq(cfg, chat_id, user_id, msg_id=None):
     """FAQ"""
     token = cfg['BOT_TOKEN']
-    text = (
-        "❓ <b>ЧАСТЫЕ ВОПРОСЫ</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
-        "<b>🔴 Ключ не работает?</b>\n"
-        "Проверь: срок не истёк? Трафик не закончился?\n\n"
-        "<b>🔴 Не подключается?</b>\n"
-        "Проверь интернет, попробуй сменить Wi-Fi на моб.\n\n"
-        "<b>🔴 Auth failed?</b>\n"
-        "Проверь логин/пароль, скопируй заново\n\n"
-        "<b>💎 Как получить VIP?</b>\n"
-        "Пиши @ArsenGuro\n\n"
-        "<b>📱 Сколько устройств?</b>\n"
-        "По лимиту в ключе (обычно 1-5)\n\n"
-        "<b>⏰ Сколько работает ключ?</b>\n"
-        "Тест — 8 часов, VIP — по тарифу\n\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "💬 Не нашёл ответ? @ArsenGuro"
-    )
+    text = _get_help_faq()
+    if not text:
+        text = "❓ <b>FAQ</b>\n\nОтредактируй /etc/UDPCustom/help_faq.txt"
     keyboard = {'inline_keyboard': [
         [{'text': '⬅️ Назад', 'callback_data': 'cab_help_back'}]
     ]}
@@ -1288,12 +1287,16 @@ def show_help_back(cfg, chat_id, user_id, msg_id=None):
             pass
     primary = channels[0].lstrip('@') if channels else 'ArsenVipKeys'
 
-    text = (
-        f"📖 <b>Как получить тестовый ключ?</b>\n\n"
-        f"1️⃣ Зайди в канал 👉 @{primary}\n"
-        f"2️⃣ Найди пост с кнопкой <b>«🎁 Получить тест»</b>\n"
-        f"3️⃣ Нажми на неё — ключ придёт в этот бот\n"
-    )
+    tpl_help = _get_help_text()
+    if tpl_help:
+        text = tpl_help.replace('{primary}', primary)
+    else:
+        text = (
+            f"📖 <b>Как получить тестовый ключ?</b>\n\n"
+            f"1️⃣ Зайди в канал 👉 @{primary}\n"
+            f"2️⃣ Найди пост с кнопкой <b>«🎁 Получить тест»</b>\n"
+            f"3️⃣ Нажми на неё — ключ придёт в этот бот\n"
+        )
     keyboard = {'inline_keyboard': [
         [{'text': '📖 Инструкция', 'callback_data': 'cab_help_instruction'},
          {'text': '❓ FAQ', 'callback_data': 'cab_help_faq'}],

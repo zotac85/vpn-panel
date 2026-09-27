@@ -1682,12 +1682,18 @@ def handle_help(cfg, chat_id):
     token = cfg['BOT_TOKEN']
     channels = get_channels()
     primary = channels[0].lstrip('@') if channels else 'ArsenVipKeys'
-    text = (
-        f"📖 <b>Как получить тестовый ключ?</b>\n\n"
-        f"1️⃣ Зайди в канал 👉 @{primary}\n"
-        f"2️⃣ Найди пост с кнопкой <b>«🎁 Получить тест»</b>\n"
-        f"3️⃣ Нажми на неё — ключ придёт в этот бот\n"
-    )
+    tpl_help = None
+    try:
+        with open("/etc/UDPCustom/help.txt") as _f:
+            tpl_help = _f.read().strip()
+    except: pass
+    if tpl_help:
+        text = tpl_help.replace("{primary}", primary)
+    else:
+        text = (f"📖 <b>Как получить тестовый ключ?</b>\n\n"
+                f"1️⃣ Зайди в канал 👉 @{primary}\n"
+                f"2️⃣ Найди пост с кнопкой <b>«🎁 Получить тест»</b>\n"
+                f"3️⃣ Нажми на неё — ключ придёт в этот бот\n")
     keyboard = {'inline_keyboard': [
         [{'text': '📖 Инструкция', 'callback_data': 'cab_help_instruction'},
          {'text': '❓ FAQ', 'callback_data': 'cab_help_faq'}],
