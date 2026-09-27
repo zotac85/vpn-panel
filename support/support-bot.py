@@ -171,26 +171,17 @@ def handle_message(cfg, msg, token, admin_id):
         return
 
     # === Проверка: админ отвечает в тикет? ===
-    if str(user_id) == str(admin_id) and user_id in PENDING_TICKET_REPLY and text:
-        _tid = PENDING_TICKET_REPLY.pop(user_id)
+    if str(user_id) == str(admin_id) and user_id in PENDING_TICKET_REPLY and text and not text.startswith('/'):
+        _tid = PENDING_TICKET_REPLY.get(user_id)
         _tk = sdb.get_ticket(_tid)
         if _tk:
             _client_id = _tk["user_id"]
             sdb.add_message(_tid, user_id, _client_id, text, is_admin=1)
-            NLr = chr(10)
-            _out = NLr.join([
-                "💬 <b>ОТВЕТ ПОДДЕРЖКИ</b>",
-                "━━━━━━━━━━━━━━━━━━━━",
-                "",
-                text,
-                "",
-                "━━━━━━━━━━━━━━━━━━━━",
-                "📩 Если что-то ещё — просто напиши"
-            ])
             try:
-                send(token, _client_id, _out)
+                send(token, _client_id, text)
             except: pass
-            send(token, chat_id, f"✅ Ответ отправлен клиенту (тикет #{_tid})")
+            # Просто тишина — как в обычном чате
+            pass
         return
 
     # Сохраняем юзера
@@ -198,6 +189,20 @@ def handle_message(cfg, msg, token, admin_id):
 
     # === АДМИН пишет (reply на сообщение клиента) ===
     if str(user_id) == str(admin_id):
+        # /cancel — выход из режима ответа
+        if text.startswith('/cancel'):
+            if user_id in PENDING_TICKET_REPLY:
+                _tid = PENDING_TICKET_REPLY.pop(user_id)
+                NLx = chr(10)
+                send(token, chat_id, NLx.join([
+                    f'🚪 <b>Вышел из режима ответа</b>',
+                    '',
+                    f'Тикет #{_tid} остаётся открытым.',
+                    'Клиент может писать — сообщения придут тебе.'
+                ]))
+            else:
+                send(token, chat_id, '🚪 Ты не в режиме ответа')
+            return
         reply = msg.get('reply_to_message')
         if reply:
             reply_text = reply.get('text', '') or reply.get('caption', '')
@@ -210,19 +215,11 @@ def handle_message(cfg, msg, token, admin_id):
                 if tk:
                     client_id = tk['user_id']
                     # Отправляем клиенту
-                    NL = chr(10)
-                    out = NL.join([
-                        '💬 <b>ОТВЕТ ПОДДЕРЖКИ</b>',
-                        '━━━━━━━━━━━━━━━━━━━━',
-                        '',
-                        text,
-                        '',
-                        '━━━━━━━━━━━━━━━━━━━━',
-                        '📩 Если что-то ещё — просто напиши'
-                    ])
-                    send(token, client_id, out)
+                    send(token, client_id, text)
                     # Логируем
                     sdb.add_message(ticket_id, user_id, client_id, text, is_admin=1)
+                    # Включаем серию — следующие сообщения тоже уйдут
+                    PENDING_TICKET_REPLY[user_id] = ticket_id
                     return
         # Если не reply — показываем статистику/меню админа
         if text.startswith('/start') or text.startswith('/admin'):
@@ -232,6 +229,9 @@ def handle_message(cfg, msg, token, admin_id):
     # === КЛИЕНТ пишет ===
     if text.startswith('/start'):
         welcome_client(cfg, chat_id, first_name)
+        return
+    if text.startswith('/help'):
+        show_help(cfg, chat_id)
         return
 
     # Пустое сообщение
@@ -297,6 +297,40 @@ def handle_message(cfg, msg, token, admin_id):
         send(token, chat_id, out)
 
 
+def show_help(cfg, chat_id):
+    """Экран /help"""
+    token = cfg['BOT_TOKEN']
+    main_bot = cfg.get('MAIN_BOT', 'ArsenVipKeysBot')
+    NL = chr(10)
+    text = NL.join([
+        '❓ <b>КАК ПОЛЬЗОВАТЬСЯ БОТОМ</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        f'Я бот поддержки <b>{main_bot}</b>.',
+        '',
+        '📌 <b>Что я умею:</b>',
+        '• Отвечаю на частые вопросы',
+        '• Передаю сложные вопросы админу',
+        '• Отвечаем в течение 1-2 часов',
+        '',
+        '💬 <b>Как задать вопрос:</b>',
+        'Просто напиши его текстом.',
+        '',
+        'Например:',
+        '• «Ключ не работает»',
+        '• «Забыл пароль»',
+        '• «Как купить VIP»',
+        '',
+        '━━━━━━━━━━━━━━━━━━━━',
+        f'🤖 <b>Основной бот:</b> @{main_bot}',
+        '   <i>Получить ключ, личный кабинет</i>'
+    ])
+    kb = {'inline_keyboard': [
+        [{'text': f'🤖 @{main_bot}', 'url': f'https://t.me/{main_bot}'}]
+    ]}
+    send(token, chat_id, text, reply_markup=kb)
+
+
 def welcome_client(cfg, chat_id, first_name):
     """Приветствие клиента"""
     token = cfg['BOT_TOKEN']
@@ -331,26 +365,13 @@ def forward_to_admin(cfg, ticket_id, user_id, first_name, username, text, is_fol
     admin_id = cfg.get('ADMIN_ID', '')
     NL = chr(10)
     if is_followup:
-        header = f'💬 <b>СООБЩЕНИЕ В ТИКЕТ #{ticket_id}</b>'
+        header = f'👤 <b>{first_name or "Клиент"}</b> · #{ticket_id}'
     else:
-        header = f'🎫 <b>НОВЫЙ ТИКЕТ #{ticket_id}</b>'
-    ts = time.strftime('%d.%m %H:%M')
-    uname = f'@{username}' if username else '—'
+        header = f'🆕 <b>{first_name or "Клиент"}</b> · тикет #{ticket_id}'
     out = NL.join([
         header,
-        '━━━━━━━━━━━━━━━━━━━━',
         '',
-        f'👤 <b>{first_name or "Клиент"}</b>',
-        f'📱 {uname}',
-        f'🆔 <code>{user_id}</code>',
-        f'🕐 {ts}',
-        '',
-        '💬 <b>Сообщение:</b>',
-        f'<i>{text}</i>',
-        '',
-        '━━━━━━━━━━━━━━━━━━━━',
-        f'📩 Ответь <b>reply</b> на это сообщение',
-        f'Тикет: <code>#{ticket_id}</code>'
+        text
     ])
     send(token, admin_id, out)
 
@@ -681,12 +702,10 @@ def start_ticket_reply(cfg, chat_id, user_id, ticket_id):
     NL = chr(10)
     out = NL.join([
         f'💬 <b>ОТВЕТ В ТИКЕТ #{ticket_id}</b>',
-        '━━━━━━━━━━━━━━━━━━━━',
         '',
-        'Напиши текст ответа клиенту.',
-        'Он получит его от бота поддержки.',
-        '',
-        '👇 Жду текст:'
+        'Напиши ответ клиенту.',
+        '<i>Все следующие сообщения будут уходить ему же.</i>',
+        '<i>Выход: /cancel</i>'
     ])
     send(token, chat_id, out)
 
@@ -978,14 +997,16 @@ def main():
     log.info(f"Token: ...{token[-8:]}")
     log.info(f"Admin: {admin_id}")
     tg(token, 'deleteWebhook')
-    # Команды для ВСЕХ — только /start
+    # Команды для ВСЕХ
     tg(token, 'setMyCommands', {'commands': [
-        {'command': 'start', 'description': '👋 Начать'}
+        {'command': 'start', 'description': '👋 Начать'},
+        {'command': 'help', 'description': '❓ Помощь'}
     ]})
     # Команды только для админа (scope: chat)
     tg(token, 'setMyCommands', {
         'commands': [
             {'command': 'start', 'description': '👋 Начать'},
+            {'command': 'help', 'description': '❓ Помощь'},
             {'command': 'admin', 'description': '⚙️ Админ-панель'}
         ],
         'scope': {'type': 'chat', 'chat_id': int(admin_id)}
