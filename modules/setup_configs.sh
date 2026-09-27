@@ -31,4 +31,9 @@ if [ ! -f /etc/UDPCustom/post.txt ] || ! grep -q "DarkTunnel" /etc/UDPCustom/pos
     curl -sf -o /etc/UDPCustom/post.txt "$REPO_URL/configs/post.txt"
 fi
 
+# rate.txt — курс USDT → манат (для ручного пополнения TMCELL)
+if [ ! -f /etc/UDPCustom/rate.txt ]; then
+    echo "20" > /etc/UDPCustom/rate.txt
+fi
+
 echo -e "\033[0;32m✅  Конфиги бота настроены\033[0m"

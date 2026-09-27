@@ -125,6 +125,11 @@ fi
 mkdir -p "$PANEL_DIR/modules" /etc/UDPCustom/limits /etc/UDPCustom/traffic /etc/UDPCustom/traffic_limits
 touch /etc/UDPCustom/users.db
 
+# rate.txt — курс USDT → манат (для ручного пополнения)
+if [ ! -f /etc/UDPCustom/rate.txt ]; then
+    echo "20" > /etc/UDPCustom/rate.txt
+fi
+
 # Скачивание ВСЕХ модулей
 # ──────────────────────────────────────────────────────────────
 echo -e "\n📥 Скачивание актуальных файлов с GitHub..."
