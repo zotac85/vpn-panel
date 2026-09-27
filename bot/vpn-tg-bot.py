@@ -482,17 +482,26 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
     
     if not_sub:
         # Не подписан на какие-то каналы
-        text = (
-            f"👋 Привет, {name}!\n\n"
-            f"⚠️ <b>Чтобы получить тестовый ключ:</b>\n\n"
-            f"1️⃣ Подпишись на все каналы ниже\n"
-            f"2️⃣ Зайди в каждый, посмотри посты\n"
-            f"3️⃣ Поставь лайк или реакцию 👍\n"
-            f"4️⃣ Вернись и нажми «Я подписался»\n\n"
-            f"<b>Ты не подписан на:</b>\n"
-            + "".join([f"👉 @{ch}\n" for ch in not_sub]) +
-            f"\n💎 Есть VIP-ключи — пиши @ArsenGuro"
-        )
+        # Пытаемся прочитать welcome.txt (редактируемый админом)
+        channels_list = chr(10).join([f"👉 @{ch}" for ch in not_sub])
+        welcome_tpl = get_welcome_text()
+        if welcome_tpl:
+            text = (welcome_tpl
+                    .replace('{name}', name)
+                    .replace('{channels_list}', channels_list))
+        else:
+            # Fallback — если файла нет
+            text = (
+                f"👋 Привет, {name}!\n\n"
+                f"⚠️ <b>Чтобы получить тестовый ключ:</b>\n\n"
+                f"1️⃣ Подпишись на все каналы ниже\n"
+                f"2️⃣ Зайди в каждый, посмотри посты\n"
+                f"3️⃣ Поставь лайк или реакцию 👍\n"
+                f"4️⃣ Вернись и нажми «Я подписался»\n\n"
+                f"<b>Ты не подписан на:</b>\n"
+                + "".join([f"👉 @{ch}\n" for ch in not_sub]) +
+                f"\n💎 Есть VIP-ключи — пиши @ArsenGuro"
+            )
         keyboard = {'inline_keyboard': []}
         for ch in not_sub:
             keyboard['inline_keyboard'].append([{'text': f'📢 @{ch}', 'url': f'https://t.me/{ch}'}])
