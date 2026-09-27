@@ -19,6 +19,18 @@ if [ ! -f /etc/UDPCustom/start.txt ] || ! grep -q "sponsors_list" /etc/UDPCustom
     curl -sf -o /etc/UDPCustom/start.txt "$REPO_URL/configs/start.txt"
 fi
 
+# test_ready.txt — текст "тестовый ключ доступен"
+if [ ! -f /etc/UDPCustom/test_ready.txt ] || ! grep -q "{hours}" /etc/UDPCustom/test_ready.txt 2>/dev/null; then
+    [ -f /etc/UDPCustom/test_ready.txt ] && cp /etc/UDPCustom/test_ready.txt /etc/UDPCustom/test_ready.txt.bak
+    curl -sf -o /etc/UDPCustom/test_ready.txt "$REPO_URL/configs/test_ready.txt"
+fi
+
+# test_issued.txt — текст "тестовый доступ готов"
+if [ ! -f /etc/UDPCustom/test_issued.txt ] || ! grep -q "{username}" /etc/UDPCustom/test_issued.txt 2>/dev/null; then
+    [ -f /etc/UDPCustom/test_issued.txt ] && cp /etc/UDPCustom/test_issued.txt /etc/UDPCustom/test_issued.txt.bak
+    curl -sf -o /etc/UDPCustom/test_issued.txt "$REPO_URL/configs/test_issued.txt"
+fi
+
 # channels.txt
 if [ ! -f /etc/UDPCustom/channels.txt ] || [ ! -s /etc/UDPCustom/channels.txt ]; then
     [ -f /etc/UDPCustom/channels.txt ] && cp /etc/UDPCustom/channels.txt /etc/UDPCustom/channels.txt.bak
