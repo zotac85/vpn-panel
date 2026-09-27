@@ -31,6 +31,22 @@ if [ ! -f /etc/UDPCustom/test_issued.txt ] || ! grep -q "{username}" /etc/UDPCus
     curl -sf -o /etc/UDPCustom/test_issued.txt "$REPO_URL/configs/test_issued.txt"
 fi
 
+# help.txt — главный экран /help
+if [ ! -f /etc/UDPCustom/help.txt ] || ! grep -q "{primary}" /etc/UDPCustom/help.txt 2>/dev/null; then
+    [ -f /etc/UDPCustom/help.txt ] && cp /etc/UDPCustom/help.txt /etc/UDPCustom/help.txt.bak
+    curl -sf -o /etc/UDPCustom/help.txt "$REPO_URL/configs/help.txt"
+fi
+
+# help_instruction.txt — инструкция подключения
+if [ ! -f /etc/UDPCustom/help_instruction.txt ]; then
+    curl -sf -o /etc/UDPCustom/help_instruction.txt "$REPO_URL/configs/help_instruction.txt"
+fi
+
+# help_faq.txt — FAQ
+if [ ! -f /etc/UDPCustom/help_faq.txt ]; then
+    curl -sf -o /etc/UDPCustom/help_faq.txt "$REPO_URL/configs/help_faq.txt"
+fi
+
 # channels.txt
 if [ ! -f /etc/UDPCustom/channels.txt ] || [ ! -s /etc/UDPCustom/channels.txt ]; then
     [ -f /etc/UDPCustom/channels.txt ] && cp /etc/UDPCustom/channels.txt /etc/UDPCustom/channels.txt.bak
