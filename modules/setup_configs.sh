@@ -47,6 +47,12 @@ if [ ! -f /etc/UDPCustom/help_faq.txt ]; then
     curl -sf -o /etc/UDPCustom/help_faq.txt "$REPO_URL/configs/help_faq.txt"
 fi
 
+# vip_buy.txt — экран "Купить VIP"
+if [ ! -f /etc/UDPCustom/vip_buy.txt ] || ! grep -q "{tariffs}" /etc/UDPCustom/vip_buy.txt 2>/dev/null; then
+    [ -f /etc/UDPCustom/vip_buy.txt ] && cp /etc/UDPCustom/vip_buy.txt /etc/UDPCustom/vip_buy.txt.bak
+    curl -sf -o /etc/UDPCustom/vip_buy.txt "$REPO_URL/configs/vip_buy.txt"
+fi
+
 # channels.txt
 if [ ! -f /etc/UDPCustom/channels.txt ] || [ ! -s /etc/UDPCustom/channels.txt ]; then
     [ -f /etc/UDPCustom/channels.txt ] && cp /etc/UDPCustom/channels.txt /etc/UDPCustom/channels.txt.bak

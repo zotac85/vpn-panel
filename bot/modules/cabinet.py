@@ -959,42 +959,51 @@ def show_buy_vip(cfg, chat_id, user_id, msg_id=None):
     tariffs = _parse_vip_tariffs(cfg)
     balance = db.get_balance(user_id)
 
-    NL = chr(10)
-    lines = [
-        "💎 <b>КУПИТЬ VIP-КЛЮЧ</b>",
-        "━━━━━━━━━━━━━━━━━━━━",
-        "",
-        f"💰 Твой баланс: <b>{balance:.2f} USDT</b>",
-        "",
-        "━━━━━━━━━━━━━━━━━━━━",
-        "📋 <b>Тарифы:</b>",
-        ""
-    ]
+    # Генерим текст тарифов
+    tariffs_lines = []
     kb_rows = []
     for i, t in enumerate(tariffs, 1):
         can_buy = balance >= t['price']
-        mark = "✅" if can_buy else "❌"
-        lines.append(f"{mark} <b>{t['days']} дней</b> — {t['price']:.0f} USDT")
-        lines.append(f"   📊 {t['gb']} ГБ · 📱 {t['devices']} устр.")
-        lines.append("")
+        mark = "✅ " if can_buy else "❌ "
+        tariffs_lines.append(f"{mark} <b>{t['days']} дней</b> — {t['price']:.0f} USDT")
+        tariffs_lines.append(f"   📊 {t['gb']} ГБ · 📱 {t['devices']} устр.")
+        tariffs_lines.append("")
         kb_rows.append([{
             'text': f"💎 {t['days']}д — {t['price']:.0f} USDT",
             'callback_data': f'cab_vip_buy:{i}'
         }])
+    tariffs_text = chr(10).join(tariffs_lines).rstrip()
 
-    if any(balance < t['price'] for t in tariffs):
-        lines.append("━━━━━━━━━━━━━━━━━━━━")
-        lines.append("⚠️ Не хватает баланса? Пополни:")
-        lines.append("<i>Нажми «💵 Пополнить» ниже</i>")
+    # Читаем шаблон из файла
+    tpl = None
+    try:
+        with open('/etc/UDPCustom/vip_buy.txt') as f:
+            tpl = f.read().strip()
+    except: pass
 
-    text = NL.join(lines)
+    if tpl:
+        text = (tpl
+                .replace('{balance}', f"{balance:.2f}")
+                .replace('{tariffs}', tariffs_text))
+    else:
+        NL = chr(10)
+        text = NL.join([
+            "💎 <b>КУПИТЬ VIP-КЛЮЧ</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            f"💰 Твой баланс: <b>{balance:.2f} USDT</b>",
+            "",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "📋 <b>Тарифы:</b>",
+            "",
+            tariffs_text
+        ])
 
     kb_rows.append([
         {'text': '💵 Пополнить', 'callback_data': 'cab_topup'},
         {'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}
     ])
     kb = {'inline_keyboard': kb_rows}
-
     if msg_id:
         _edit(token, chat_id, msg_id, text, kb)
     else:
