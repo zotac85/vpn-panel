@@ -1258,7 +1258,10 @@ def _get_help_faq():
     try:
         with open('/etc/UDPCustom/help_faq.txt') as f:
             t = f.read().strip()
-            return t.replace('{support}', _get_support()) if t else None
+            if not t: return None
+            t = t.replace('{support}', _get_support())
+            # {hours} подставляем позже — здесь без cfg
+            return t
     except: return None
 
 
@@ -1283,6 +1286,9 @@ def show_help_faq(cfg, chat_id, user_id, msg_id=None):
     text = _get_help_faq()
     if not text:
         text = "❓ <b>FAQ</b>\n\nОтредактируй /etc/UDPCustom/help_faq.txt"
+    else:
+        _hours = cfg.get('TEST_HOURS', '8')
+        text = text.replace('{hours}', str(_hours))
     keyboard = {'inline_keyboard': [
         [{'text': '⬅️ Назад', 'callback_data': 'cab_help_back'}]
     ]}

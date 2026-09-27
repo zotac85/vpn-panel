@@ -250,6 +250,16 @@ def handle_message(cfg, msg, token, admin_id):
     # Ищем ответ в FAQ
     answer, title = find_faq_answer(text)
     if answer:
+        # Подставляем плейсхолдеры в найденный ответ
+        _sup = ''
+        try:
+            with open('/etc/UDPCustom/support.txt') as _f:
+                _sup = _f.read().strip() or '@ArsenGuro'
+        except: _sup = '@ArsenGuro'
+        _hours = cfg.get('TEST_HOURS', '8')
+        answer = (answer
+                  .replace('{support}', _sup)
+                  .replace('{hours}', str(_hours)))
         sdb.faq_hit(title or 'unknown')
         # Сохраняем какой блок показан (для feedback)
         try:
