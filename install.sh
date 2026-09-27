@@ -130,6 +130,13 @@ if [ ! -f /etc/UDPCustom/rate.txt ]; then
     echo "20" > /etc/UDPCustom/rate.txt
 fi
 
+# Добавляем недостающие параметры в bot.conf (не перезаписывая существующие)
+if [ -f /etc/UDPCustom/bot.conf ]; then
+    grep -q "^SERVER_LOCATION=" /etc/UDPCustom/bot.conf || echo 'SERVER_LOCATION="🌍 Сервер"' >> /etc/UDPCustom/bot.conf
+    grep -q "^VIP_TARIFFS=" /etc/UDPCustom/bot.conf || echo 'VIP_TARIFFS="10|2|100|1,30|5|300|1,90|13|900|1"' >> /etc/UDPCustom/bot.conf
+    echo -e "\033[0;32m✅   bot.conf: недостающие параметры добавлены\033[0m"
+fi
+
 # Скачивание ВСЕХ модулей
 # ──────────────────────────────────────────────────────────────
 echo -e "\n📥 Скачивание актуальных файлов с GitHub..."
