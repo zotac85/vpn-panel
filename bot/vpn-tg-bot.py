@@ -3966,22 +3966,15 @@ def main():
                     balance = _db.get_balance(user_id)
                     u_name = user.get('first_name') or '—'
                     u_uname = user.get('username') or ''
-                    # 1. Forward фото админу
+                    # 1. Отправляем фото по file_id (forward не сработает — фото в другом сообщении)
                     try:
-                        tg_request(cfg['BOT_TOKEN'], 'forwardMessage', {
-                            'chat_id': admin_id,
-                            'from_chat_id': user_id,
-                            'message_id': msg['message_id']
-                        })
-                    except Exception as e:
-                        log.error(f'topup forward error: {e}')
-                        try:
-                            tg_request(cfg['BOT_TOKEN'], 'sendPhoto', {
+                        tg_request(cfg['BOT_TOKEN'], 'sendPhoto', {
                             'chat_id': admin_id,
                             'photo': _file_id,
                             'caption': f'💵 Чек от {u_name} (ID {user_id})'
-                            })
-                        except: pass
+                        })
+                    except Exception as e:
+                        log.error(f'topup sendPhoto error: {e}')
                     # 2. Уведомление админу
                     NLx = chr(10)
                     admin_msg = NLx.join([
