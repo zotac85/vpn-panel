@@ -3448,6 +3448,54 @@ def main():
                 if 'message' not in upd: continue
                 msg = upd['message']; chat_id = msg['chat']['id']; user_id = msg['from']['id']; first_name = msg['from'].get('first_name','')
                 text = msg.get('text','')
+
+                # === PHOTO handler (чек пополнения) ===
+                try:
+                    from bot_modules import db as _dbp
+                    _pend_ph = _dbp.get_pending(user_id)
+                except: _pend_ph = None
+
+                if 'photo' in msg:
+                    if _pend_ph == 'topup_check':
+                        _file_id = msg['photo'][-1]['file_id']
+                        _dbp.set_pending(user_id, 'topup_amount:' + _file_id)
+                        NLp = chr(10)
+                        ask = NLp.join([
+                            "✅ <b>ФОТО ПОЛУЧЕНО</b>",
+                            "",
+                            "━━━━━━━━━━━━━━━━━━━━",
+                            "📝 <b>ШАГ 2/2</b>",
+                            "━━━━━━━━━━━━━━━━━━━━",
+                            "",
+                            "Напиши сумму в <b>USDT</b>, которую",
+                            "нужно зачислить на баланс.",
+                            "",
+                            "Например: <code>5</code> или <code>10.5</code>",
+                            "",
+                            "💡 Курс: 1 USDT ≈ 20 манат",
+                            "Например, за 100 манат → ~5 USDT"
+                        ])
+                        send_message(cfg['BOT_TOKEN'], chat_id, ask, parse_mode='HTML')
+                        continue
+                    else:
+                        NLp2 = chr(10)
+                        hint = NLp2.join([
+                            "⚠️ <b>Чтобы отправить чек:</b>",
+                            "",
+                            "1. /cabinet → 💰 Баланс",
+                            "2. 💵 Пополнить → 💳 Ручное (TMCELL)",
+                            "3. 📸 Отправить чек",
+                            "",
+                            "И тогда отправь фото 👇"
+                        ])
+                        send_message(cfg['BOT_TOKEN'], chat_id, hint, parse_mode='HTML')
+                        continue
+
+                if ('document' in msg or 'sticker' in msg) and _pend_ph == 'topup_check':
+                    send_message(cfg['BOT_TOKEN'], chat_id,
+                        "⚠️ Отправь именно <b>фото</b> (скриншот), не файл и не стикер.",
+                        parse_mode='HTML')
+                    continue
                 
                 # Обработка ввода промокода
                 try:
@@ -3499,38 +3547,54 @@ def main():
                     except: pass
                     continue
 
-                if pending == 'topup_amount' and text and not text.startswith('/'):
-                    _db.clear_pending(user_id)
-                    # Парсим сумму
+                if pending and pending.startswith('topup_amount:') and text and not text.startswith('/'):
+                    _file_id = pending.split(':', 1)[1]
                     try:
                         amount = float(text.strip().replace(',', '.'))
                     except:
-                        send_message(cfg['BOT_TOKEN'], chat_id, "❌ Отправь число. Например: <code>10</code>", parse_mode='HTML')
+                        send_message(cfg['BOT_TOKEN'], chat_id, '❌ Отправь число. Например: <code>10</code>', parse_mode='HTML')
                         continue
                     if amount < 1:
-                        send_message(cfg['BOT_TOKEN'], chat_id, "❌ Минимум 1 USDT")
+                        send_message(cfg['BOT_TOKEN'], chat_id, '❌ Минимум 1 USDT')
                         continue
                     if amount > 10000:
-                        send_message(cfg['BOT_TOKEN'], chat_id, "❌ Слишком большая сумма. Максимум 10000 USDT")
+                        send_message(cfg['BOT_TOKEN'], chat_id, '❌ Слишком большая сумма. Максимум 10000 USDT')
                         continue
-
-                    # Отправляем заявку админу
+                    # Всё ок — чистим pending
+                    _db.clear_pending(user_id)
                     user = _db.get_user(user_id) or {}
                     admin_id = cfg.get('ADMIN_ID', '')
                     balance = _db.get_balance(user_id)
-                    first_name = user.get('first_name') or '—'
-                    username = user.get('username') or ''
+                    u_name = user.get('first_name') or '—'
+                    u_uname = user.get('username') or ''
+                    # 1. Forward фото админу
+                    try:
+                        tg_request(cfg['BOT_TOKEN'], 'forwardMessage', {
+                            'chat_id': admin_id,
+                            'from_chat_id': user_id,
+                            'message_id': msg['message_id']
+                        })
+                    except Exception as e:
+                        log.error(f'topup forward error: {e}')
+                        try:
+                            tg_request(cfg['BOT_TOKEN'], 'sendPhoto', {
+                            'chat_id': admin_id,
+                            'photo': _file_id,
+                            'caption': f'💵 Чек от {u_name} (ID {user_id})'
+                            })
+                        except: pass
+                    # 2. Уведомление админу
                     NLx = chr(10)
                     admin_msg = NLx.join([
-                        "💵 <b>ЗАЯВКА НА ПОПОЛНЕНИЕ</b>",
+                        "💵 <b>НОВАЯ ЗАЯВКА НА ПОПОЛНЕНИЕ</b>",
                         "━━━━━━━━━━━━━━━━━━━━",
                         "",
-                        f"👤 Имя: <b>{first_name}</b>",
+                        f"👤 Имя: <b>{u_name}</b>",
                         f"🆔 ID: <code>{user_id}</code>",
-                        f"📱 Username: @{username}" if username else "📱 Username: —",
-                        f"💰 Текущий баланс: <b>{balance:.2f} USDT</b>",
+                        f"📱 Username: @{u_uname}" if u_uname else "📱 Username: —",
+                        f"💰 Баланс до: <b>{balance:.2f} USDT</b>",
                         "",
-                        f"💵 Хочет пополнить: <b>{amount:.2f} USDT</b>",
+                        f"💵 Хочет получить: <b>{amount:.2f} USDT</b>",
                         "",
                         "━━━━━━━━━━━━━━━━━━━━",
                         f"Начислить: /admin → 💰 Начислить баланс",
@@ -3547,19 +3611,31 @@ def main():
                             'reply_markup': kb_admin
                         })
                     except Exception as e:
-                        log.error(f"topup admin send: {e}")
-
-                    # Подтверждение юзеру
+                        log.error(f'topup admin send: {e}')
+                    # 3. Подтверждение юзеру
                     NLx2 = chr(10)
                     ok_text = NLx2.join([
                         "✅ <b>ЗАЯВКА ОТПРАВЛЕНА</b>",
                         "",
-                        f"Сумма: <b>{amount:.2f} USDT</b>",
+                        "━━━━━━━━━━━━━━━━━━━━",
+                        "📸 Фото чека: ✅",
+                        f"💵 Сумма: <b>{amount:.2f} USDT</b>",
+                        "━━━━━━━━━━━━━━━━━━━━",
                         "",
-                        "Админ получил заявку и свяжется с тобой.",
-                        "Если долго нет ответа — напиши @ArsenGuro"
+                        "Админ проверит и пополнит баланс",
+                        "в течение 15-30 минут.",
+                        "",
+                        "💬 @ArsenGuro — если долго нет ответа"
                     ])
-                    send_message(cfg['BOT_TOKEN'], chat_id, ok_text, parse_mode='HTML')
+                    kb_ok = {'inline_keyboard': [
+                        [{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
+                    ]}
+                    tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                        'chat_id': chat_id,
+                        'text': ok_text,
+                        'parse_mode': 'HTML',
+                        'reply_markup': kb_ok
+                    })
                     continue
 
                 if pending == 'promo_input' and text and not text.startswith('/'):

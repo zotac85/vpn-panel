@@ -924,6 +924,15 @@ def show_promo(cfg, chat_id, user_id, msg_id=None):
         _send(token, chat_id, text, keyboard)
 
 
+def _get_rate():
+    """Читает курс из /etc/UDPCustom/rate.txt (USDT → манат)."""
+    try:
+        with open('/etc/UDPCustom/rate.txt') as f:
+            return float(f.read().strip())
+    except:
+        return 20.0
+
+
 def _parse_vip_tariffs(cfg):
     """Парсит VIP_TARIFFS из конфига. Возвращает список dict."""
     raw = cfg.get('VIP_TARIFFS', '10|2|100|1,30|5|300|1,90|13|900|1')
@@ -1380,25 +1389,99 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
     if cb_data == 'cab_topup':
         NL = chr(10)
         balance = db.get_balance(user_id)
+        rate = _get_rate()
         text = NL.join([
             "💵 <b>ПОПОЛНЕНИЕ БАЛАНСА</b>",
             "━━━━━━━━━━━━━━━━━━━━",
             "",
-            f"Твой баланс: <b>{balance:.2f} USDT</b>",
+            f"💰 Текущий баланс: <b>{balance:.2f} USDT</b>",
             "",
-            "Для пополнения напиши админу:",
-            "👉 @ArsenGuro",
-            "",
-            f"Укажи свой ID: <code>{user_id}</code>",
-            "",
-            "<i>Скоро — автоплатежи (USDT)</i>"
+            "━━━━━━━━━━━━━━━━━━━━",
+            "Выбери способ пополнения:"
         ])
         kb = {'inline_keyboard': [
-            [{'text': '📤 Отправить заявку админу', 'callback_data': 'cab_topup_send'}],
-            [{'text': '💬 Написать @ArsenGuro', 'url': 'https://t.me/ArsenGuro'}],
+            [{'text': '💳 Ручное (TMCELL)', 'callback_data': 'cab_topup_manual'}],
+            [{'text': '🤖 Крипто-бот', 'callback_data': 'cab_topup_crypto'}],
             [{'text': '⬅️ К балансу', 'callback_data': 'cab_balance'}]
         ]}
         _edit(token, chat_id, msg_id, text, kb)
+        return True
+    if cb_data == 'cab_topup_manual':
+        NL = chr(10)
+        rate = _get_rate()
+        text = NL.join([
+            "💳 <b>ПОПОЛНЕНИЕ ЧЕРЕЗ TMCELL</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "📋 <b>ИНСТРУКЦИЯ:</b>",
+            "",
+            "1️⃣ Напиши админу @ArsenGuro",
+            "   Уточни <b>АКТУАЛЬНЫЙ</b> номер TMCELL",
+            "   (номер может меняться)",
+            "",
+            "2️⃣ Переведи нужную сумму на этот номер",
+            "",
+            "3️⃣ Вернись сюда и нажми кнопку",
+            "   «📸 Отправить чек»",
+            "",
+            "━━━━━━━━━━━━━━━━━━━━",
+            f"💵 Курс: <b>1 USDT ≈ {rate:.0f} манат</b>",
+            "",
+            "⚠️ <b>Важно:</b> уточни номер у админа",
+            "ПЕРЕД переводом!"
+        ])
+        kb = {'inline_keyboard': [
+            [{'text': '💬 Написать @ArsenGuro', 'url': 'https://t.me/ArsenGuro'}],
+            [{'text': '📸 Отправить чек', 'callback_data': 'cab_topup_photo'}],
+            [{'text': '⬅️ Назад', 'callback_data': 'cab_topup'}]
+        ]}
+        _edit(token, chat_id, msg_id, text, kb)
+        return True
+    if cb_data == 'cab_topup_crypto':
+        NL = chr(10)
+        text = NL.join([
+            "🤖 <b>КРИПТО-БОТ</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "🚧 <b>Скоро будет доступно!</b>",
+            "",
+            "Автоматическое пополнение через USDT",
+            "(TRC-20 / ERC-20) прямо в бота.",
+            "",
+            "Пока — пиши @ArsenGuro"
+        ])
+        kb = {'inline_keyboard': [
+            [{'text': '💬 @ArsenGuro', 'url': 'https://t.me/ArsenGuro'}],
+            [{'text': '⬅️ Назад', 'callback_data': 'cab_topup'}]
+        ]}
+        _edit(token, chat_id, msg_id, text, kb)
+        return True
+    if cb_data == 'cab_topup_photo':
+        NL = chr(10)
+        text = NL.join([
+            "📸 <b>ОТПРАВКА ЧЕКА (шаг 1/2)</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "Отправь скриншот из приложения",
+            "с <b>успешным переводом</b>.",
+            "",
+            "⚠️ На скрине должно быть видно:",
+            "• Сумма перевода",
+            "• Номер получателя",
+            "• Дата/время",
+            "",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "Просто отправь <b>фото</b> следующим",
+            "сообщением 👇"
+        ])
+        kb = {'inline_keyboard': [
+            [{'text': '⬅️ Отмена', 'callback_data': 'cab_topup_manual'}]
+        ]}
+        _edit(token, chat_id, msg_id, text, kb)
+        try:
+            db.set_pending(user_id, 'topup_check')
+        except Exception as e:
+            cab_log.error(f"set_pending topup_check: {e}")
         return True
     if cb_data.startswith('cab_hist:'):
         try:
