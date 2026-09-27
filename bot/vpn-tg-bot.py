@@ -2863,39 +2863,147 @@ CHANNELS_FILE = "/etc/UDPCustom/channels.txt"
 
 
 def handle_channels(cfg, chat_id, user_id, msg_id=None):
-    """Список каналов с ролями"""
+    """Список каналов с кнопками управления"""
     token = cfg['BOT_TOKEN']
     if not is_admin(cfg, user_id):
         send_message(token, chat_id, "🚫 Только для админа."); return
-    
     channels = get_channels()
+    NL = chr(10)
     if not channels:
-        kb = {'inline_keyboard': [[{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]]}
-        if msg_id:
-            tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': "📢 <b>Каналов нет.</b>\n\n<i>Добавить: /addchannel @name</i>", 'reply_markup': kb, 'parse_mode': 'HTML'})
-        else:
-            send_message(token, chat_id, "📢 <b>Каналов нет.</b>\n\n<i>Добавить: /addchannel @name</i>", reply_markup=kb, parse_mode='HTML')
-        return
-    
-    text = f"📢 <b>Каналы ({len(channels)}):</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
-    for i, ch in enumerate(channels, 1):
-        ch_clean = ch.lstrip('@')
-        if i == 1:
-            text += f"<b>{i}.</b> <code>@{ch_clean}</code> — 🎯 <b>Основной</b>\n"
-        else:
-            text += f"<b>{i}.</b> <code>@{ch_clean}</code> — 📢 Спонсор\n"
-    
-    text += f"\n━━━━━━━━━━━━━━━━━━━━\n"
-    text += f"<i>Добавить: /addchannel @name</i>\n"
-    text += f"<i>Удалить: /delchannel N</i>"
+        text = NL.join([
+            "📢 <b>КАНАЛОВ НЕТ</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "Добавь первый канал — он станет основным."
+        ])
+    else:
+        lines_txt = [
+            f"📢 <b>УПРАВЛЕНИЕ КАНАЛАМИ ({len(channels)})</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            ""
+        ]
+        for i, ch in enumerate(channels, 1):
+            ch_clean = ch.lstrip('@')
+            if i == 1:
+                lines_txt.append(f"<b>{i}.</b> <code>@{ch_clean}</code> — 🎯 <b>Основной</b>")
+            else:
+                lines_txt.append(f"<b>{i}.</b> <code>@{ch_clean}</code> — 📢 Спонсор")
+        lines_txt.append("")
+        lines_txt.append("━━━━━━━━━━━━━━━━━━━━")
+        lines_txt.append("<i>Основной — первый канал. Остальные — обязательные спонсоры.</i>")
+        text = NL.join(lines_txt)
+
     kb = {'inline_keyboard': [
+        [{'text': '➕ Добавить канал', 'callback_data': 'adm_ch_add'}],
+        [{'text': '🗑 Удалить канал', 'callback_data': 'adm_ch_del'}],
         [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
     ]}
     if msg_id:
         tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
     else:
-        send_message(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
-    
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
+
+
+def show_delete_channels(cfg, chat_id, user_id, msg_id=None):
+    """Экран удаления каналов"""
+    token = cfg['BOT_TOKEN']
+    if not is_admin(cfg, user_id):
+        return
+    channels = get_channels()
+    NL = chr(10)
+    if not channels:
+        text = "📢 Каналов нет"
+        kb = {'inline_keyboard': [[{'text': '⬅️ Назад', 'callback_data': 'admin_channels'}]]}
+    else:
+        lines_txt = [
+            "🗑 <b>УДАЛИТЬ КАНАЛ</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "Выбери канал для удаления:",
+            ""
+        ]
+        if len(channels) > 1:
+            lines_txt.append("<i>⚠️ Основной удалить нельзя.</i>")
+            lines_txt.append("<i>Сначала сделай другой канал основным — удали текущий основной, после чего следующий станет первым.</i>")
+        else:
+            lines_txt.append("<i>⚠️ Это единственный канал — его нельзя удалить.</i>")
+        text = NL.join(lines_txt)
+
+        kb_rows = []
+        for i, ch in enumerate(channels, 1):
+            ch_clean = ch.lstrip('@')
+            if i == 1:
+                continue  # Основной пропускаем
+            kb_rows.append([{'text': f"🗑 @{ch_clean}", 'callback_data': f'adm_ch_delok:{i}'}])
+        kb_rows.append([{'text': '⬅️ Назад', 'callback_data': 'admin_channels'}])
+        kb = {'inline_keyboard': kb_rows}
+
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
+
+
+def do_delete_channel(cfg, cb, idx):
+    """Удаляет канал по номеру (1-based)"""
+    token = cfg['BOT_TOKEN']
+    chat_id = cb['message']['chat']['id']
+    cb_id = cb['id']
+    if idx == 1:
+        tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': '🚫 Основной удалить нельзя', 'show_alert': True})
+        return
+    try:
+        with open('/etc/UDPCustom/channels.txt') as f:
+            channels = [l.strip() for l in f if l.strip() and not l.startswith('#')]
+    except:
+        tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': '❌ Ошибка чтения', 'show_alert': True})
+        return
+    if idx < 1 or idx > len(channels):
+        tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': '❌ Канал не найден', 'show_alert': True})
+        return
+    removed = channels.pop(idx - 1)
+    try:
+        with open('/etc/UDPCustom/channels.txt', 'w') as f:
+            for ch in channels:
+                f.write(ch + chr(10))
+    except Exception as e:
+        tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': f'❌ {e}', 'show_alert': True})
+        return
+    tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': f'✅ {removed} удалён'})
+    # Показываем обновлённый список
+    show_delete_channels(cfg, chat_id, cb['from']['id'], cb['message']['message_id'])
+    log.info(f'Channel deleted: {removed}')
+
+
+def show_add_channel(cfg, chat_id, user_id):
+    """Инструкция добавления канала"""
+    token = cfg['BOT_TOKEN']
+    if not is_admin(cfg, user_id):
+        return
+    PENDING_ACTIONS[user_id] = 'addchannel_new'
+    NL = chr(10)
+    text = NL.join([
+        "➕ <b>ДОБАВИТЬ КАНАЛ</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "",
+        "Отправь username канала ответом на это сообщение.",
+        "",
+        "📌 Форматы:",
+        "• <code>@MyChannel</code>",
+        "• <code>MyChannel</code>",
+        "• <code>https://t.me/MyChannel</code>",
+        "",
+        "⚠️ Бот должен быть админом канала!",
+        "",
+        "👇 Отправь ответом:"
+    ])
+    tg_request(token, 'sendMessage', {
+        'chat_id': chat_id,
+        'text': text,
+        'parse_mode': 'HTML',
+        'reply_markup': {'force_reply': True, 'selective': True}
+    })
+
 
 
 PENDING_ACTIONS = {}
@@ -2922,6 +3030,88 @@ def handle_addchannel(cfg, chat_id, user_id, args):
     
     # Есть аргумент — обрабатываем сразу
     _do_addchannel(token, chat_id, args)
+
+
+def _do_addchannel_new(token, chat_id, raw_args):
+    """Добавляет канал с разными форматами (кнопка из админки)"""
+    NL = chr(10)
+    raw = (raw_args or '').strip()
+    if not raw:
+        send_message(token, chat_id, '❌ Пустой ввод')
+        return
+
+    # Обрабатываем форматы
+    ch = raw
+    if ch.startswith('https://t.me/'):
+        ch = ch[len('https://t.me/'):]
+    elif ch.startswith('t.me/'):
+        ch = ch[len('t.me/'):]
+    elif ch.startswith('http://t.me/'):
+        ch = ch[len('http://t.me/'):]
+    # Убираем @ в начале
+    ch = ch.lstrip('@').split('/')[0].split('?')[0].strip()
+    if not ch:
+        send_message(token, chat_id, '❌ Неверный формат')
+        return
+
+    ch = '@' + ch
+
+    # Проверяем через Telegram API
+    test = tg_request(token, 'getChat', {'chat_id': ch})
+    if not test or not test.get('ok'):
+        err = test.get('description', 'unknown') if test else 'нет ответа'
+        send_message(token, chat_id, f"❌ Не удалось получить канал: {err}" + NL + NL + "Проверь что:" + NL + "• Username правильный" + NL + "• Бот добавлен в канал как админ")
+        return
+
+    # Читаем каналы
+    try:
+        with open('/etc/UDPCustom/channels.txt') as f:
+            channels = [l.strip() for l in f if l.strip() and not l.startswith('#')]
+    except:
+        channels = []
+
+    if ch in channels:
+        send_message(token, chat_id, f"⚠️ Канал <code>{ch}</code> уже в списке", parse_mode='HTML')
+        return
+
+    channels.append(ch)
+    try:
+        with open('/etc/UDPCustom/channels.txt', 'w') as f:
+            for c in channels:
+                f.write(c + NL)
+    except Exception as e:
+        send_message(token, chat_id, f"❌ Ошибка сохранения: {e}")
+        return
+
+    # Определяем роль
+    if len(channels) == 1:
+        role = '🎯 Основной'
+    else:
+        role = f'📢 Спонсор #{len(channels) - 1}'
+
+    # Результат
+    result = NL.join([
+        '✅ <b>КАНАЛ ДОБАВЛЕН</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        f'📢 <code>{ch}</code>',
+        f'📍 Роль: {role}',
+        '',
+        f'📊 Всего каналов: <b>{len(channels)}</b>'
+    ])
+    kb = {'inline_keyboard': [
+        [{'text': '📢 К каналам', 'callback_data': 'admin_channels'},
+         {'text': '➕ Добавить ещё', 'callback_data': 'adm_ch_add'}],
+        [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
+    ]}
+    tg_request(token, 'sendMessage', {
+        'chat_id': chat_id,
+        'text': result,
+        'parse_mode': 'HTML',
+        'reply_markup': kb
+    })
+    log.info(f'Channel added: {ch}')
+
 
 
 def _do_addchannel(token, chat_id, args):
@@ -3480,6 +3670,20 @@ def main():
                     elif cb_data == 'admin_channels':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         handle_channels(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                    elif cb_data == 'adm_ch_add':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        show_add_channel(cfg, cb['message']['chat']['id'], cb_user_id)
+                        continue
+                    elif cb_data == 'adm_ch_del':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        show_delete_channels(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                        continue
+                    elif cb_data.startswith('adm_ch_delok:'):
+                        try:
+                            _idx = int(cb_data.split(':', 1)[1])
+                        except: _idx = 0
+                        do_delete_channel(cfg, cb, _idx)
+                        continue
                     elif cb_data == 'admin_manage':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
                             'callback_query_id': cb['id']
@@ -3842,6 +4046,8 @@ def main():
                     action = PENDING_ACTIONS.pop(user_id)
                     if action == 'addchannel':
                         _do_addchannel(cfg['BOT_TOKEN'], chat_id, text)
+                    elif action == 'addchannel_new':
+                        _do_addchannel_new(cfg['BOT_TOKEN'], chat_id, text)
                     elif action == 'delchannel':
                         _do_delchannel(cfg['BOT_TOKEN'], chat_id, text)
                     elif action == 'newpromo':
