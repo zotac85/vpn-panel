@@ -571,11 +571,17 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         # Пытаемся прочитать start.txt
         tpl_start = get_start_text()
         NL = chr(10)
+        _hours = cfg.get("TEST_HOURS", "8")
+        _gb = cfg.get("TEST_TRAFFIC_GB", "50")
+        _dev = cfg.get("TEST_DEVICES", "1")
         if tpl_start:
             text = (tpl_start
                     .replace("{name}", name)
                     .replace("{primary}", primary_clean)
-                    .replace("{sponsors_list}", sponsors_list))
+                    .replace("{sponsors_list}", sponsors_list)
+                    .replace("{hours}", str(_hours))
+                    .replace("{gb}", str(_gb))
+                    .replace("{devices}", str(_dev)))
         else:
             text = NL.join([
                 f"👋 Привет, {name}!",
@@ -1644,7 +1650,7 @@ def show_promo_list(cfg, chat_id, user_id, msg_id=None):
 
 EDIT_FILES = {
     'welcome': {'file': 'welcome.txt', 'name': '👋 Приветствие', 'ph': '{name}, {channels_list}'},
-    'start': {'file': 'start.txt', 'name': '📖 Как получить тест', 'ph': '{name}, {primary}, {sponsors_list}'},
+    'start': {'file': 'start.txt', 'name': '📖 Как получить тест', 'ph': '{name}, {primary}, {sponsors_list}, {hours}, {gb}, {devices}'},
     'test_ready': {'file': 'test_ready.txt', 'name': '🎁 Тест доступен', 'ph': '{name}, {hours}, {gb}, {devices}, {location}'},
     'test_issued': {'file': 'test_issued.txt', 'name': '🎉 Тест готов', 'ph': '{username}, {hours}, {gb}, {devices}'},
     'help': {'file': 'help.txt', 'name': '🏠 Меню /help', 'ph': '{primary}'},
