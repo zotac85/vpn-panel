@@ -16,4 +16,4 @@
 ━━━━━━━━━━━━━━━━━━
 
 📍 Ты в: @{primary}
-💬 @ArsenGuro
+💬 {support}

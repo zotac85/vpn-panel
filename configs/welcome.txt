@@ -10,4 +10,4 @@
 <b>Ты не подписан на:</b>
 {channels_list}
 
-💎 Есть VIP-ключи — пиши @ArsenGuro
+💎 Есть VIP-ключи — пиши {support}

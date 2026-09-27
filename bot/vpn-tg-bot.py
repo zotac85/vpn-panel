@@ -168,7 +168,7 @@ def get_start_text():
         try:
             with open(p) as f:
                 t = f.read().strip()
-                if t: return t
+                if t: return t.replace('{support}', get_support())
         except: pass
     return None
 
@@ -190,7 +190,7 @@ def get_welcome_text():
         try:
             with open(p) as f:
                 t = f.read().strip()
-                if t: return t
+                if t: return t.replace('{support}', get_support())
         except: pass
     return None
 
@@ -202,7 +202,7 @@ def get_test_ready_text():
         try:
             with open(p) as f:
                 t = f.read().strip()
-                if t: return t
+                if t: return t.replace('{support}', get_support())
         except: pass
     return None
 
@@ -214,9 +214,21 @@ def get_test_issued_text():
         try:
             with open(p) as f:
                 t = f.read().strip()
-                if t: return t
+                if t: return t.replace('{support}', get_support())
         except: pass
     return None
+
+
+def get_support():
+    """Контакты поддержки из /etc/UDPCustom/support.txt"""
+    p = '/etc/UDPCustom/support.txt'
+    if os.path.exists(p):
+        try:
+            with open(p) as f:
+                t = f.read().strip()
+                if t: return t
+        except: pass
+    return '@ArsenGuro'
 
 
 def get_payload():
@@ -487,7 +499,7 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
     channels = get_channels()
     
     if not channels:
-        send_message(token, chat_id, "❌ Каналы не настроены. Обратись: @ArsenGuro")
+        send_message(token, chat_id, f"❌  Каналы не настроены. Обратись: {get_support()}")
         return
     
     primary = channels[0].lstrip('@')
@@ -524,7 +536,7 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
                 f"4️⃣ Вернись и нажми «Я подписался»\n\n"
                 f"<b>Ты не подписан на:</b>\n"
                 + "".join([f"👉 @{ch}\n" for ch in not_sub]) +
-                f"\n💎 Есть VIP-ключи — пиши @ArsenGuro"
+                f"\n💎 Есть VIP-ключи — пиши {get_support()}"
             )
         keyboard = {'inline_keyboard': []}
         for ch in not_sub:
@@ -605,7 +617,7 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
                 "",
                 "━━━━━━━━━━━━━━━━━━━━",
                 "🎁 Тест:  8 часов · 50 ГБ · 1 устр.",
-                "💎 VIP:   @ArsenGuro"
+                f"💎 VIP:   {get_support()}"
             ])
         kb_start = []
         for i in range(0, len(sponsors_start), 2):
@@ -614,7 +626,7 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
                 row.append({"text": f"📢 @{sponsors_start[i+1]}", "url": f"https://t.me/{sponsors_start[i+1]}"})
             kb_start.append(row)
         kb_start.append([
-            {"text": "📣 Реклама", "url": "https://t.me/ArsenGuro"},
+            {"text": "📣 Реклама", "url": f"https://t.me/{get_support().lstrip(chr(64))}"},
             {"text": "👤 Личный кабинет", "callback_data": "cab_main"}
         ])
         keyboard = {"inline_keyboard": kb_start}
@@ -646,7 +658,7 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
 def handle_test(cfg, chat_id, user_id, first_name, cb_id=None):
     token = cfg['BOT_TOKEN']
     if is_blacklisted(user_id):
-        send_message(token, chat_id, "🚫 Ты в чёрном списке. @ArsenGuro"); return
+        send_message(token, chat_id, f"🚫 Ты в чёрном списке. {get_support()}"); return
     if cfg.get('REQUIRE_SUBSCRIPTION','0') == '1':
         channels = get_channels()
         not_sub = []
@@ -1818,7 +1830,7 @@ def post_to_channel(cfg, chat_id, user_id):
         return
     
     with open(post_file) as f:
-        post_text = f.read().strip()
+        post_text = f.read().strip().replace('{support}', get_support())
     
     # Убираем визуальный маркер кнопки из текста
     post_text = post_text.replace('[🎁 Получить тест]', '').strip()
@@ -1885,7 +1897,7 @@ def handle_channel_test(cfg, user_id, first_name):
     if is_blacklisted(user_id):
         tg_request(token, 'sendMessage', {
             'chat_id': user_id,
-            'text': "🚫 Ты в чёрном списке. Обратись: @ArsenGuro"
+            'text': f"🚫 Ты в чёрном списке. Обратись: {get_support()}"
         })
         return
     
@@ -1969,7 +1981,7 @@ def handle_channel_test(cfg, user_id, first_name):
         text += f"✅ Ключ получен с канала @{ch_name}\n"
         text += f"🕐 {now_str}\n"
     
-    text += f"\n💬 @ArsenGuro\n📢 @ArsenVipKeys"
+    text += f"\n💬 {get_support()}\n📢 @ArsenVipKeys"
     
     # Убираем кнопку "Получить тест" из welcome-сообщения
     welcome_file = f"/etc/UDPCustom/welcome_msgs/{user_id}"
@@ -4012,7 +4024,7 @@ def main():
                         "Админ проверит и пополнит баланс",
                         "в течение 15-30 минут.",
                         "",
-                        "💬 @ArsenGuro — если долго нет ответа"
+                        f"💬 {get_support()} — если долго нет ответа"
                     ])
                     kb_ok = {'inline_keyboard': [
                         [{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
@@ -4041,7 +4053,7 @@ def main():
                             'expired': '⏰ Промокод истёк',
                             'exhausted': '🚫 Промокод больше не действует',
                             'already_used': '⚠️ Ты уже использовал этот промокод',
-                            'no_vip_key': '⚠️ У тебя нет активного VIP-ключа.\n\nПромокод даёт дни только к VIP. Купи VIP: @ArsenGuro'
+                            'no_vip_key': f'⚠️ У тебя нет активного VIP-ключа.\n\nПромокод даёт дни только к VIP. Купи VIP: {get_support()}'
                         }
                         msg_text = reasons.get(reason, '❌ Ошибка активации')
                     send_message(cfg['BOT_TOKEN'], chat_id, msg_text, parse_mode='HTML')

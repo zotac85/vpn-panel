@@ -362,7 +362,7 @@ def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
         [{'text': '💰 Баланс', 'callback_data': 'cab_balance'},
          {'text': '🎫 Промокод', 'callback_data': 'cab_promo'}],
         [{'text': '👥 Рефералы', 'callback_data': 'cab_refs'},
-         {'text': '💬 Поддержка', 'url': 'https://t.me/ArsenGuro'}],
+         {'text': '💬 Поддержка', 'url': f'https://t.me/{_get_support().lstrip(chr(64))}'}],
         [{'text': '🏠 В главное меню', 'callback_data': 'cab_exit'}]
     ]}
 
@@ -427,7 +427,7 @@ def show_my_keys(cfg, chat_id, user_id, kind='all', msg_id=None):
             lines.append("4️⃣ Ключ прилетит сюда, в бот")
         lines.append("━━━━━━━━━━━━━━━━━━━━")
         lines.append("🎁 Тест:  8 часов · 50 ГБ · 1 устр.")
-        lines.append("💎 VIP:   @ArsenGuro")
+        lines.append(f"💎 VIP:   {_get_support()}")
     else:
         for kk, k in items:
             if k['expires_at'] == 0:
@@ -910,7 +910,7 @@ def show_promo(cfg, chat_id, user_id, msg_id=None):
         "",
         "━━━━━━━━━━━━━━━━━━━━",
         "📢 Промокоды публикуем в канале",
-        "💬 Не работает? @ArsenGuro"
+        f"💬 Не работает? {_get_support()}"
     ]
     text = NL.join(lines)
     keyboard = {'inline_keyboard': [
@@ -922,6 +922,15 @@ def show_promo(cfg, chat_id, user_id, msg_id=None):
         _edit(token, chat_id, msg_id, text, keyboard)
     else:
         _send(token, chat_id, text, keyboard)
+
+
+def _get_support():
+    """Контакты поддержки из /etc/UDPCustom/support.txt"""
+    try:
+        with open('/etc/UDPCustom/support.txt') as f:
+            t = f.read().strip()
+            return t if t else '@ArsenGuro'
+    except: return '@ArsenGuro'
 
 
 def _get_rate():
@@ -1231,7 +1240,7 @@ def _get_help_text():
     try:
         with open('/etc/UDPCustom/help.txt') as f:
             t = f.read().strip()
-            return t if t else None
+            return t.replace('{support}', _get_support()) if t else None
     except: return None
 
 
@@ -1240,7 +1249,7 @@ def _get_help_instruction():
     try:
         with open('/etc/UDPCustom/help_instruction.txt') as f:
             t = f.read().strip()
-            return t if t else None
+            return t.replace('{support}', _get_support()) if t else None
     except: return None
 
 
@@ -1249,7 +1258,7 @@ def _get_help_faq():
     try:
         with open('/etc/UDPCustom/help_faq.txt') as f:
             t = f.read().strip()
-            return t if t else None
+            return t.replace('{support}', _get_support()) if t else None
     except: return None
 
 
@@ -1427,7 +1436,7 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
             "",
             "📋 <b>ИНСТРУКЦИЯ:</b>",
             "",
-            "1️⃣ Напиши админу @ArsenGuro",
+            f"1️⃣ Напиши админу {_get_support()}",
             "   Уточни <b>АКТУАЛЬНЫЙ</b> номер TMCELL",
             "   (номер может меняться)",
             "",
@@ -1443,7 +1452,7 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
             "ПЕРЕД переводом!"
         ])
         kb = {'inline_keyboard': [
-            [{'text': '💬 Написать @ArsenGuro', 'url': 'https://t.me/ArsenGuro'}],
+            [{'text': f'💬 Написать {_get_support()}', 'url': f'https://t.me/{_get_support().lstrip(chr(64))}'}],
             [{'text': '📸 Отправить чек', 'callback_data': 'cab_topup_photo'}],
             [{'text': '⬅️ Назад', 'callback_data': 'cab_topup'}]
         ]}
@@ -1460,10 +1469,10 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
             "Автоматическое пополнение через USDT",
             "(TRC-20 / ERC-20) прямо в бота.",
             "",
-            "Пока — пиши @ArsenGuro"
+            f"Пока — пиши {_get_support()}"
         ])
         kb = {'inline_keyboard': [
-            [{'text': '💬 @ArsenGuro', 'url': 'https://t.me/ArsenGuro'}],
+            [{'text': f'💬 {_get_support()}', 'url': f'https://t.me/{_get_support().lstrip(chr(64))}'}],
             [{'text': '⬅️ Назад', 'callback_data': 'cab_topup'}]
         ]}
         _edit(token, chat_id, msg_id, text, kb)
