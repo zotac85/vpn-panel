@@ -1340,7 +1340,194 @@ def _do_newpromo(cfg, chat_id, args):
         lines.append('📅 До: <b>' + exp_str + '</b>')
     else:
         lines.append('📅 Действует: <b>бессрочно</b>')
-    send_message(token, chat_id, NL.join(lines), parse_mode='HTML')
+    kb = {'inline_keyboard': [
+        [{'text': '📤 Опубликовать в канал', 'callback_data': 'promo_pub:' + code}],
+        [{'text': '🎫 К промокодам', 'callback_data': 'adm_promo_list'}]
+    ]}
+    tg_request(token, 'sendMessage', {
+        'chat_id': chat_id,
+        'text': NL.join(lines),
+        'parse_mode': 'HTML',
+        'reply_markup': kb
+    })
+def _do_promo_post_start(cfg, cb, code):
+    """Просит текст поста для промокода"""
+    token = cfg['BOT_TOKEN']
+    chat_id = cb['message']['chat']['id']
+    admin_id = cb['from']['id']
+    cb_id = cb['id']
+
+    tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id})
+    PENDING_ACTIONS[admin_id] = 'promo_post:' + code
+
+    NL = chr(10)
+    text = NL.join([
+        '📢 <b>ПУБЛИКАЦИЯ ПРОМОКОДА</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        '🎫 Промокод: <code>' + code + '</code>',
+        '',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        '✏️ <b>Отправь текст поста ответом</b> на это сообщение 👇',
+        '',
+        '<i>Поддерживается HTML:</i>',
+        '<code>&lt;b&gt;жирный&lt;/b&gt;</code>',
+        '<code>&lt;i&gt;курсив&lt;/i&gt;</code>',
+        '<code>&lt;code&gt;моно&lt;/code&gt;</code>',
+        '',
+        '<i>Не забудь упомянуть промокод</i> <b>' + code + '</b> <i>в тексте.</i>'
+    ])
+
+    tg_request(token, 'sendMessage', {
+        'chat_id': chat_id,
+        'text': text,
+        'parse_mode': 'HTML',
+        'reply_markup': {'force_reply': True, 'selective': True}
+    })
+
+
+def _show_promo_preview(cfg, chat_id, code, post_text):
+    """Показывает превью и предлагает каналы"""
+    token = cfg['BOT_TOKEN']
+
+    channels = []
+    try:
+        with open('/etc/UDPCustom/channels.txt') as f:
+            channels = [l.strip().lstrip('@') for l in f if l.strip() and not l.startswith('#')]
+    except: pass
+
+    if not channels:
+        send_message(token, chat_id, '❌ Нет каналов в channels.txt')
+        return
+
+    NL = chr(10)
+    preview = NL.join([
+        '📢 <b>ПРЕВЬЮ ПОСТА</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        post_text,
+        '',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        '👇 Выбери канал для публикации:'
+    ])
+
+    kb_rows = []
+    for i, ch in enumerate(channels, 1):
+        kb_rows.append([{'text': f'📢 @{ch}', 'callback_data': f'promo_send:{code}:{i}'}])
+    kb_rows.append([{'text': '📢 Во ВСЕ каналы', 'callback_data': f'promo_send:{code}:0'}])
+    kb_rows.append([
+        {'text': '✏️ Изменить', 'callback_data': f'promo_pub:{code}'},
+        {'text': '❌ Отмена', 'callback_data': 'adm_promo_list'}
+    ])
+    kb = {'inline_keyboard': kb_rows}
+
+    tg_request(token, 'sendMessage', {
+        'chat_id': chat_id,
+        'text': preview,
+        'parse_mode': 'HTML',
+        'reply_markup': kb
+    })
+
+
+def _do_promo_publish(cfg, cb, code, channel_idx):
+    """Публикует пост в канал(ы)"""
+    token = cfg['BOT_TOKEN']
+    chat_id = cb['message']['chat']['id']
+    cb_id = cb['id']
+
+    try:
+        from bot_modules import db as _db
+    except:
+        tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': 'Ошибка db', 'show_alert': True})
+        return
+
+    # Достаём промокод
+    p = _db.get_promo(code)
+    if not p:
+        tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': '❌ Промокод не найден', 'show_alert': True})
+        return
+
+    # Считываем сохранённый текст из callback (или из prefs)
+    # Проще: текст уже в preview, но callback его не хранит.
+    # Сохраняем через extra файл:
+    text_file = f'/tmp/promo_post_{code}.txt'
+    try:
+        with open(text_file) as f:
+            post_text = f.read()
+    except:
+        tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': '❌ Текст поста потерялся, отправь заново', 'show_alert': True})
+        return
+
+    # Каналы
+    channels = []
+    try:
+        with open('/etc/UDPCustom/channels.txt') as f:
+            channels = [l.strip().lstrip('@') for l in f if l.strip() and not l.startswith('#')]
+    except: pass
+
+    if not channels:
+        tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': '❌ Нет каналов', 'show_alert': True})
+        return
+
+    # Целевые каналы
+    if channel_idx == 0:
+        targets = channels
+    else:
+        if channel_idx < 1 or channel_idx > len(channels):
+            tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': '❌ Неверный канал', 'show_alert': True})
+            return
+        targets = [channels[channel_idx - 1]]
+
+    # Кнопки в посте
+    me = tg_request(token, 'getMe')
+    bot_u = me['result'].get('username', '') if me and me.get('ok') else ''
+    kb = {'inline_keyboard': [
+        [{'text': '🎁 Получить тест', 'url': f'https://t.me/{bot_u}?start=go'}],
+        [{'text': '🎫 Активировать промокод', 'url': f'https://t.me/{bot_u}?start=promo'}]
+    ]}
+
+    # Публикуем
+    ok = 0
+    errors = []
+    for ch in targets:
+        target = '@' + ch if not ch.startswith('@') else ch
+        r = tg_request(token, 'sendMessage', {
+            'chat_id': target,
+            'text': post_text,
+            'parse_mode': 'HTML',
+            'reply_markup': kb,
+            'disable_web_page_preview': True
+        })
+        if r and r.get('ok'):
+            ok += 1
+        else:
+            err = r.get('description', '?') if r else 'нет ответа'
+            errors.append(f'@{ch}: {err}')
+
+    # Ответ
+    if ok == len(targets):
+        tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': f'✅ Опубликовано в {ok} канал(ов)'})
+        result_text = f'✅ <b>ОПУБЛИКОВАНО</b>{NL2}📢 Каналов: <b>{ok}</b>'.replace('{NL2}', chr(10))
+        tg_request(token, 'sendMessage', {'chat_id': chat_id, 'text': result_text, 'parse_mode': 'HTML'})
+    else:
+        tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': f'⚠️ Опубликовано {ok}/{len(targets)}'})
+        tg_request(token, 'sendMessage', {
+            'chat_id': chat_id,
+            'text': '⚠️ <b>Частичная публикация</b>' + chr(10) + chr(10) + chr(10).join(errors),
+            'parse_mode': 'HTML'
+        })
+
+    # Удаляем временный файл
+    try:
+        import os as _os
+        _os.remove(text_file)
+    except: pass
+
+    log.info(f'Promo {code} published to {ok}/{len(targets)} channels')
+
+
 def show_promo_list(cfg, chat_id, user_id, msg_id=None):
     """Список промокодов для админа"""
     token = cfg['BOT_TOKEN']
@@ -2862,6 +3049,16 @@ def main():
                                 [{'text': '⬅️ Отмена', 'callback_data': 'adm_main'}]
                             ]}
                         })
+                    elif cb_data.startswith('promo_pub:'):
+                        _code = cb_data.split(':', 1)[1]
+                        _do_promo_post_start(cfg, cb, _code)
+                        continue
+                    elif cb_data.startswith('promo_send:'):
+                        _parts = cb_data.split(':')
+                        _code = _parts[1]
+                        _idx = int(_parts[2]) if len(_parts) > 2 else 0
+                        _do_promo_publish(cfg, cb, _code, _idx)
+                        continue
                     elif cb_data == 'adm_promo_list':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         show_promo_list(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
@@ -3400,6 +3597,15 @@ def main():
                         _do_addbalance(cfg, chat_id, text)
                     elif action == 'broadcast_text':
                         _do_broadcast_preview(cfg, chat_id, text)
+                    elif action.startswith('promo_post:'):
+                        _pcode = action.split(':', 1)[1]
+                        # Сохраняем текст во временный файл (для публикации)
+                        try:
+                            with open(f'/tmp/promo_post_{_pcode}.txt', 'w') as _pf:
+                                _pf.write(text)
+                        except Exception as _pe:
+                            log.error(f'promo_post save: {_pe}')
+                        _show_promo_preview(cfg, chat_id, _pcode, text)
                     continue
                 if text.startswith('/start'):
                     # Обработка реферальной ссылки
