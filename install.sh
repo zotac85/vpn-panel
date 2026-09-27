@@ -581,6 +581,70 @@ else
 fi
 
 # ──────────────────────────────────────────────────────────────
+# Support Bot (отдельный бот поддержки)
+# ──────────────────────────────────────────────────────────────
+echo -e "\n🤖 Установка бота поддержки..."
+
+# Код бота поддержки
+curl -sf -o /usr/local/bin/support-bot.py "$REPO_URL/support/support-bot.py" && chmod +x /usr/local/bin/support-bot.py
+curl -sf -o /usr/local/bin/bot_modules/support_db.py "$REPO_URL/bot/modules/support_db.py"
+
+# Конфиг бота поддержки (если нет)
+if [ ! -f /etc/UDPCustom/support_bot.conf ]; then
+    if [ -f "$PANEL_DIR/configs/support_bot.conf.template" ]; then
+        cp "$PANEL_DIR/configs/support_bot.conf.template" /etc/UDPCustom/support_bot.conf
+    else
+        curl -sf -o /etc/UDPCustom/support_bot.conf "$REPO_URL/configs/support_bot.conf.template"
+    fi
+    echo -e "\033[0;33m⚠️  ЗАПОЛНИ BOT_TOKEN в /etc/UDPCustom/support_bot.conf!\033[0m"
+fi
+
+# Ключевые слова для FAQ
+if [ ! -f /etc/UDPCustom/faq_keywords.txt ]; then
+    curl -sf -o /etc/UDPCustom/faq_keywords.txt "$REPO_URL/configs/faq_keywords.txt"
+fi
+
+# Systemd-сервис
+if [ ! -f /etc/systemd/system/support-bot.service ]; then
+    curl -sf -o /etc/systemd/system/support-bot.service "$REPO_URL/configs/support-bot.service"
+    if [ $? -ne 0 ]; then
+        cat > /etc/systemd/system/support-bot.service << 'SUPSERVICE_EOF'
+[Unit]
+Description=VPN Support Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root
+ExecStart=/usr/bin/python3 /usr/local/bin/support-bot.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/vpn-support-bot.log
+StandardError=append:/var/log/vpn-support-bot.log
+
+[Install]
+WantedBy=multi-user.target
+SUPSERVICE_EOF
+    fi
+    systemctl daemon-reload
+fi
+
+# Инициализация БД
+python3 -c "import sys; sys.path.insert(0, '/usr/local/bin'); from bot_modules import support_db; support_db.init_schema()" 2>/dev/null
+
+# Автозапуск (если токен задан)
+if [ -f /etc/UDPCustom/support_bot.conf ] && grep -q "^BOT_TOKEN=\"[^\"]" /etc/UDPCustom/support_bot.conf 2>/dev/null; then
+    systemctl enable support-bot 2>/dev/null
+    systemctl restart support-bot 2>/dev/null
+    echo -e "\033[0;32m✅  Support Bot запущен\033[0m"
+else
+    echo -e "\033[0;33m⚠️  Support Bot: BOT_TOKEN не задан\033[0m"
+    echo -e "\033[0;33m   Заполни /etc/UDPCustom/support_bot.conf\033[0m"
+    echo -e "\033[0;33m   и запусти: systemctl enable --now support-bot\033[0m"
+fi
+
+# ──────────────────────────────────────────────────────────────
 # ФИНАЛЬНАЯ ПРОВЕРКА PAM  (ИСПРАВЛЕНО)
 # ──────────────────────────────────────────────────────────────
 echo -e "\n🔍 Финальная проверка..."

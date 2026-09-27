@@ -1,0 +1,16 @@
+[Unit]
+Description=VPN Support Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root
+ExecStart=/usr/bin/python3 /usr/local/bin/support-bot.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/vpn-support-bot.log
+StandardError=append:/var/log/vpn-support-bot.log
+
+[Install]
+WantedBy=multi-user.target

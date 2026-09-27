@@ -70,4 +70,9 @@ if [ ! -f /etc/UDPCustom/rate.txt ]; then
     echo "20" > /etc/UDPCustom/rate.txt
 fi
 
+# support.txt — контакт поддержки
+if [ ! -f /etc/UDPCustom/support.txt ]; then
+    echo "@ArsenGuro" > /etc/UDPCustom/support.txt
+fi
+
 echo -e "\033[0;32m✅  Конфиги бота настроены\033[0m"

@@ -1,0 +1,5 @@
+BOT_TOKEN=""
+ADMIN_ID=""
+MAIN_BOT="ArsenVipKeysBot"
+SUPPORT_BOT="ArsenSupportBot"
+AUTO_CLOSE_HOURS="1"
