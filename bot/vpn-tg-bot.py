@@ -195,6 +195,30 @@ def get_welcome_text():
     return None
 
 
+def get_test_ready_text():
+    """Текст 'тестовый ключ доступен' из /etc/UDPCustom/test_ready.txt"""
+    p = '/etc/UDPCustom/test_ready.txt'
+    if os.path.exists(p):
+        try:
+            with open(p) as f:
+                t = f.read().strip()
+                if t: return t
+        except: pass
+    return None
+
+
+def get_test_issued_text():
+    """Текст 'тестовый доступ готов' из /etc/UDPCustom/test_issued.txt"""
+    p = '/etc/UDPCustom/test_issued.txt'
+    if os.path.exists(p):
+        try:
+            with open(p) as f:
+                t = f.read().strip()
+                if t: return t
+        except: pass
+    return None
+
+
 def get_payload():
     """Payload из файла /etc/UDPCustom/payload.txt"""
     p = '/etc/UDPCustom/payload.txt'
@@ -509,80 +533,85 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
     
     elif verified:
         # Подписан на все + verified → кнопка получить тест
-        text = (
-            f"👋 Привет, {name}!\n\n"
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            "🎁 <b>ТЕСТОВЫЙ КЛЮЧ ДОСТУПЕН</b>\n"
-            "━━━━━━━━━━━━━━━━━━━━\n\n"
-            "✅ Подписка подтверждена\n\n"
-            "📱 8 часов   |   📊 50 ГБ   |   💻 1 устр.\n"
-            "🇫🇮 Сервер: Финляндия\n\n"
-            "👇 Жми кнопку и получай 🔑"
-        )
-        keyboard = {'inline_keyboard': [
-            [{'text': '🎁 ПОЛУЧИТЬ ТЕСТ', 'callback_data': 'get_test'}],
-            [{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}],
+        # Читаем test_ready.txt (редактируемый админом)
+        tpl_ready = get_test_ready_text()
+        hours = cfg.get("TEST_HOURS", "8")
+        gb = cfg.get("TEST_TRAFFIC_GB", "50")
+        devices = cfg.get("TEST_DEVICES", "1")
+        location = cfg.get("SERVER_LOCATION", "🌍 Сервер")
+        if tpl_ready:
+            text = (tpl_ready
+                    .replace("{name}", name)
+                    .replace("{hours}", str(hours))
+                    .replace("{gb}", str(gb))
+                    .replace("{devices}", str(devices))
+                    .replace("{location}", str(location)))
+        else:
+            text = (
+                f"👋 Привет, {name}!\n\n"
+                "━━━━━━━━━━━━━━━━━━━━\n"
+                "🎁 <b>ТЕСТОВЫЙ КЛЮЧ ДОСТУПЕН</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━\n\n"
+                "✅ Подписка подтверждена\n\n"
+                f"📱 {hours} часов   |   📊 {gb} ГБ   |   💻 {devices} устр.\n"
+                f"{location}\n\n"
+                "👇 Жми кнопку и получай 🔑"
+            )
+        keyboard = {"inline_keyboard": [
+            [{"text": "🎁 ПОЛУЧИТЬ ТЕСТ", "callback_data": "get_test"}],
+            [{"text": "👤 Личный кабинет", "callback_data": "cab_main"}],
         ]}
     
     else:
         # Подписан на все, но НЕ verified → надо зайти на канал
-        channels_all = [c.lstrip('@') for c in channels]
+        channels_all = [c.lstrip("@") for c in channels]
         primary_clean = channels_all[0] if channels_all else primary
         sponsors_start = channels_all[1:] if len(channels_all) > 1 else []
-
+        sponsors_list = chr(10).join([f"   📢 @{s}" for s in sponsors_start]) if sponsors_start else "(нет спонсоров)"
+        # Пытаемся прочитать start.txt
+        tpl_start = get_start_text()
         NL = chr(10)
-        lines2 = [
-            f"👋 Привет, {name}!",
-            "",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "🎁 <b>БЕСПЛАТНЫЙ ТЕСТ-КЛЮЧ</b>",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "",
-            "Как получить 👇",
-            "",
-            f"1️⃣ Перейди в наш канал: @{primary_clean}",
-            "",
-        ]
-        if sponsors_start:
-            lines2.append("2️⃣ Подпишись на спонсоров:")
-            lines2.append("")
-            for s in sponsors_start:
-                lines2.append(f"   📢 @{s}")
-            lines2.append("")
-            lines2.append("3️⃣ Найди в канале пост с кнопкой")
-            lines2.append("   «🎁 Получить тест» — нажми её")
-            lines2.append("")
-            lines2.append("4️⃣ Прояви активность на постах")
-            lines2.append("   (лайки, реакции — это важно!)")
-            lines2.append("")
-            lines2.append("5️⃣ После этого кнопка появится")
-            lines2.append("   здесь, в боте — жми и получай 🔑")
+        if tpl_start:
+            text = (tpl_start
+                    .replace("{name}", name)
+                    .replace("{primary}", primary_clean)
+                    .replace("{sponsors_list}", sponsors_list))
         else:
-            lines2.append("2️⃣ Найди пост с кнопкой")
-            lines2.append("   «🎁 Получить тест» — нажми её")
-            lines2.append("")
-            lines2.append("3️⃣ Прояви активность на постах")
-            lines2.append("   (лайки, реакции — это важно!)")
-            lines2.append("")
-            lines2.append("4️⃣ После этого кнопка появится")
-            lines2.append("   здесь, в боте — жми и получай 🔑")
-        lines2.append("")
-        lines2.append("━━━━━━━━━━━━━━━━━━━━")
-        lines2.append("🎁 Тест:  8 часов · 50 ГБ · 1 устр.")
-        lines2.append("💎 VIP:   @ArsenGuro")
-        text = NL.join(lines2)
-        sponsors_start = [c.lstrip('@') for c in channels[1:]]
+            text = NL.join([
+                f"👋 Привет, {name}!",
+                "",
+                "━━━━━━━━━━━━━━━━━━━━",
+                "🎁 <b>БЕСПЛАТНЫЙ ТЕСТ-КЛЮЧ</b>",
+                "━━━━━━━━━━━━━━━━━━━━",
+                "",
+                "Как получить 👇",
+                "",
+                f"1️⃣ Перейди в наш канал: @{primary_clean}",
+                "",
+                "2️⃣ Найди в канале пост с кнопкой",
+                "   «🎁 Получить тест» — нажми её",
+                "",
+                "3️⃣ Прояви активность на постах",
+                "   (лайки, реакции — это важно!)",
+                "",
+                "4️⃣ После этого кнопка появится",
+                "   здесь, в боте — жми и получай 🔑",
+                "",
+                "━━━━━━━━━━━━━━━━━━━━",
+                "🎁 Тест:  8 часов · 50 ГБ · 1 устр.",
+                "💎 VIP:   @ArsenGuro"
+            ])
         kb_start = []
         for i in range(0, len(sponsors_start), 2):
-            row = [{'text': f'📢 @{sponsors_start[i]}', 'url': f'https://t.me/{sponsors_start[i]}'}]
+            row = [{"text": f"📢 @{sponsors_start[i]}", "url": f"https://t.me/{sponsors_start[i]}"}]
             if i + 1 < len(sponsors_start):
-                row.append({'text': f'📢 @{sponsors_start[i+1]}', 'url': f'https://t.me/{sponsors_start[i+1]}'})
+                row.append({"text": f"📢 @{sponsors_start[i+1]}", "url": f"https://t.me/{sponsors_start[i+1]}"})
             kb_start.append(row)
         kb_start.append([
-            {'text': '📣 Реклама', 'url': 'https://t.me/ArsenGuro'},
-            {'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}
+            {"text": "📣 Реклама", "url": "https://t.me/ArsenGuro"},
+            {"text": "👤 Личный кабинет", "callback_data": "cab_main"}
         ])
-        keyboard = {'inline_keyboard': kb_start}
+        keyboard = {"inline_keyboard": kb_start}
     
     # Сохраняем message_id приветствия для авто-удаления
     result = smart_send(token, chat_id, text, reply_markup=keyboard, parse_mode='HTML')
@@ -648,14 +677,24 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None):
     domain = get_domain(); ws_port = get_ws_port(); proxy = get_random_proxy()
     connect_line = f"{domain}:{ws_port}@{username}:{password}"
     traffic = cfg.get('TEST_TRAFFIC_GB','50'); devices = cfg.get('TEST_DEVICES','1')
-    text = (f"🎉 <b>ТЕСТОВЫЙ ДОСТУП ГОТОВ</b>\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"🎁 Ключ: <code>{username}</code>\n"
-            f"⏰ Срок: {cfg.get('TEST_HOURS','8')} часов\n"
-            f"📊 Трафик: {traffic} ГБ\n"
-            f"📱 Устройств: {devices}\n\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"🔑 Логин, пароль и конфиг — в личном кабинете")
+    # Читаем test_issued.txt (редактируемый админом)
+    tpl_issued = get_test_issued_text()
+    hours = cfg.get("TEST_HOURS", "8")
+    if tpl_issued:
+        text = (tpl_issued
+                .replace("{username}", username)
+                .replace("{hours}", str(hours))
+                .replace("{gb}", str(traffic))
+                .replace("{devices}", str(devices)))
+    else:
+        text = (f"🎉 <b>ТЕСТОВЫЙ ДОСТУП ГОТОВ</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"🎁 Ключ: <code>{username}</code>\n"
+                f"⏰ Срок: {hours} часов\n"
+                f"📊 Трафик: {traffic} ГБ\n"
+                f"📱 Устройств: {devices}\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"🔑 Логин, пароль и конфиг — в личном кабинете")
     # Убираем кнопку "Получить тест" из welcome-сообщения
     welcome_file = f"/etc/UDPCustom/welcome_msgs/{user_id}"
     if os.path.exists(welcome_file):
