@@ -1642,6 +1642,94 @@ def show_promo_list(cfg, chat_id, user_id, msg_id=None):
         smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
 
 
+EDIT_FILES = {
+    'welcome': {'file': 'welcome.txt', 'name': '👋 Приветствие', 'ph': '{name}, {channels_list}'},
+    'start': {'file': 'start.txt', 'name': '📖 Как получить тест', 'ph': '{name}, {primary}, {sponsors_list}'},
+    'test_ready': {'file': 'test_ready.txt', 'name': '🎁 Тест доступен', 'ph': '{name}, {hours}, {gb}, {devices}, {location}'},
+    'test_issued': {'file': 'test_issued.txt', 'name': '🎉 Тест готов', 'ph': '{username}, {hours}, {gb}, {devices}'},
+    'help': {'file': 'help.txt', 'name': '🏠 Меню /help', 'ph': '{primary}'},
+    'help_instruction': {'file': 'help_instruction.txt', 'name': '📲 Инструкция', 'ph': '(нет)'},
+    'help_faq': {'file': 'help_faq.txt', 'name': '❓ FAQ', 'ph': '(нет)'},
+    'vip_buy': {'file': 'vip_buy.txt', 'name': '💎 Купить VIP', 'ph': '{balance}, {tariffs}'},
+    'post': {'file': 'post.txt', 'name': '📢 Пост', 'ph': '(нет)'},
+    'rate': {'file': 'rate.txt', 'name': '💰 Курс USDT', 'ph': '(число)'},
+}
+
+
+def show_edit_texts_menu(cfg, chat_id, user_id, msg_id=None):
+    """Список файлов для редактирования"""
+    token = cfg['BOT_TOKEN']
+    if not is_admin(cfg, user_id):
+        send_message(token, chat_id, '🚫 Только для админа.')
+        return
+    NL = chr(10)
+    text = NL.join([
+        '📝 <b>РЕДАКТИРОВАНИЕ ТЕКСТОВ</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        'Выбери текст для изменения:',
+        '',
+        '<i>Файлы хранятся в /etc/UDPCustom/</i>'
+    ])
+    kb_rows = []
+    keys = list(EDIT_FILES.keys())
+    for i in range(0, len(keys), 2):
+        row = []
+        k1 = keys[i]
+        row.append({'text': EDIT_FILES[k1]['name'], 'callback_data': 'adm_edit_txt:' + k1})
+        if i + 1 < len(keys):
+            k2 = keys[i + 1]
+            row.append({'text': EDIT_FILES[k2]['name'], 'callback_data': 'adm_edit_txt:' + k2})
+        kb_rows.append(row)
+    kb_rows.append([{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}])
+    kb = {'inline_keyboard': kb_rows}
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
+
+
+def show_edit_text_file(cfg, chat_id, user_id, key, msg_id=None):
+    """Показ файла для редактирования"""
+    token = cfg['BOT_TOKEN']
+    if not is_admin(cfg, user_id):
+        return
+    if key not in EDIT_FILES:
+        send_message(token, chat_id, '❌ Файл не найден')
+        return
+    info = EDIT_FILES[key]
+    path = '/etc/UDPCustom/' + info['file']
+    try:
+        with open(path) as f:
+            content = f.read()
+    except Exception as e:
+        content = '❌ Не удалось прочитать: ' + str(e)
+    NL = chr(10)
+    text = NL.join([
+        '📝 <b>' + info['name'] + '</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        '📁 Файл: <code>' + info['file'] + '</code>',
+        '💡 Плейсхолдеры: <code>' + info['ph'] + '</code>',
+        '',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '📄 <b>Текущее содержимое:</b>',
+        '',
+        content,
+        '',
+        '━━━━━━━━━━━━━━━━━━━━'
+    ])
+    kb = {'inline_keyboard': [
+        [{'text': '✏️ Редактировать', 'callback_data': 'adm_edit_go:' + key}],
+        [{'text': '🔄 Обновить', 'callback_data': 'adm_edit_txt:' + key}],
+        [{'text': '⬅️ К списку', 'callback_data': 'adm_edit_texts'}]
+    ]}
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
+
+
 def show_admin_panel(cfg, chat_id, user_id, msg_id=None):
     """Админ-панель"""
     token = cfg['BOT_TOKEN']
@@ -1669,7 +1757,8 @@ def show_admin_panel(cfg, chat_id, user_id, msg_id=None):
         [{'text': '🎫 Промокоды', 'callback_data': 'adm_promo_list'},
          {'text': '📨 Рассылка', 'callback_data': 'adm_broadcast'}],
         [{'text': '💰 Начислить баланс', 'callback_data': 'admin_addbalance'},
-         {'text': '👑 Админы', 'callback_data': 'adm_admins'}],
+         {'text': '👑 Админы', 'callback_data': 'adm_admins'},
+         {'text': '📝 Тексты', 'callback_data': 'adm_edit_texts'}],
         [{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
     ]}
     if msg_id:
@@ -3213,6 +3302,40 @@ def main():
                             'parse_mode': 'HTML',
                             'reply_markup': kb
                         })
+                    elif cb_data == 'adm_edit_texts':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        show_edit_texts_menu(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                        continue
+                    elif cb_data.startswith('adm_edit_txt:'):
+                        _key = cb_data.split(':', 1)[1]
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        show_edit_text_file(cfg, cb['message']['chat']['id'], cb_user_id, _key, cb['message']['message_id'])
+                        continue
+                    elif cb_data.startswith('adm_edit_go:'):
+                        _key = cb_data.split(':', 1)[1]
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        if _key in EDIT_FILES:
+                            _info = EDIT_FILES[_key]
+                            PENDING_ACTIONS[cb_user_id] = 'edit_text:' + _key
+                            NLx = chr(10)
+                            _instr = NLx.join([
+                                '📝 <b>РЕДАКТИРОВАНИЕ: ' + _info['name'] + '</b>',
+                                '━━━━━━━━━━━━━━━━━━━━',
+                                '',
+                                '📁 Файл: <code>' + _info['file'] + '</code>',
+                                '💡 Плейсхолдеры: <code>' + _info['ph'] + '</code>',
+                                '',
+                                '⚠️ Текущее содержимое будет <b>полностью заменено</b>.',
+                                '',
+                                '✏️ Отправь новый текст ответом на это сообщение 👇'
+                            ])
+                            tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                                'chat_id': cb['message']['chat']['id'],
+                                'text': _instr,
+                                'parse_mode': 'HTML',
+                                'reply_markup': {'force_reply': True, 'selective': True}
+                            })
+                        continue
                     elif cb_data == 'adm_broadcast':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         PENDING_ACTIONS[cb_user_id] = 'broadcast_text'
@@ -3736,6 +3859,36 @@ def main():
                         except Exception as _pe:
                             log.error(f'promo_post save: {_pe}')
                         _show_promo_preview(cfg, chat_id, _pcode, text)
+                    elif action.startswith('edit_text:'):
+                        _key = action.split(':', 1)[1]
+                        if _key in EDIT_FILES:
+                            _info = EDIT_FILES[_key]
+                            _path = '/etc/UDPCustom/' + _info['file']
+                            try:
+                                with open(_path, 'w') as _f:
+                                    _f.write(text)
+                                NLx = chr(10)
+                                _ok = NLx.join([
+                                    '✅ <b>ТЕКСТ СОХРАНЁН</b>',
+                                    '━━━━━━━━━━━━━━━━━━━━',
+                                    '',
+                                    '📁 Файл: <code>' + _info['file'] + '</code>',
+                                    '✏️ Размер: <b>' + str(len(text)) + '</b> символов',
+                                    '',
+                                    '🔄 Бот подхватит изменения автоматически'
+                                ])
+                                kb = {'inline_keyboard': [
+                                    [{'text': '📝 К списку', 'callback_data': 'adm_edit_texts'}],
+                                    [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
+                                ]}
+                                tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                                    'chat_id': chat_id,
+                                    'text': _ok,
+                                    'parse_mode': 'HTML',
+                                    'reply_markup': kb
+                                })
+                            except Exception as _e:
+                                send_message(cfg['BOT_TOKEN'], chat_id, '❌ Ошибка сохранения: ' + str(_e))
                     continue
                 if text.startswith('/start'):
                     # Обработка реферальной ссылки
