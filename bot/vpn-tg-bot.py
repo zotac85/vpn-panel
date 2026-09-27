@@ -1749,17 +1749,17 @@ def show_admin_panel(cfg, chat_id, user_id, msg_id=None):
     text = NLx.join(lines)
     keyboard = {'inline_keyboard': [
         [{'text': '📊 Статистика', 'callback_data': 'admin_stats'},
-         {'text': '👥 Пользователи', 'callback_data': 'admin_users_1'}],
-        [{'text': '📢 Опубликовать', 'callback_data': 'admin_post'},
-         {'text': '📢 Каналы', 'callback_data': 'admin_channels'}],
-        [{'text': '⚙️ Сервисы', 'callback_data': 'manage_services'},
+         {'text': '👥 Пользователи', 'callback_data': 'admin_users_1'},
          {'text': '🚫 Бан-лист', 'callback_data': 'admin_banlist'}],
-        [{'text': '🎫 Промокоды', 'callback_data': 'adm_promo_list'},
+        [{'text': '📢 Пост', 'callback_data': 'admin_post'},
+         {'text': '📢 Каналы', 'callback_data': 'admin_channels'},
          {'text': '📨 Рассылка', 'callback_data': 'adm_broadcast'}],
-        [{'text': '💰 Начислить баланс', 'callback_data': 'admin_addbalance'},
-         {'text': '👑 Админы', 'callback_data': 'adm_admins'},
-         {'text': '📝 Тексты', 'callback_data': 'adm_edit_texts'}],
-        [{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
+        [{'text': '💰 Баланс', 'callback_data': 'admin_addbalance'},
+         {'text': '🎫 Промокоды', 'callback_data': 'adm_promo_list'},
+         {'text': '👑 Админы', 'callback_data': 'adm_admins'}],
+        [{'text': '📝 Тексты', 'callback_data': 'adm_edit_texts'},
+         {'text': '⚙️ Сервисы', 'callback_data': 'manage_services'},
+         {'text': '👤 Кабинет', 'callback_data': 'cab_main'}]
     ]}
     if msg_id:
         tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': keyboard})
