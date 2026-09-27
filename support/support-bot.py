@@ -170,6 +170,29 @@ def handle_message(cfg, msg, token, admin_id):
         save_faq_block(cfg, chat_id, _idx, text)
         return
 
+    # === Проверка: админ отвечает в тикет? ===
+    if str(user_id) == str(admin_id) and user_id in PENDING_TICKET_REPLY and text:
+        _tid = PENDING_TICKET_REPLY.pop(user_id)
+        _tk = sdb.get_ticket(_tid)
+        if _tk:
+            _client_id = _tk["user_id"]
+            sdb.add_message(_tid, user_id, _client_id, text, is_admin=1)
+            NLr = chr(10)
+            _out = NLr.join([
+                "💬 <b>ОТВЕТ ПОДДЕРЖКИ</b>",
+                "━━━━━━━━━━━━━━━━━━━━",
+                "",
+                text,
+                "",
+                "━━━━━━━━━━━━━━━━━━━━",
+                "📩 Если что-то ещё — просто напиши"
+            ])
+            try:
+                send(token, _client_id, _out)
+            except: pass
+            send(token, chat_id, f"✅ Ответ отправлен клиенту (тикет #{_tid})")
+        return
+
     # Сохраняем юзера
     sdb.upsert_user(user_id, username, first_name)
 
@@ -232,6 +255,7 @@ def handle_message(cfg, msg, token, admin_id):
         try:
             with open(f'/tmp/support_last_block_{user_id}.txt', 'w') as f:
                 f.write(title or '')
+        except: pass
         # Сохраняем что юзер спросил (для кнопки "Нет")
         sdb.upsert_user(user_id, username, first_name)
         # Кэшируем "последний текст" в tickets? Нет — используем callback_data с текстом
@@ -418,6 +442,33 @@ def handle_callback(cfg, cb, token, admin_id):
         tg(token, 'answerCallbackQuery', {'callback_query_id': cb_id})
         show_active_tickets(cfg, chat_id, msg_id)
         return
+    if data.startswith('adm_ticket:') and not data.startswith('adm_ticket_'):
+        tid = data.split(':', 1)[1]
+        try: tid = int(tid)
+        except: return
+        tg(token, 'answerCallbackQuery', {'callback_query_id': cb_id})
+        show_ticket_detail(cfg, chat_id, tid, msg_id)
+        return
+    if data.startswith('adm_ticket_reply:'):
+        tid = data.split(':', 1)[1]
+        try: tid = int(tid)
+        except: return
+        tg(token, 'answerCallbackQuery', {'callback_query_id': cb_id})
+        start_ticket_reply(cfg, chat_id, user_id, tid)
+        return
+    if data.startswith('adm_ticket_close:'):
+        tid = data.split(':', 1)[1]
+        try: tid = int(tid)
+        except: return
+        tg(token, 'answerCallbackQuery', {'callback_query_id': cb_id})
+        show_ticket_close_confirm(cfg, chat_id, tid, msg_id)
+        return
+    if data.startswith('adm_ticket_closeok:'):
+        tid = data.split(':', 1)[1]
+        try: tid = int(tid)
+        except: return
+        do_close_ticket(cfg, cb, tid)
+        return
     if data == 'adm_faq_stats':
         tg(token, 'answerCallbackQuery', {'callback_query_id': cb_id})
         show_faq_stats(cfg, chat_id, msg_id)
@@ -445,7 +496,7 @@ def handle_callback(cfg, cb, token, admin_id):
         return
 
 def show_active_tickets(cfg, chat_id, msg_id=None):
-    """Список активных тикетов"""
+    """Список активных тикетов с кнопками"""
     token = cfg['BOT_TOKEN']
     tickets = sdb.get_active_tickets()
     NL = chr(10)
@@ -462,32 +513,187 @@ def show_active_tickets(cfg, chat_id, msg_id=None):
         lines_txt = [
             f'📋 <b>АКТИВНЫЕ ТИКЕТЫ ({len(tickets)})</b>',
             '━━━━━━━━━━━━━━━━━━━━',
-            ''
+            '',
+            'Выбери тикет для просмотра:'
         ]
+        text = NL.join(lines_txt)
+
         kb_rows = []
         for t in tickets[:10]:
             user = sdb.get_user(t['user_id']) or {}
             name = user.get('first_name') or 'Клиент'
-            uname = f"@{user.get('username')}" if user.get('username') else f"id{t['user_id']}"
             ago = int(time.time()) - t['updated_at']
             if ago < 60:
                 t_ago = 'только что'
             elif ago < 3600:
-                t_ago = f'{ago // 60} мин назад'
+                t_ago = f'{ago // 60}мин'
             else:
-                t_ago = f'{ago // 3600} ч назад'
-            preview = (t['last_msg_text'] or '')[:40]
-            lines_txt.append(f'🎫 <b>#{t["id"]}</b> — {name} · {uname}')
-            lines_txt.append(f'   🕐 {t_ago}')
-            lines_txt.append(f'   💬 <i>{preview}...</i>')
-            lines_txt.append('')
-        text = NL.join(lines_txt)
-        kb = {'inline_keyboard': [[{'text': '⬅️ Назад', 'callback_data': 'adm_refresh'}]]}
+                t_ago = f'{ago // 3600}ч'
+            btn = f'🎫 #{t["id"]} · {name[:15]} · {t_ago}'
+            kb_rows.append([{'text': btn, 'callback_data': f'adm_ticket:{t["id"]}'}])
+        kb_rows.append([{'text': '⬅️ Назад', 'callback_data': 'adm_refresh'}])
+        kb = {'inline_keyboard': kb_rows}
 
     if msg_id:
         tg(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
     else:
         send(token, chat_id, text, reply_markup=kb)
+
+
+def show_ticket_detail(cfg, chat_id, ticket_id, msg_id=None):
+    """Детали тикета с историей"""
+    token = cfg['BOT_TOKEN']
+    tk = sdb.get_ticket(ticket_id)
+    if not tk:
+        if msg_id:
+            tg(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': '❌ Тикет не найден', 'parse_mode': 'HTML'})
+        return
+
+    user = sdb.get_user(tk['user_id']) or {}
+    name = user.get('first_name') or 'Клиент'
+    uname = f"@{user.get('username')}" if user.get('username') else f"id{tk['user_id']}"
+
+    # История сообщений (последние 10)
+    msgs = sdb.query("SELECT * FROM messages WHERE ticket_id=? ORDER BY created_at ASC LIMIT 10", (int(ticket_id),))
+
+    NL = chr(10)
+    status = '🟢 Открыт' if tk['status'] == 'open' else '✅ Закрыт'
+    created = time.strftime('%d.%m %H:%M', time.localtime(tk['created_at']))
+
+    lines_txt = [
+        f'🎫 <b>ТИКЕТ #{ticket_id}</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        f'👤 <b>{name}</b> · {uname}',
+        f'🆔 <code>{tk["user_id"]}</code>',
+        f'🕐 Создан: {created}',
+        f'📊 Статус: {status}',
+        '',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '💬 <b>История:</b>',
+        ''
+    ]
+
+    if not msgs:
+        lines_txt.append('<i>Нет сообщений</i>')
+    else:
+        for m in msgs:
+            ts = time.strftime('%H:%M', time.localtime(m['created_at']))
+            if m['is_admin']:
+                who = '💬 Ты'
+            else:
+                who = f'👤 {name}'
+            # Экранируем HTML теги в тексте
+            txt = (m['text'] or '').replace('<', '&lt;').replace('>', '&gt;')
+            lines_txt.append(f'<b>{who}</b> · <i>{ts}</i>')
+            lines_txt.append(f'{txt}')
+            lines_txt.append('')
+
+    text = NL.join(lines_txt)
+
+    kb_rows = []
+    if tk['status'] == 'open':
+        kb_rows.append([{'text': '💬 Ответить клиенту', 'callback_data': f'adm_ticket_reply:{ticket_id}'}])
+        kb_rows.append([{'text': '🗑 Закрыть тикет', 'callback_data': f'adm_ticket_close:{ticket_id}'}])
+    else:
+        kb_rows.append([{'text': '🔄 Тикет закрыт', 'callback_data': 'noop'}])
+    kb_rows.append([{'text': '🔄 Обновить', 'callback_data': f'adm_ticket:{ticket_id}'}])
+    kb_rows.append([{'text': '⬅️ К тикетам', 'callback_data': 'adm_tickets'}])
+
+    kb = {'inline_keyboard': kb_rows}
+    if msg_id:
+        tg(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        send(token, chat_id, text, reply_markup=kb)
+
+
+def show_ticket_close_confirm(cfg, chat_id, ticket_id, msg_id=None):
+    """Подтверждение закрытия тикета"""
+    token = cfg['BOT_TOKEN']
+    tk = sdb.get_ticket(ticket_id)
+    if not tk:
+        return
+    user = sdb.get_user(tk['user_id']) or {}
+    name = user.get('first_name') or 'Клиент'
+    uname = f"@{user.get('username')}" if user.get('username') else f"id{tk['user_id']}"
+
+    NL = chr(10)
+    text = NL.join([
+        f'🗑 <b>ЗАКРЫТЬ ТИКЕТ #{ticket_id}?</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        f'👤 {name} · {uname}',
+        '',
+        'Клиент получит уведомление о закрытии.',
+        'Если он напишет снова — создастся новый тикет.'
+    ])
+    kb = {'inline_keyboard': [
+        [{'text': '✅ Да, закрыть', 'callback_data': f'adm_ticket_closeok:{ticket_id}'}],
+        [{'text': '⬅️ Отмена', 'callback_data': f'adm_ticket:{ticket_id}'}]
+    ]}
+    if msg_id:
+        tg(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        send(token, chat_id, text, reply_markup=kb)
+
+
+def do_close_ticket(cfg, cb, ticket_id):
+    """Закрывает тикет + уведомляет клиента"""
+    token = cfg['BOT_TOKEN']
+    chat_id = cb['message']['chat']['id']
+    msg_id = cb['message']['message_id']
+    cb_id = cb['id']
+
+    tk = sdb.get_ticket(ticket_id)
+    if not tk:
+        tg(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': '❌ Тикет не найден', 'show_alert': True})
+        return
+
+    client_id = tk['user_id']
+    sdb.close_ticket(ticket_id)
+
+    # Уведомляем клиента
+    NL = chr(10)
+    out = NL.join([
+        f'✅ <b>Тикет #{ticket_id} закрыт</b>',
+        '',
+        'Спасибо за обращение! Если возникнут',
+        'вопросы — просто напиши снова.'
+    ])
+    try:
+        send(token, client_id, out)
+    except: pass
+
+    tg(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': f'✅ Тикет #{ticket_id} закрыт'})
+    # Возврат к списку тикетов
+    show_active_tickets(cfg, chat_id, msg_id)
+    log.info(f'Ticket #{ticket_id} closed by admin')
+
+
+def start_ticket_reply(cfg, chat_id, user_id, ticket_id):
+    """Просит текст ответа (через reply или ForceReply)"""
+    token = cfg['BOT_TOKEN']
+    tk = sdb.get_ticket(ticket_id)
+    if not tk:
+        send(token, chat_id, '❌ Тикет не найден')
+        return
+    PENDING_TICKET_REPLY[user_id] = ticket_id
+    NL = chr(10)
+    out = NL.join([
+        f'💬 <b>ОТВЕТ В ТИКЕТ #{ticket_id}</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        'Напиши текст ответа клиенту.',
+        'Он получит его от бота поддержки.',
+        '',
+        '👇 Жду текст:'
+    ])
+    send(token, chat_id, out)
+
+
+# Pending: какой тикет отвечаем (user_id -> ticket_id)
+PENDING_TICKET_REPLY = {}
+
 
 
 def show_faq_stats(cfg, chat_id, msg_id=None):
@@ -747,7 +953,6 @@ def save_faq_block(cfg, chat_id, idx, new_text):
 PENDING_FAQ_EDIT = {}
 
 
-def auto_close_loop(cfg):
 def auto_close_loop(cfg):
     """Автозакрытие тикетов каждый час"""
     hours = int(cfg.get('AUTO_CLOSE_HOURS', '1') or '1')
