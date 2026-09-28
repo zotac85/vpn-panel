@@ -1424,6 +1424,33 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
     if cb_data == 'cab_whitedns':
         show_whitedns_menu(cfg, chat_id, user_id, msg_id)
         return True
+    if cb_data == 'cab_wd_de':
+        show_whitedns_profiles(cfg, chat_id, user_id, 0, msg_id)
+        return True
+    if cb_data == 'cab_wd_fi':
+        show_whitedns_profiles(cfg, chat_id, user_id, 1, msg_id)
+        return True
+    if cb_data == 'cab_wd_se':
+        show_whitedns_profiles(cfg, chat_id, user_id, 2, msg_id)
+        return True
+    if cb_data.startswith('cab_wd_prof:'):
+        try:
+            _parts = cb_data.split(':')
+            _prof = int(_parts[1])
+            _srv = int(_parts[2])
+        except:
+            _prof, _srv = 0, 0
+        show_whitedns_confirm(cfg, chat_id, user_id, _srv, _prof, msg_id)
+        return True
+    if cb_data.startswith('cab_wd_send:'):
+        try:
+            _parts = cb_data.split(':')
+            _srv = int(_parts[1])
+            _prof = int(_parts[2])
+        except:
+            _srv, _prof = 0, 0
+        send_whitedns_files(cfg, chat_id, user_id, _srv, _prof, first_name or '')
+        return True
     if cb_data.startswith('cab_vip_buy:'):
         try:
             idx = int(cb_data.split(':', 1)[1])
@@ -1763,3 +1790,206 @@ def show_whitedns_menu(cfg, chat_id, user_id, msg_id=None):
         _edit(token, chat_id, msg_id, text, kb)
     else:
         _send(token, chat_id, text, kb)
+
+
+# ──────────────────────────────────────────────────────────────
+# WHITEDNS — клиентские функции
+# ──────────────────────────────────────────────────────────────
+WD_SRV_NAMES = ['🇩🇪 Германия', '🇫🇮 Финляндия', '🇸🇪 Швеция']
+WD_PROF_NAMES = ['📱 3G', '📶 WiFi', '🖥 ADSL']
+WD_RES_PATHS = [
+    '/etc/UDPCustom/whitedns_resolvers_de.txt',
+    '/etc/UDPCustom/whitedns_resolvers_fi.txt',
+    '/etc/UDPCustom/whitedns_resolvers_se.txt',
+]
+WD_SET_PATHS = [
+    '/etc/UDPCustom/whitedns_settings_3g.txt',
+    '/etc/UDPCustom/whitedns_settings_wifi.txt',
+    '/etc/UDPCustom/whitedns_settings_adsl.txt',
+]
+WD_SRV_FILE = '/etc/UDPCustom/whitedns_servers.txt'
+WD_ISSUED_LOG = '/etc/UDPCustom/whitedns_issued.log'
+
+def _wd_c_read_servers():
+    result = ['', '', '']
+    try:
+        with open(WD_SRV_FILE) as f:
+            lines = [l.rstrip(chr(10)) for l in f]
+        for i in range(min(3, len(lines))):
+            result[i] = lines[i]
+    except:
+        pass
+    return result
+
+def _wd_c_read_file(path):
+    try:
+        with open(path) as f:
+            return f.read().rstrip(chr(10))
+    except:
+        return ''
+
+def _wd_c_log(user_id, username, server_idx, prof_idx):
+    from datetime import datetime as _dt
+    try:
+        with open(WD_ISSUED_LOG, 'a') as f:
+            f.write(str(user_id) + '|' + str(username) + '|' + WD_SRV_NAMES[server_idx] + '|' + WD_PROF_NAMES[prof_idx] + '|' + _dt.now().strftime('%F %H:%M') + chr(10))
+    except: pass
+
+def show_whitedns_profiles(cfg, chat_id, user_id, server_idx, msg_id=None):
+    token = cfg['BOT_TOKEN']
+    NL = chr(10)
+    if server_idx < 0 or server_idx > 2:
+        server_idx = 0
+    text = NL.join([
+        WD_SRV_NAMES[server_idx] + ' — <b>WHITEDNS</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        '2️⃣ <b>ВЫБЕРИ ПРОФИЛЬ:</b>',
+        '',
+        '📱 3G   — мобильная сеть',
+        '📶 WiFi — домашний Wi-Fi',
+        '🖥 ADSL — проводной интернет',
+    ])
+    kb = {'inline_keyboard': [
+        [{'text': '📱 3G', 'callback_data': 'cab_wd_prof:0:' + str(server_idx)},
+         {'text': '📶 WiFi', 'callback_data': 'cab_wd_prof:1:' + str(server_idx)},
+         {'text': '🖥 ADSL', 'callback_data': 'cab_wd_prof:2:' + str(server_idx)}],
+        [{'text': '⬅️ Назад', 'callback_data': 'cab_whitedns'}]
+    ]}
+    if msg_id:
+        _edit(token, chat_id, msg_id, text, kb)
+    else:
+        _send(token, chat_id, text, kb)
+
+def show_whitedns_confirm(cfg, chat_id, user_id, server_idx, prof_idx, msg_id=None):
+    token = cfg['BOT_TOKEN']
+    NL = chr(10)
+    if server_idx < 0 or server_idx > 2:
+        server_idx = 0
+    if prof_idx < 0 or prof_idx > 2:
+        prof_idx = 0
+    res = _wd_c_read_file(WD_RES_PATHS[server_idx])
+    res_count = len([l for l in res.split(chr(10)) if l.strip()]) if res else 0
+    text = NL.join([
+        '⚠️ <b>ПРОВЕРЬ ВЫБОР</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        '📌 <b>Ты выбрал:</b>',
+        '',
+        '🌐 Сервер: ' + WD_SRV_NAMES[server_idx],
+        '⚙️ Профиль: ' + WD_PROF_NAMES[prof_idx],
+        '🔢 Резолверы: ' + WD_SRV_NAMES[server_idx] + ' (' + str(res_count) + ' IP)',
+        '',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        '⚠️ Импортировать нужно ИМЕННО в эти разделы:',
+        '',
+        '🔗 conection → «Connection»',
+        '⚙️ setings → «Setting»',
+        '🔢 resolvers → «Resolver»',
+        '',
+        '❌ Перепутаешь — не заработает!',
+    ])
+    kb = {'inline_keyboard': [
+        [{'text': '✅ ДА, ВСЁ ВЕРНО', 'callback_data': 'cab_wd_send:' + str(server_idx) + ':' + str(prof_idx)}],
+        [{'text': '❌ Отмена', 'callback_data': 'cab_whitedns'}]
+    ]}
+    if msg_id:
+        _edit(token, chat_id, msg_id, text, kb)
+    else:
+        _send(token, chat_id, text, kb)
+
+def _wd_send_txt_file(token, chat_id, filename, content, caption=''):
+    """Отправляет текстовый файл через Telegram sendDocument."""
+    import tempfile
+    import subprocess
+    import os as _os
+    tmp_path = None
+    try:
+        fd, tmp_path = tempfile.mkstemp(suffix='.txt')
+        with _os.fdopen(fd, 'w', encoding='utf-8') as f:
+            f.write(content)
+        cmd = [
+            'curl', '-s', '-X', 'POST',
+            'https://api.telegram.org/bot' + token + '/sendDocument',
+            '-F', 'chat_id=' + str(chat_id),
+            '-F', 'document=@' + tmp_path + ';filename=' + filename,
+        ]
+        if caption:
+            cmd += ['-F', 'caption=' + caption, '-F', 'parse_mode=HTML']
+        subprocess.run(cmd, capture_output=True, timeout=30)
+    except Exception as e:
+        pass
+    finally:
+        if tmp_path and _os.path.exists(tmp_path):
+            try:
+                _os.remove(tmp_path)
+            except: pass
+
+def send_whitedns_files(cfg, chat_id, user_id, server_idx, prof_idx, username=''):
+    token = cfg['BOT_TOKEN']
+    NL = chr(10)
+    if server_idx < 0 or server_idx > 2:
+        server_idx = 0
+    if prof_idx < 0 or prof_idx > 2:
+        prof_idx = 0
+    servers = _wd_c_read_servers()
+    conn_data = servers[server_idx] if servers[server_idx] else ''
+    settings_data = _wd_c_read_file(WD_SET_PATHS[prof_idx])
+    resolvers_data = _wd_c_read_file(WD_RES_PATHS[server_idx])
+    srv_name = WD_SRV_NAMES[server_idx]
+    prof_name = WD_PROF_NAMES[prof_idx]
+    if not conn_data:
+        _send(token, chat_id, '❌ <b>Сервер не настроен.</b>' + NL + 'Попробуй другой сервер.', {'inline_keyboard': [[{'text': '⬅️ Назад', 'callback_data': 'cab_whitedns'}]]})
+        return
+    if not settings_data:
+        _send(token, chat_id, '❌ <b>Профиль не настроен.</b>' + NL + 'Выбери другой профиль.', {'inline_keyboard': [[{'text': '⬅️ Назад', 'callback_data': 'cab_whitedns'}]]})
+        return
+    if not resolvers_data:
+        _send(token, chat_id, '❌ <b>Резолверы не настроены.</b>' + NL + 'Попробуй другой сервер.', {'inline_keyboard': [[{'text': '⬅️ Назад', 'callback_data': 'cab_whitedns'}]]})
+        return
+    intro = NL.join([
+        '📡 <b>WHITEDNS — ГОТОВО!</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        'Сейчас придут 3 файла.',
+        '📌 Тапни по тексту в каждом —',
+        '   он скопируется в буфер.',
+        '',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        '⚠️ <b>КАЖДЫЙ В СВОЙ РАЗДЕЛ:</b>',
+        '',
+        '🔗 conection.txt → «Connection»',
+        '⚙️ setings.txt → «Setting»',
+        '🔢 resolvers.txt → «Resolver»',
+        '',
+        '❌ Перепутаешь — не заработает!',
+        '',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '📱 Сервер: ' + srv_name,
+        '⚙️ Профиль: ' + prof_name,
+    ])
+    _send(token, chat_id, intro)
+    flag = srv_name.split(' ')[0]
+    _wd_send_txt_file(token, chat_id, flag + ' conection.txt', conn_data,
+        '🔗 <b>conection.txt</b> — ' + srv_name + chr(10) + '➡️ Импортируй в раздел «Connection»')
+    _wd_send_txt_file(token, chat_id, 'setings.txt', settings_data,
+        '⚙️ <b>setings.txt</b> — ' + prof_name + chr(10) + '➡️ Импортируй в раздел «Setting»')
+    _wd_send_txt_file(token, chat_id, flag + ' resolvers.txt', resolvers_data,
+        '🔢 <b>resolvers.txt</b> — ' + srv_name + chr(10) + '➡️ Импортируй в раздел «Resolver»')
+    _wd_c_log(user_id, username or '', server_idx, prof_idx)
+    try:
+        admin_id = cfg.get('ADMIN_ID', '')
+        if admin_id:
+            from datetime import datetime as _dt
+            adm_msg = NL.join([
+                '📡 <b>WHITEDNS — НОВАЯ ВЫДАЧА</b>',
+                '━━━━━━━━━━━━━━━━━━━━',
+                '👤 Юзер: <code>' + str(user_id) + '</code>',
+                '🌐 Сервер: ' + srv_name,
+                '⚙️ Профиль: ' + prof_name,
+                '⏰ ' + _dt.now().strftime('%F %H:%M'),
+            ])
+            _send(token, str(admin_id), adm_msg)
+    except: pass
