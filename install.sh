@@ -113,6 +113,8 @@ if [ -d "$PANEL_DIR" ] || [ -f "/usr/local/bin/vpn" ]; then
                 exit 1
             fi
             echo ""
+            chmod 600 /etc/UDPCustom/*.conf /etc/UDPCustom/*.db /etc/UDPCustom/*.txt 2>/dev/null || true
+            echo -e "\033[0;32m✅  Права на конфиги: 600\033[0m"
             exit 0
             ;;
         3)
