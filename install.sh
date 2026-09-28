@@ -179,6 +179,17 @@ fi
 mkdir -p "$PANEL_DIR/modules" /etc/UDPCustom/limits /etc/UDPCustom/traffic /etc/UDPCustom/traffic_limits
 touch /etc/UDPCustom/users.db
 
+# WhiteDNS — служебные файлы
+touch /etc/UDPCustom/whitedns_servers.txt
+touch /etc/UDPCustom/whitedns_resolvers_de.txt
+touch /etc/UDPCustom/whitedns_resolvers_fi.txt
+touch /etc/UDPCustom/whitedns_resolvers_se.txt
+touch /etc/UDPCustom/whitedns_settings_3g.txt
+touch /etc/UDPCustom/whitedns_settings_wifi.txt
+touch /etc/UDPCustom/whitedns_settings_adsl.txt
+touch /etc/UDPCustom/whitedns_issued.log
+chmod 600 /etc/UDPCustom/whitedns_*.txt /etc/UDPCustom/whitedns_*.log 2>/dev/null
+
 # rate.txt — курс USDT → манат (для ручного пополнения)
 if [ ! -f /etc/UDPCustom/rate.txt ]; then
     echo "20" > /etc/UDPCustom/rate.txt
