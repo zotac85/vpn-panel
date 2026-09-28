@@ -1755,6 +1755,65 @@ def show_edit_text_file(cfg, chat_id, user_id, key, msg_id=None):
         smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
 
 
+# ──────────────────────────────────────────────────────────────
+# WHITEDNS — админка
+# ──────────────────────────────────────────────────────────────
+WD_SS = '/etc/UDPCustom/whitedns_servers.txt'
+WD_RES = '/etc/UDPCustom/whitedns_resolvers.txt'
+WD_S3 = '/etc/UDPCustom/whitedns_settings_3g.txt'
+WD_SW = '/etc/UDPCustom/whitedns_settings_wifi.txt'
+WD_SA = '/etc/UDPCustom/whitedns_settings_adsl.txt'
+WD_LOG = '/etc/UDPCustom/whitedns_issued.log'
+
+def _wd_count_lines(path):
+    try:
+        with open(path) as f:
+            return len([l for l in f if l.strip()])
+    except:
+        return 0
+
+def show_adm_whitedns(cfg, chat_id, user_id, msg_id=None):
+    """Меню WhiteDNS в админке."""
+    token = cfg['BOT_TOKEN']
+    srv = _wd_count_lines(WD_SS)
+    res = _wd_count_lines(WD_RES)
+    s3 = _wd_count_lines(WD_S3)
+    sw = _wd_count_lines(WD_SW)
+    sa = _wd_count_lines(WD_SA)
+    issued = _wd_count_lines(WD_LOG)
+    NL = chr(10)
+    lines = [
+        '📡 <b>WHITEDNS УПРАВЛЕНИЕ</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        '📊 Выдано конфигов: <b>' + str(issued) + '</b>',
+        '',
+        '━━ 🌐 Серверы ━━',
+        'Настроено: <b>' + str(srv) + '</b>',
+        '',
+        '━━ ⚙️ Профили ━━',
+        '📱 3G   : ' + (str(s3) + ' стр.' if s3 else '❌ пусто'),
+        '📶 WiFi : ' + (str(sw) + ' стр.' if sw else '❌ пусто'),
+        '🖥 ADSL : ' + (str(sa) + ' стр.' if sa else '❌ пусто'),
+        '',
+        '━━ 🔢 Резолверы ━━',
+        'IP: <b>' + str(res) + '</b>',
+        '',
+        '━━━━━━━━━━━━━━━━━━━━',
+    ]
+    text = NL.join(lines)
+    kb = {'inline_keyboard': [
+        [{'text': '🌐 Серверы (' + str(srv) + ')', 'callback_data': 'wd_servers'},
+         {'text': '🔢 Резолверы (' + str(res) + ')', 'callback_data': 'wd_resolvers'}],
+        [{'text': '⚙️ Профили', 'callback_data': 'wd_profiles'},
+         {'text': '📊 Статистика', 'callback_data': 'wd_stats'}],
+        [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
+    ]}
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
+
 def show_admin_panel(cfg, chat_id, user_id, msg_id=None):
     """Админ-панель"""
     token = cfg['BOT_TOKEN']
@@ -1775,16 +1834,16 @@ def show_admin_panel(cfg, chat_id, user_id, msg_id=None):
     keyboard = {'inline_keyboard': [
         [{'text': '📊 Статистика', 'callback_data': 'admin_stats'},
          {'text': '👥 Пользователи', 'callback_data': 'admin_users_1'},
-         {'text': '🚫 Бан-лист', 'callback_data': 'admin_banlist'}],
-        [{'text': '📢 Пост', 'callback_data': 'admin_post'},
-         {'text': '📢 Каналы', 'callback_data': 'admin_channels'},
-         {'text': '📨 Рассылка', 'callback_data': 'adm_broadcast'}],
+         {'text': '👑 Админы', 'callback_data': 'adm_admins'}],
         [{'text': '💰 Баланс', 'callback_data': 'admin_addbalance'},
          {'text': '🎫 Промокоды', 'callback_data': 'adm_promo_list'},
-         {'text': '👑 Админы', 'callback_data': 'adm_admins'}],
-        [{'text': '📝 Тексты', 'callback_data': 'adm_edit_texts'},
-         {'text': '⚙️ Сервисы', 'callback_data': 'manage_services'},
-         {'text': '👤 Кабинет', 'callback_data': 'cab_main'}]
+         {'text': '📨 Рассылка', 'callback_data': 'adm_broadcast'}],
+        [{'text': '📢 Пост', 'callback_data': 'admin_post'},
+         {'text': '📢 Каналы', 'callback_data': 'admin_channels'},
+         {'text': '📝 Тексты', 'callback_data': 'adm_edit_texts'}],
+        [{'text': '⚙️ SSH WS', 'callback_data': 'manage_services'},
+         {'text': '⚙️ UDP Custom', 'callback_data': 'adm_udp_soon'},
+         {'text': '⚙️ WhiteDNS', 'callback_data': 'adm_whitedns'}]
     ]}
     if msg_id:
         tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': keyboard})
@@ -3671,6 +3730,21 @@ def main():
                     elif cb_data == 'admin_stats_traffic':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         handle_stats(cfg, cb['message']['chat']['id'], cb_user_id, 'traffic', cb['message']['message_id'])
+                    elif cb_data == 'adm_udp_soon':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        _ut = ('🛡 <b>UDP Custom — скоро будет!</b>' + chr(10) + chr(10) +
+                               '🚧 Раздел в разработке.')
+                        _uk = {'inline_keyboard': [
+                            [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
+                        ]}
+                        tg_request(cfg['BOT_TOKEN'], 'editMessageText', {
+                            'chat_id': cb['message']['chat']['id'],
+                            'message_id': cb['message']['message_id'],
+                            'text': _ut, 'parse_mode': 'HTML', 'reply_markup': _uk
+                        })
+                    elif cb_data == 'adm_whitedns':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        show_adm_whitedns(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
                     elif cb_data == 'admin_banlist':
                         handle_banlist(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
                     elif cb_data == 'admin_post':
