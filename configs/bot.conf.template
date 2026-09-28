@@ -1,28 +1,22 @@
-# ═══════════════════════════════════════════════════════════════
-# VPN Bot Configuration
-# ⚠️  ЗАПОЛНИ BOT_TOKEN — без него бот не запустится
-# ═══════════════════════════════════════════════════════════════
-
-# Токен бота от @BotFather
-BOT_TOKEN=""
-
-# ID главного администратора (узнать: @userinfobot)
-ADMIN_ID=""
-
-REQUIRE_SUBSCRIPTION="0"
-
-# Кулдаун выдачи тестов (часы)
+BOT_TOKEN="8977113901:AAE_P0W16MWjZcuxhudeDuM3ki5JKCFBGSo"
+ADMIN_ID="1738878748"
+CHANNEL_ID="@ArsenSettings"
+CHANNEL_ID_2="@vpnbalkan"
+CHANNEL_NAME_2="VPN Balkan"
+REQUIRE_SUBSCRIPTION=1
 COOLDOWN_HOURS="8"
-
-# Параметры теста
 TEST_HOURS="8"
 VERIFIED_MINUTES="60"
 TEST_DEVICES="1"
 TEST_TRAFFIC_GB="50"
-
-# Отображение
-CONFIG_NAME="VPN"
-SERVER_LOCATION="🌍 Сервер"
-
-# Тарифы VIP: ДНИ|ЦЕНА_USDT|ГБ|УСТРОЙСТВ (через запятую)
+WELCOME_TEXT=""
+SUCCESS_TEMPLATE="🎉 Тестовый доступ готов!\n\n📱 Логин: {USERNAME}\n🔑 Пароль: {PASSWORD}\n🌐 Сервер: {SERVER}\n🔌 Порт: {PORT}\n\n📲 Строка для DarkTunnel:\n{CONNECT_LINE}\n\n⏰ 8 ч | 📊 50 ГБ | 💻 1 устр.\n\n💬 @ArsenGuro"
+CONFIG_NAME="ArsenVipKeys"
+CONNECTED_MSG="Подключено!"
+PAYLOAD="CONNECT http://co.nr HTTP/1.1[crlf]Host: www.icloud.com[crlf]User-Agent: microsoft.com[crlf][crlf]AN / HTTP/1.1[lf]Host: [host][lf]Connection: Upgrade[lf]Upgrade: websocket[crlf][crlf]"
+SERVER_LOCATION="🇩🇪 Германия"
 VIP_TARIFFS="10|2|100|1,30|5|300|1,90|13|900|1"
+STAR_RATE="0.015"
+STAR_MIN="1"
+STAR_MAX="100"
+STARS_PAYLOAD_TAG="stars_topup"

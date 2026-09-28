@@ -1416,7 +1416,6 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
     if cb_data == 'cab_topup':
         NL = chr(10)
         balance = db.get_balance(user_id)
-        rate = _get_rate()
         text = NL.join([
             "💵 <b>ПОПОЛНЕНИЕ БАЛАНСА</b>",
             "━━━━━━━━━━━━━━━━━━━━",
@@ -1427,11 +1426,46 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
             "Выбери способ пополнения:"
         ])
         kb = {'inline_keyboard': [
+            [{'text': '⭐ Telegram Stars', 'callback_data': 'cab_topup_stars'}],
             [{'text': '💳 Ручное (TMCELL)', 'callback_data': 'cab_topup_manual'}],
             [{'text': '🤖 Крипто-бот', 'callback_data': 'cab_topup_crypto'}],
             [{'text': '⬅️ К балансу', 'callback_data': 'cab_balance'}]
         ]}
         _edit(token, chat_id, msg_id, text, kb)
+        return True
+    if cb_data == 'cab_topup_stars':
+        NL = chr(10)
+        _rate = 0.015  # будет читаться из конфига
+        _smin = 1
+        _smax = 100
+        try:
+            with open('/etc/UDPCustom/bot.conf') as _f:
+                for _l in _f:
+                    if _l.startswith('STAR_RATE='):
+                        _rate = float(_l.split('=',1)[1].strip().strip('"'))
+                    elif _l.startswith('STAR_MIN='):
+                        _smin = float(_l.split('=',1)[1].strip().strip('"'))
+                    elif _l.startswith('STAR_MAX='):
+                        _smax = float(_l.split('=',1)[1].strip().strip('"'))
+        except: pass
+        text = NL.join([
+            "⭐ <b>ПОПОЛНЕНИЕ ЧЕРЕЗ STARS</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            f"💡 Курс: <b>1 Star ≈ {_rate} USDT</b>",
+            "",
+            "Введи сумму в USDT для пополнения баланса.",
+            "",
+            f"📊 Мин: <b>{_smin:.0f}</b> · Макс: <b>{_smax:.0f}</b> USDT",
+            "",
+            "Например: <code>5</code>"
+        ])
+        kb = {'inline_keyboard': [
+            [{'text': '⬅️ Отмена', 'callback_data': 'cab_topup'}]
+        ]}
+        _edit(token, chat_id, msg_id, text, kb)
+        # Запоминаем что ждём сумму для Stars
+        db.set_pending(user_id, 'stars_amount')
         return True
     if cb_data == 'cab_topup_manual':
         NL = chr(10)

@@ -3336,6 +3336,61 @@ def main():
             if not updates or not updates.get('ok'): time.sleep(3); continue
             for upd in updates.get('result', []):
                 offset = upd['update_id'] + 1
+
+                # === Telegram Stars: pre_checkout ===
+                if 'pre_checkout_query' in upd:
+                    _pcq = upd['pre_checkout_query']
+                    tg_request(cfg['BOT_TOKEN'], 'answerPreCheckoutQuery', {
+                        'pre_checkout_query_id': _pcq['id'],
+                        'ok': True
+                    })
+                    log.info(f'Pre-checkout OK for {_pcq["from"]["id"]}')
+                    continue
+
+                # === Telegram Stars: successful_payment ===
+                if 'message' in upd and 'successful_payment' in upd['message']:
+                    _sp = upd['message']['successful_payment']
+                    _sp_user = upd['message']['from']['id']
+                    _sp_stars = _sp['total_amount']
+                    _sp_payload = _sp.get('invoice_payload', '')
+                    try:
+                        from bot_modules import db as _dbs
+                        # Читаем pending stars_invoice
+                        _pend = _dbs.get_pending(_sp_user) or ''
+                        _amt = 0.0
+                        if _pend.startswith('stars_invoice:'):
+                            _p = _pend.split(':')
+                            _amt = float(_p[1])
+                        _dbs.clear_pending(_sp_user)
+                        if _amt > 0:
+                            _new_bal = _dbs.add_balance(_sp_user, _amt, method='stars', meta={'stars': _sp_stars, 'payload': _sp_payload})
+                            NLsp = chr(10)
+                            _ok = NLsp.join([
+                            '✅ <b>ПЛАТЁЖ ПОЛУЧЕН</b>',
+                            '━━━━━━━━━━━━━━━━━━━━',
+                            '',
+                            f'💵 Зачислено: <b>{_amt:.2f} USDT</b>',
+                            f'💰 Баланс: <b>{_new_bal:.2f} USDT</b>'
+                            ])
+                            send_message(cfg['BOT_TOKEN'], _sp_user, _ok)
+                            # Уведомляем админа
+                            _adm = cfg.get('ADMIN_ID', '')
+                            if _adm:
+                                try:
+                                    _u = _dbs.get_user(_sp_user) or {}
+                                    tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                                        'chat_id': _adm,
+                                        'text': f'⭐ <b>STARS ОПЛАТА</b>' + chr(10) + chr(10) + f'👤 {_u.get("first_name") or "—"}' + chr(10) + f'🆔 <code>{_sp_user}</code>' + chr(10) + f'⭐ {_sp_stars} Stars' + chr(10) + f'💵 +{_amt:.2f} USDT',
+                                        'parse_mode': 'HTML'
+                                    })
+                                except: pass
+                                log.info(f'Stars topup: user={_sp_user} amt={_amt} stars={_sp_stars}')
+                        else:
+                            log.warning(f'Stars payment без pending: user={_sp_user} stars={_sp_stars}')
+                    except Exception as _e:
+                        log.error(f'Stars payment error: {_e}')
+                    continue
+
                 if 'callback_query' in upd:
                     cb = upd['callback_query']
                     cb_data = cb.get('data', '')
@@ -3743,6 +3798,47 @@ def main():
                         key_name = cb_data.split(':', 1)[1]
                         _do_key_delete(cfg, cb, cb_user_id, key_name)
                         continue
+                    elif cb_data == 'stars_pay':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        # Читаем pending stars_confirm
+                        try:
+                            from bot_modules import db as _dbs
+                            _pend = _dbs.get_pending(cb_user_id) or ''
+                        except: _pend = ''
+                        if not _pend.startswith('stars_confirm:'):
+                            send_message(cfg['BOT_TOKEN'], cb['message']['chat']['id'], '❌ Сессия истекла. Начни заново')
+                            continue
+                        try:
+                            _parts = _pend.split(':')
+                            _amt = float(_parts[1])
+                            _stars = int(_parts[2])
+                        except:
+                            send_message(cfg['BOT_TOKEN'], cb['message']['chat']['id'], '❌ Ошибка сессии')
+                            continue
+                        # Отправляем счёт
+                        import time as _t
+                        _payload = f'stars_{cb_user_id}_{int(_t.time())}'
+                        _prices = [{'label': f'Пополнение на {_amt:.2f} USDT', 'amount': _stars}]
+                        _inv = tg_request(cfg['BOT_TOKEN'], 'sendInvoice', {
+                            'chat_id': cb_user_id,
+                            'title': 'Пополнение баланса',
+                            'description': f'Пополнение на {_amt:.2f} USDT через Telegram Stars',
+                            'payload': _payload,
+                            'currency': 'XTR',
+                            'prices': json.dumps(_prices),
+                            'provider_token': ''
+                        })
+                        if _inv and _inv.get('ok'):
+                            # Сохраняем в pending на случай перезапуска
+                            try:
+                                _dbs.set_pending(cb_user_id, f'stars_invoice:{_amt}:{_stars}:{_payload}')
+                            except: pass
+                            log.info(f'Stars invoice: user={cb_user_id} amt={_amt} stars={_stars}')
+                        else:
+                            _err = _inv.get('description', '?') if _inv else 'нет ответа'
+                            send_message(cfg['BOT_TOKEN'], cb['message']['chat']['id'], f'❌ Ошибка счёта: {_err}')
+                            log.error(f'Stars invoice error: {_err}')
+                        continue
                     elif cb_data.startswith('cab_vip_confirm:'):
                         try:
                             idx = int(cb_data.split(':', 1)[1])
@@ -3948,6 +4044,56 @@ def main():
                     try:
                         _db.set_pending(user_id, f'vip_ready:{tariff_idx}:{name}')
                     except: pass
+                    continue
+
+                if pending == 'stars_amount' and text and not text.startswith('/'):
+                    import math as _math
+                    # Читаем конфиг
+                    _rate = 0.015
+                    _smin = 1.0
+                    _smax = 100.0
+                    try:
+                        with open('/etc/UDPCustom/bot.conf') as _f:
+                            for _l in _f:
+                                if _l.startswith('STAR_RATE='):
+                                    _rate = float(_l.split('=',1)[1].strip().strip('"'))
+                                elif _l.startswith('STAR_MIN='):
+                                    _smin = float(_l.split('=',1)[1].strip().strip('"'))
+                                elif _l.startswith('STAR_MAX='):
+                                    _smax = float(_l.split('=',1)[1].strip().strip('"'))
+                    except: pass
+                    try:
+                        _amt = float(text.strip().replace(',', '.'))
+                    except:
+                        send_message(cfg['BOT_TOKEN'], chat_id, '❌ Отправь число. Например: <code>5</code>', parse_mode='HTML')
+                        continue
+                    if _amt < _smin:
+                        send_message(cfg['BOT_TOKEN'], chat_id, f'❌ Минимум {_smin:.0f} USDT')
+                        continue
+                    if _amt > _smax:
+                        send_message(cfg['BOT_TOKEN'], chat_id, f'❌ Максимум {_smax:.0f} USDT')
+                        continue
+                    # Считаем Stars (округление вверх)
+                    _stars = int(_math.ceil(_amt / _rate))
+                    # Запоминаем в pending
+                    _db.set_pending(user_id, 'stars_confirm:' + str(_amt) + ':' + str(_stars))
+                    NLs = chr(10)
+                    _msg = NLs.join([
+                        '⭐ <b>ПОДТВЕРЖДЕНИЕ ОПЛАТЫ</b>',
+                        '━━━━━━━━━━━━━━━━━━━━',
+                        '',
+                        f'💵 К зачислению: <b>{_amt:.2f} USDT</b>',
+                        f'⭐ К оплате: <b>{_stars} Stars</b>',
+                        f'📊 Курс: 1 Star = {_rate} USDT',
+                        '',
+                        '━━━━━━━━━━━━━━━━━━━━',
+                        '<i>Оплата через Telegram Stars</i>'
+                    ])
+                    _kb = {'inline_keyboard': [
+                        [{'text': f'✅ Оплатить {_stars} ⭐', 'callback_data': 'stars_pay'}],
+                        [{'text': '⬅️ Отмена', 'callback_data': 'cab_topup_stars'}]
+                    ]}
+                    send_message(cfg['BOT_TOKEN'], chat_id, _msg, reply_markup=_kb)
                     continue
 
                 if pending and pending.startswith('topup_amount:') and text and not text.startswith('/'):
