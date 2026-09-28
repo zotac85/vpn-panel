@@ -1,10 +1,11 @@
 #!/bin/bash
-# Автобэкап БД VPN-панели
+# Автобэкап БД VPN-панели + отправка в Telegram
 
 BACKUP_DIR="/root/backups"
 SRC_DIR="/etc/UDPCustom"
 KEEP_DAYS=14
 TS=$(date +%F_%H%M)
+SUPPORT_CONF="/etc/UDPCustom/support_bot.conf"
 
 mkdir -p "$BACKUP_DIR"
 chmod 700 "$BACKUP_DIR"
@@ -16,7 +17,6 @@ ERROR=0
 
 backup_one() {
     src="$1"; dst="$2"
-    # Если это SQLite — безопасный backup через API
     if head -c 16 "$src" 2>/dev/null | grep -q "SQLite format 3"; then
         python3 -c "import sqlite3; s=sqlite3.connect('$src'); d=sqlite3.connect('$dst'); s.backup(d); d.close(); s.close()" 2>/dev/null && return 0 || return 1
     else
@@ -47,4 +47,20 @@ rm -f *.${TS}
 find "$BACKUP_DIR" -name "backup_*.tar.gz" -mtime +$KEEP_DAYS -delete 2>/dev/null
 
 SIZE=$(du -h "backup_${TS}.tar.gz" 2>/dev/null | cut -f1)
-echo "$(date '+%F %T') Бэкап: backup_${TS}.tar.gz (${SIZE}), файлов: ${COUNT}, ошибок: ${ERROR}"
+HOSTNAME=$(hostname)
+MSG="💾 Автобэкап: ${HOSTNAME}
+📦 backup_${TS}.tar.gz (${SIZE})
+📁 Файлов: ${COUNT}, ошибок: ${ERROR}"
+echo "$(date '+%F %T') $MSG"
+
+# Отправка в Telegram (бот поддержки)
+if [ -f "$SUPPORT_CONF" ]; then
+    TG_TOKEN=$(grep -oP '(?<=BOT_TOKEN=")[^"]+' "$SUPPORT_CONF" | head -1)
+    TG_ADMIN=$(grep -oP '(?<=ADMIN_ID=")[^"]+' "$SUPPORT_CONF" | head -1)
+    if [ -n "$TG_TOKEN" ] && [ -n "$TG_ADMIN" ] && [ -f "backup_${TS}.tar.gz" ]; then
+        curl -s -F "chat_id=${TG_ADMIN}" \
+             -F "caption=${MSG}" \
+             -F "document=@backup_${TS}.tar.gz" \
+             "https://api.telegram.org/bot${TG_TOKEN}/sendDocument" > /dev/null 2>&1
+    fi
+fi
