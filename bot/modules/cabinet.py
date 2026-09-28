@@ -265,16 +265,16 @@ def _format_config_name(username, loc='VPN'):
             if row and row.get('created_at'):
                 from datetime import datetime as _dt
                 date_str = _dt.fromtimestamp(row['created_at']).strftime('%d.%m')
-                return f"🎁 TEST {loc} | {date_str}"
+                return f"🎁 TEST {loc} {date_str}"
         except: pass
         suffix = username[4:]
-        return f"🎁 TEST {loc} | {suffix}" if suffix else f"🎁 TEST {loc}"
+        return f"🎁 TEST {loc} {suffix}" if suffix else f"🎁 TEST {loc}"
     if u.startswith('vip_'):
         suffix = username[4:]
         parts = suffix.split('_')
         if len(parts) > 1 and parts[0].isdigit():
             suffix = parts[-1]
-        return f"💎 VIP {loc} | {suffix}" if suffix else f"💎 VIP {loc}"
+        return f"💎 VIP {loc} {suffix}" if suffix else f"💎 VIP {loc}"
     return f"⭐  {username}"
 
 def make_darktunnel_url(username, password, domain, ws_port, proxy, loc='VPN'):
