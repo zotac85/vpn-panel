@@ -102,6 +102,7 @@ if [ -d "$PANEL_DIR" ] || [ -f "/usr/local/bin/vpn" ]; then
                 fi
             done
             echo "   ✓ OK"
+            bash "$REPO_DIR/modules/setup_ssh_banner.sh" 2>/dev/null || true
             echo "→ Перезапуск vpn-tg-bot.service..."
             systemctl restart vpn-tg-bot 2>/dev/null || true
             sleep 2
