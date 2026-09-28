@@ -104,6 +104,32 @@ def _save_post_id(channel, channel_id_safe, msg_id):
     except: pass
 
 
+def _load_bot_cfg():
+    """Читает /etc/UDPCustom/bot.conf для плейсхолдеров."""
+    cfg = {}
+    try:
+        with open('/etc/UDPCustom/bot.conf') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#') or '=' not in line:
+                    continue
+                k, v = line.split('=', 1)
+                cfg[k.strip()] = v.strip().strip('"').strip("'")
+    except Exception as e:
+        auto_log.error(f"_load_bot_cfg: {e}")
+    return cfg
+
+
+def _load_support():
+    """Читает /etc/UDPCustom/support.txt."""
+    try:
+        with open('/etc/UDPCustom/support.txt') as f:
+            return f.read().strip()
+    except Exception as e:
+        auto_log.error(f"_load_support: {e}")
+        return ''
+
+
 def publish_post(token):
     """Публикует пост во все каналы, удаляя предыдущий"""
     if not os.path.exists(POST_FILE):
@@ -117,6 +143,12 @@ def publish_post(token):
     if not channels:
         auto_log.error("channels.txt пуст")
         return False
+    _bcfg = _load_bot_cfg()
+    _support_user = _load_support()
+    _hours = _bcfg.get('TEST_HOURS', '4')
+    _gb = _bcfg.get('TEST_TRAFFIC_GB', '50')
+    _devices = _bcfg.get('TEST_DEVICES', '1')
+    _location = _bcfg.get('SERVER_LOCATION', '')
     
     bot_username = _get_bot_username(token)
     if not bot_username:
@@ -139,7 +171,14 @@ def publish_post(token):
         primary_clean = target.lstrip('@')
         sponsors = [c2.lstrip('@') for c2 in channels if c2.lstrip('@') != primary_clean]
         sponsors_list = ", ".join([f"@{s}" for s in sponsors]) if sponsors else "—"
-        personalized = post_text.replace('{sponsors_list}', sponsors_list).replace('{primary}', primary_clean)
+        personalized = (post_text
+            .replace('{sponsors_list}', sponsors_list)
+            .replace('{primary}', primary_clean)
+            .replace('{hours}', _hours)
+            .replace('{gb}', _gb)
+            .replace('{devices}', _devices)
+            .replace('{location}', _location)
+            .replace('{support}', _support_user))
         
         r = _send(token, target, personalized, keyboard, parse_mode='HTML')
         if r and r.get('ok'):

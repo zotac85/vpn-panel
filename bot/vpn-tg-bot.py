@@ -587,13 +587,15 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         _gb = cfg.get("TEST_TRAFFIC_GB", "50")
         _dev = cfg.get("TEST_DEVICES", "1")
         if tpl_start:
+            _loc = cfg.get("SERVER_LOCATION", "")
             text = (tpl_start
                     .replace("{name}", name)
                     .replace("{primary}", primary_clean)
                     .replace("{sponsors_list}", sponsors_list)
                     .replace("{hours}", str(_hours))
                     .replace("{gb}", str(_gb))
-                    .replace("{devices}", str(_dev)))
+                    .replace("{devices}", str(_dev))
+                    .replace("{location}", str(_loc)))
         else:
             text = NL.join([
                 f"👋 Привет, {name}!",
@@ -1662,14 +1664,14 @@ def show_promo_list(cfg, chat_id, user_id, msg_id=None):
 
 EDIT_FILES = {
     'welcome': {'file': 'welcome.txt', 'name': '👋 Приветствие', 'ph': '{name}, {channels_list}'},
-    'start': {'file': 'start.txt', 'name': '📖 Как получить тест', 'ph': '{name}, {primary}, {sponsors_list}, {hours}, {gb}, {devices}'},
+    'start': {'file': 'start.txt', 'name': '📖 Как получить тест', 'ph': '{name}, {primary}, {sponsors_list}, {hours}, {gb}, {devices}, {location}, {support}'},
     'test_ready': {'file': 'test_ready.txt', 'name': '🎁 Тест доступен', 'ph': '{name}, {hours}, {gb}, {devices}, {location}'},
     'test_issued': {'file': 'test_issued.txt', 'name': '🎉 Тест готов', 'ph': '{username}, {hours}, {gb}, {devices}'},
     'help': {'file': 'help.txt', 'name': '🏠 Меню /help', 'ph': '{primary}'},
     'help_instruction': {'file': 'help_instruction.txt', 'name': '📲 Инструкция', 'ph': '(нет)'},
     'help_faq': {'file': 'help_faq.txt', 'name': '❓ FAQ', 'ph': '(нет)'},
     'vip_buy': {'file': 'vip_buy.txt', 'name': '💎 Купить VIP', 'ph': '{balance}, {tariffs}'},
-    'post': {'file': 'post.txt', 'name': '📢 Пост', 'ph': '(нет)'},
+    'post': {'file': 'post.txt', 'name': '📢 Пост', 'ph': '{primary}, {sponsors_list}, {hours}, {gb}, {devices}, {location}, {support}'},
     'rate': {'file': 'rate.txt', 'name': '💰 Курс USDT', 'ph': '(число)'},
     'ssh_banner': {'file': 'ssh_banner.txt', 'name': '🖥️ SSH-баннер', 'ph': '(HTML: h5, h6, font)'},
 }
@@ -1866,8 +1868,16 @@ def post_to_channel(cfg, chat_id, user_id):
         sponsors_list = ", ".join([f"@{s}" for s in sponsors]) if sponsors else "—"
         
         # Подстановка переменных
+        _hours = cfg.get('TEST_HOURS', '')
+        _gb = cfg.get('TEST_TRAFFIC_GB', '')
+        _devices = cfg.get('TEST_DEVICES', '')
+        _location = cfg.get('SERVER_LOCATION', '')
         personalized = post_text.replace('{sponsors_list}', sponsors_list)
         personalized = personalized.replace('{primary}', primary_clean)
+        personalized = personalized.replace('{hours}', _hours)
+        personalized = personalized.replace('{gb}', _gb)
+        personalized = personalized.replace('{devices}', _devices)
+        personalized = personalized.replace('{location}', _location)
         
         result = tg_request(token, 'sendMessage', {
             'chat_id': target_channel,
