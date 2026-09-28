@@ -357,12 +357,14 @@ def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
 
     keyboard = {'inline_keyboard': [
         [{'text': f'🔑 Мои ключи ({active_count})', 'callback_data': 'cab_keys'},
-         {'text': '💎 Купить VIP', 'callback_data': 'cab_buy_vip'}],
-        [{'text': '💰 Баланс', 'callback_data': 'cab_balance'},
+         {'text': '💰 Баланс', 'callback_data': 'cab_balance'},
          {'text': '🎫 Промокод', 'callback_data': 'cab_promo'}],
+        [{'text': '💎 VIP SSH', 'callback_data': 'cab_buy_vip'},
+         {'text': '💎 VIP UDP', 'callback_data': 'cab_udp_soon'},
+         {'text': '💎 VIP DNS', 'callback_data': 'cab_whitedns'}],
         [{'text': '👥 Рефералы', 'callback_data': 'cab_refs'},
-         {'text': '💬 Поддержка', 'url': f'https://t.me/{_get_support().lstrip(chr(64))}'}],
-        [{'text': '🏠 В главное меню', 'callback_data': 'cab_exit'}]
+         {'text': '💬 Поддержка', 'url': f'https://t.me/{_get_support().lstrip(chr(64))}'},
+         {'text': '🏠 Меню', 'callback_data': 'cab_exit'}]
     ]}
 
     if msg_id:
@@ -943,7 +945,7 @@ def _get_rate():
 
 def _parse_vip_tariffs(cfg):
     """Парсит VIP_TARIFFS из конфига. Возвращает список dict."""
-    raw = cfg.get('VIP_TARIFFS', '10|2|100|1,30|5|300|1,90|13|900|1')
+    raw = cfg.get('VIP_TARIFFS', '15|2.5|100|1,30|5|300|1,90|13|900|1')
     tariffs = []
     for item in raw.split(','):
         parts = item.strip().split('|')
@@ -1405,6 +1407,23 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
     if cb_data == 'cab_buy_vip':
         show_buy_vip(cfg, chat_id, user_id, msg_id)
         return True
+    if cb_data == 'cab_udp_soon':
+        _udp_text = (
+            "🛡 <b>VIP UDP — скоро будет!</b>" + chr(10) + chr(10) +
+            "🚧 Раздел в разработке." + chr(10) +
+            "Следи за обновлениями в канале."
+        )
+        _udp_kb = {'inline_keyboard': [
+            [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
+        ]}
+        if msg_id:
+            _edit(token, chat_id, msg_id, _udp_text, _udp_kb)
+        else:
+            _send(token, chat_id, _udp_text, _udp_kb)
+        return True
+    if cb_data == 'cab_whitedns':
+        show_whitedns_menu(cfg, chat_id, user_id, msg_id)
+        return True
     if cb_data.startswith('cab_vip_buy:'):
         try:
             idx = int(cb_data.split(':', 1)[1])
@@ -1685,3 +1704,62 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         return True
 
     return False
+
+# ──────────────────────────────────────────────────────────────
+# WHITEDNS — меню (заготовка, логика будет добавлена)
+# ──────────────────────────────────────────────────────────────
+def show_whitedns_menu(cfg, chat_id, user_id, msg_id=None):
+    """Меню WhiteDNS. Проверка VIP + выбор сервера."""
+    token = cfg['BOT_TOKEN']
+    vip_keys = db.get_vip_keys(user_id, active_only=True)
+    has_vip = len(vip_keys) > 0
+    NL = chr(10)
+    if not has_vip:
+        text = NL.join([
+            "📡 <b>WHITEDNS — ДОСТУП ПО VIP</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "🔒 Этот раздел доступен",
+            "только VIP-подписчикам.",
+            "",
+            "<b>━━━ ЧТО ВНУТРИ ━━━</b>",
+            "",
+            "🌐 3 сервера на выбор:",
+            "   🇩🇪 Германия",
+            "   🇫🇮 Финляндия",
+            "   🇸🇪 Швеция",
+            "",
+            "⚙️ 3 профиля настроек:",
+            "   📱 3G",
+            "   📶 WiFi",
+            "   🖥 ADSL",
+            "",
+            "📲 Готовые конфиги для WhiteDNS",
+            "",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "Оформи VIP — раздел откроется.",
+        ])
+        kb = {'inline_keyboard': [
+            [{'text': '💎 Купить VIP SSH', 'callback_data': 'cab_buy_vip'}],
+            [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
+        ]}
+    else:
+        text = NL.join([
+            "📡 <b>WHITEDNS ДОСТУП</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "✅ Твой VIP активен",
+            "",
+            "1️⃣ <b>ВЫБЕРИ СЕРВЕР:</b>",
+        ])
+        kb = {'inline_keyboard': [
+            [{'text': '🇩🇪 Германия', 'callback_data': 'cab_wd_de'},
+             {'text': '🇫🇮 Финляндия', 'callback_data': 'cab_wd_fi'}],
+            [{'text': '🇸🇪 Швеция', 'callback_data': 'cab_wd_se'}],
+            [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
+        ]}
+    if msg_id:
+        _edit(token, chat_id, msg_id, text, kb)
+    else:
+        _send(token, chat_id, text, kb)
