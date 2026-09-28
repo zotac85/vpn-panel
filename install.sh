@@ -210,7 +210,6 @@ FILES_MODULES=(
     "security.sh"
     "traffic.sh"
     "devicelimit.sh"
-    "banner.sh"
     "maintenance.sh"
     "torrent_block.sh"
     "domain_proxy.sh"
