@@ -178,6 +178,54 @@ def faq_feedback(block_name, helped=True):
         execute(f"INSERT INTO faq_stats (block_name, {col}) VALUES (?, 1)", (block_name,))
 
 
+def get_response_stats():
+    """Статистика времени ответа по тикетам"""
+    # Получаем все тикеты
+    tickets = query("SELECT id, created_at, status FROM tickets")
+    if not tickets:
+        return None
+
+    times = []  # секунды на первый ответ
+    no_answer = 0
+
+    for t in tickets:
+        # Находим первое сообщение от админа в этом тикете
+        first_admin = query_one(
+            "SELECT created_at FROM messages WHERE ticket_id=? AND is_admin=1 ORDER BY created_at ASC LIMIT 1",
+            (t['id'],)
+        )
+        if first_admin:
+            delta = first_admin['created_at'] - t['created_at']
+            if delta >= 0:
+                times.append(delta)
+        else:
+            no_answer += 1
+
+    if not times:
+        return {
+            'total': len(tickets),
+            'answered': 0,
+            'no_answer': no_answer,
+            'avg': 0,
+            'median': 0,
+            'min': 0,
+            'max': 0
+        }
+
+    times_sorted = sorted(times)
+    n = len(times_sorted)
+
+    return {
+        'total': len(tickets),
+        'answered': n,
+        'no_answer': no_answer,
+        'avg': sum(times) // n,
+        'median': times_sorted[n // 2],
+        'min': times_sorted[0],
+        'max': times_sorted[-1]
+    }
+
+
 def get_stats():
     total_tickets = query_one("SELECT COUNT(*) as n FROM tickets")['n']
     open_tickets = query_one("SELECT COUNT(*) as n FROM tickets WHERE status='open'")['n']

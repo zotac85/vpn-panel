@@ -406,6 +406,7 @@ def show_admin_menu(cfg, chat_id):
     ])
     kb = {'inline_keyboard': [
         [{'text': f'📋 Активные тикеты ({stats["open_tickets"]})', 'callback_data': 'adm_tickets'}],
+        [{'text': '⏱ Статистика ответов', 'callback_data': 'adm_resp_stats'}],
         [{'text': '📊 FAQ статистика', 'callback_data': 'adm_faq_stats'}],
         [{'text': '📝 Управление FAQ', 'callback_data': 'adm_faq_edit'}],
         [{'text': '🔄 Обновить', 'callback_data': 'adm_refresh'}]
@@ -500,6 +501,11 @@ def handle_callback(cfg, cb, token, admin_id):
         except: return
         do_close_ticket(cfg, cb, tid)
         return
+    if data == 'adm_resp_stats':
+        tg(token, 'answerCallbackQuery', {'callback_query_id': cb_id})
+        show_response_stats(cfg, chat_id, msg_id)
+        return
+
     if data == 'adm_faq_stats':
         tg(token, 'answerCallbackQuery', {'callback_query_id': cb_id})
         show_faq_stats(cfg, chat_id, msg_id)
@@ -723,6 +729,83 @@ def start_ticket_reply(cfg, chat_id, user_id, ticket_id):
 # Pending: какой тикет отвечаем (user_id -> ticket_id)
 PENDING_TICKET_REPLY = {}
 
+
+
+
+
+def _fmt_time(sec):
+    """Форматирует секунды в человеко-читаемый вид"""
+    sec = int(sec)
+    if sec < 60:
+        return f"{sec} сек"
+    if sec < 3600:
+        return f"{sec // 60} мин"
+    h = sec // 3600
+    m = (sec % 3600) // 60
+    if m == 0:
+        return f"{h} ч"
+    return f"{h}ч {m}мин"
+
+
+def show_response_stats(cfg, chat_id, msg_id=None):
+    """Статистика времени ответа по тикетам"""
+    token = cfg['BOT_TOKEN']
+    try:
+        stats = sdb.get_response_stats()
+    except Exception as e:
+        if msg_id:
+            tg(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': f'❌ Ошибка: {e}', 'parse_mode': 'HTML'})
+        return
+
+    NL = chr(10)
+    if not stats or stats['total'] == 0:
+        text = NL.join([
+            '⏱ <b>СТАТИСТИКА ОТВЕТОВ</b>',
+            '━━━━━━━━━━━━━━━━━━━━',
+            '',
+            '📭 Пока нет тикетов',
+            '',
+            '<i>Статистика появится после первых обращений</i>'
+        ])
+    else:
+        answered = stats['answered']
+        total = stats['total']
+        pct = int(answered * 100 / total) if total > 0 else 0
+
+        lines_txt = [
+            '⏱ <b>СТАТИСТИКА ОТВЕТОВ</b>',
+            '━━━━━━━━━━━━━━━━━━━━',
+            '',
+            f'📊 Проанализировано: <b>{total}</b> тикетов',
+            ''
+        ]
+        if answered > 0:
+            lines_txt += [
+                '⏱ <b>Время ответа:</b>',
+                f'   • Среднее: <b>{_fmt_time(stats["avg"])}</b>',
+                f'   • Медиана: <b>{_fmt_time(stats["median"])}</b>',
+                f'   • Быстрейший: <b>{_fmt_time(stats["min"])}</b>',
+                f'   • Медленнейший: <b>{_fmt_time(stats["max"])}</b>',
+                ''
+            ]
+        else:
+            lines_txt += ['⏱ <i>Пока нет ответов</i>', '']
+
+        lines_txt += [
+            '━━━━━━━━━━━━━━━━━━━━',
+            f'✅ Отвечено: <b>{answered}/{total}</b> ({pct}%)',
+            f'❌ Без ответа: <b>{stats["no_answer"]}</b>'
+        ]
+        text = NL.join(lines_txt)
+
+    kb = {'inline_keyboard': [
+        [{'text': '🔄 Обновить', 'callback_data': 'adm_resp_stats'}],
+        [{'text': '⬅️ Назад', 'callback_data': 'adm_refresh'}]
+    ]}
+    if msg_id:
+        tg(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        send(token, chat_id, text, reply_markup=kb)
 
 
 def show_faq_stats(cfg, chat_id, msg_id=None):
@@ -1009,14 +1092,12 @@ def main():
     tg(token, 'deleteWebhook')
     # Команды для ВСЕХ
     tg(token, 'setMyCommands', {'commands': [
-        {'command': 'start', 'description': '👋 Начать'},
-        {'command': 'help', 'description': '❓ Помощь'}
+        {'command': 'start', 'description': '👋 Начать'}
     ]})
     # Команды только для админа (scope: chat)
     tg(token, 'setMyCommands', {
         'commands': [
             {'command': 'start', 'description': '👋 Начать'},
-            {'command': 'help', 'description': '❓ Помощь'},
             {'command': 'admin', 'description': '⚙️ Админ-панель'}
         ],
         'scope': {'type': 'chat', 'chat_id': int(admin_id)}
