@@ -542,6 +542,17 @@ chmod +x /usr/local/bin/vpn-auto-cleanup.sh
 echo "0 4 * * * root /usr/local/bin/vpn-auto-cleanup.sh" > /etc/cron.d/vpn-auto-cleanup
 chmod 644 /etc/cron.d/vpn-auto-cleanup
 
+
+# ──────────────────────────────────────────────────────────────
+# Автобэкап БД
+# ──────────────────────────────────────────────────────────────
+echo -e "\n💾 Установка автобэкапа БД..."
+curl -sf -o /usr/local/bin/vpn-backup.sh "$REPO_URL/scripts/vpn-backup.sh" && chmod +x /usr/local/bin/vpn-backup.sh
+if [ -f /usr/local/bin/vpn-backup.sh ]; then
+    echo "0 4 * * * root /usr/local/bin/vpn-backup.sh >> /var/log/vpn-backup.log 2>&1" > /etc/cron.d/vpn-backup
+    chmod 644 /etc/cron.d/vpn-backup
+    echo -e "\033[0;32m✅   Автобэкап: ежедневно в 4:00 → /root/backups/\033[0m"
+fi
 systemctl restart cron 2>/dev/null || systemctl restart crond 2>/dev/null
 
 # ──────────────────────────────────────────────────────────────
