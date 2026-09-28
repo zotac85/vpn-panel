@@ -1772,42 +1772,341 @@ def _wd_count_lines(path):
     except:
         return 0
 
+def show_wd_stats(cfg, chat_id, user_id, msg_id=None):
+    """Статистика WhiteDNS."""
+    token = cfg['BOT_TOKEN']
+    NL = chr(10)
+    issued = _wd_count_lines(WD_LOG)
+    servers = _wd_count_lines(WD_SS)
+    resolvers = _wd_count_lines(WD_RES)
+    # Последние 5 выдач
+    last5 = []
+    try:
+        with open(WD_LOG) as f:
+            lines_all = [l.strip() for l in f if l.strip()]
+            last5 = lines_all[-5:][::-1]
+    except:
+        pass
+    txt = [
+        '📊 <b>WHITEDNS СТАТИСТИКА</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        '📤 Выдано конфигов: <b>' + str(issued) + '</b>',
+        '🌐 Серверов: <b>' + str(servers) + '</b>',
+        '🔢 Резолверов: <b>' + str(resolvers) + '</b>',
+        '',
+    ]
+    if last5:
+        txt.append('━━ Последние 5 ━━')
+        for row in last5:
+            txt.append('• ' + row)
+    else:
+        txt.append('Пока выдач не было.')
+    text = NL.join(txt)
+    kb = {'inline_keyboard': [
+        [{'text': '🗑 Очистить лог', 'callback_data': 'wd_stats_clear'}],
+        [{'text': '⬅️ Назад', 'callback_data': 'adm_whitedns'}]
+    ]}
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
+
+def _wd_prof_path(idx):
+    return [
+        '/etc/UDPCustom/whitedns_settings_3g.txt',
+        '/etc/UDPCustom/whitedns_settings_wifi.txt',
+        '/etc/UDPCustom/whitedns_settings_adsl.txt'
+    ][idx]
+
+def _wd_read_profile(idx):
+    try:
+        with open(_wd_prof_path(idx)) as f:
+            return f.read().rstrip(chr(10))
+    except:
+        return ''
+
+def _wd_save_profile(idx, txt):
+    import os as _os
+    path = _wd_prof_path(idx)
+    with open(path, 'w') as f:
+        f.write(txt + chr(10))
+    try:
+        _os.chmod(path, 0o600)
+    except: pass
+
+def show_wd_profile_edit(cfg, chat_id, user_id, idx, msg_id=None):
+    """Экран редактирования одного профиля (0=3G, 1=WiFi, 2=ADSL)."""
+    token = cfg['BOT_TOKEN']
+    NL = chr(10)
+    names = ['📱 3G', '📶 WiFi', '🖥 ADSL']
+    cur = _wd_read_profile(idx)
+    cnt = len([l for l in cur.split(chr(10)) if l.strip()]) if cur else 0
+    if cur:
+        preview = cur[:500]
+        if len(cur) > 500:
+            preview += NL + '... (обрезано)'
+        block = '<pre>' + preview + '</pre>'
+    else:
+        block = '❌ пока пусто'
+    text = NL.join([
+        '✏️ <b>ПРОФИЛЬ: ' + names[idx] + '</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        'Строк: <b>' + str(cnt) + '</b>',
+        '',
+        block,
+        '',
+        '━━━━━━━━━━━━━━━━━━━━',
+        'Отправь новое содержимое сообщением.',
+        'Или отправь <code>-</code> чтобы очистить.',
+    ])
+    kb = {'inline_keyboard': [
+        [{'text': '🗑 Очистить', 'callback_data': 'wd_prof_clear_' + str(idx)}],
+        [{'text': '⬅️ Назад', 'callback_data': 'wd_profiles'}]
+    ]}
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
+
+def show_wd_profiles(cfg, chat_id, user_id, msg_id=None):
+    """Меню профилей WhiteDNS (3G/WiFi/ADSL)."""
+    token = cfg['BOT_TOKEN']
+    NL = chr(10)
+    def _cnt(path):
+        try:
+            with open(path) as f:
+                return len([l for l in f if l.strip()])
+        except:
+            return 0
+    c3 = _cnt(WD_S3)
+    cw = _cnt(WD_SW)
+    ca = _cnt(WD_SA)
+    text = NL.join([
+        '⚙️ <b>ПРОФИЛИ НАСТРОЕК</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        '📱 3G   : ' + (str(c3) + ' стр. ✅' if c3 else '❌ пусто'),
+        '📶 WiFi : ' + (str(cw) + ' стр. ✅' if cw else '❌ пусто'),
+        '🖥 ADSL : ' + (str(ca) + ' стр. ✅' if ca else '❌ пусто'),
+        '',
+        '━━━━━━━━━━━━━━━━━━━━',
+        'Выбери профиль для редактирования:',
+    ])
+    kb = {'inline_keyboard': [
+        [{'text': '📱 3G', 'callback_data': 'wd_prof_3g'},
+         {'text': '📶 WiFi', 'callback_data': 'wd_prof_wifi'},
+         {'text': '🖥 ADSL', 'callback_data': 'wd_prof_adsl'}],
+        [{'text': '⬅️ Назад', 'callback_data': 'adm_whitedns'}]
+    ]}
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
+
+def _wd_read_resolvers(idx):
+    """Читает резолверы для сервера idx (0=de, 1=fi, 2=se)."""
+    paths = [
+        '/etc/UDPCustom/whitedns_resolvers_de.txt',
+        '/etc/UDPCustom/whitedns_resolvers_fi.txt',
+        '/etc/UDPCustom/whitedns_resolvers_se.txt'
+    ]
+    try:
+        with open(paths[idx]) as f:
+            return [l.strip() for l in f if l.strip()]
+    except:
+        return []
+
+def _wd_res_path(idx):
+    return [
+        '/etc/UDPCustom/whitedns_resolvers_de.txt',
+        '/etc/UDPCustom/whitedns_resolvers_fi.txt',
+        '/etc/UDPCustom/whitedns_resolvers_se.txt'
+    ][idx]
+
+def show_wd_resolvers(cfg, chat_id, user_id, msg_id=None):
+    """Резолверы WhiteDNS — по 3 серверам."""
+    token = cfg['BOT_TOKEN']
+    NL = chr(10)
+    names = ['🇩🇪 Германия', '🇫🇮 Финляндия', '🇸🇪 Швеция']
+    txt = ['🔢 <b>РЕЗОЛВЕРЫ WHITEDNS</b>', '━━━━━━━━━━━━━━━━━━━━', '']
+    for i, name in enumerate(names):
+        c = len(_wd_read_resolvers(i))
+        if c:
+            txt.append(name + ' — <b>' + str(c) + '</b> IP ✅')
+        else:
+            txt.append(name + ' — ❌ пусто')
+    txt.append('')
+    txt.append('━━━━━━━━━━━━━━━━━━━━')
+    txt.append('Нажми на сервер, чтобы отредактировать список.')
+    text = NL.join(txt)
+    kb = {'inline_keyboard': [
+        [{'text': '🇩🇪 Германия', 'callback_data': 'wd_res_edit_0'},
+         {'text': '🇫🇮 Финляндия', 'callback_data': 'wd_res_edit_1'},
+         {'text': '🇸🇪 Швеция', 'callback_data': 'wd_res_edit_2'}],
+        [{'text': '⬅️ Назад', 'callback_data': 'adm_whitedns'}]
+    ]}
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
+
+def show_wd_resolver_edit(cfg, chat_id, user_id, idx, msg_id=None):
+    """Экран редактирования резолверов одного сервера."""
+    token = cfg['BOT_TOKEN']
+    NL = chr(10)
+    names = ['🇩🇪 Германия', '🇫🇮 Финляндия', '🇸🇪 Швеция']
+    res = _wd_read_resolvers(idx)
+    if res:
+        preview = chr(10).join(res[:5])
+        if len(res) > 5:
+            preview += chr(10) + '... (ещё ' + str(len(res) - 5) + ')'
+        preview_block = '<pre>' + preview + '</pre>'
+    else:
+        preview_block = '❌ пока пусто'
+    text = NL.join([
+        '✏️ <b>РЕЗОЛВЕРЫ: ' + names[idx] + '</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        'Всего IP: <b>' + str(len(res)) + '</b>',
+        '',
+        preview_block,
+        '',
+        '━━━━━━━━━━━━━━━━━━━━',
+        'Отправь список IP — по одному на строку.',
+        'Или отправь <code>-</code> чтобы очистить.',
+    ])
+    kb = {'inline_keyboard': [
+        [{'text': '🗑 Очистить', 'callback_data': 'wd_res_clear_' + str(idx)}],
+        [{'text': '⬅️ Назад', 'callback_data': 'wd_resolvers'}]
+    ]}
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
+
+def _wd_read_servers():
+    """Читает 3 строки серверов. Возвращает список из 3 строк (или '')."""
+    result = ['', '', '']
+    try:
+        with open(WD_SS) as f:
+            lines = [l.rstrip(chr(10)) for l in f]
+        for i in range(min(3, len(lines))):
+            result[i] = lines[i]
+    except:
+        pass
+    return result
+
+def _wd_save_servers(servers):
+    """Сохраняет 3 строки серверов."""
+    with open(WD_SS, 'w') as f:
+        f.write(chr(10).join(servers) + chr(10))
+
+def show_wd_servers(cfg, chat_id, user_id, msg_id=None):
+    """Список 3 серверов WhiteDNS."""
+    token = cfg['BOT_TOKEN']
+    NL = chr(10)
+    servers = _wd_read_servers()
+    names = ['🇩🇪 Германия', '🇫🇮 Финляндия', '🇸🇪 Швеция']
+    txt = ['🌐 <b>СЕРВЕРЫ WHITEDNS</b>', '━━━━━━━━━━━━━━━━━━━━', '']
+    for i, name in enumerate(names):
+        if servers[i]:
+            txt.append(name + ' — ✅  настроено')
+        else:
+            txt.append(name + ' — ❌  пусто')
+        txt.append('')
+    txt.append('━━━━━━━━━━━━━━━━━━━━')
+    txt.append('Нажми на сервер, чтобы отредактировать.')
+    text = NL.join(txt)
+    kb = {'inline_keyboard': [
+        [{'text': '🇩🇪 Германия', 'callback_data': 'wd_srv_edit_0'},
+         {'text': '🇫🇮 Финляндия', 'callback_data': 'wd_srv_edit_1'},
+         {'text': '🇸🇪 Швеция', 'callback_data': 'wd_srv_edit_2'}],
+        [{'text': '⬅️ Назад', 'callback_data': 'adm_whitedns'}]
+    ]}
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
+
+def show_wd_server_edit(cfg, chat_id, user_id, idx, msg_id=None):
+    """Экран редактирования одного сервера."""
+    token = cfg['BOT_TOKEN']
+    NL = chr(10)
+    servers = _wd_read_servers()
+    names = ['🇩🇪 Германия', '🇫🇮 Финляндия', '🇸🇪 Швеция']
+    cur = servers[idx] if idx < len(servers) else ''
+    if cur:
+        _prev = cur[:500]
+        if len(cur) > 500:
+            _prev += NL + '... (обрезано)'
+        preview = '<pre>' + _prev + '</pre>'
+    else:
+        preview = '❌ пока пусто'
+    text = NL.join([
+        '✏️ <b>РЕДАКТИРОВАНИЕ: ' + names[idx] + '</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        'Текущее значение:',
+        preview,
+        '',
+        '━━━━━━━━━━━━━━━━━━━━',
+        'Отправь новое значение сообщением.',
+        '',
+        'Или отправь <code>-</code> чтобы очистить.',
+    ])
+    kb = {'inline_keyboard': [
+        [{'text': '🗑 Очистить', 'callback_data': 'wd_srv_clear_' + str(idx)}],
+        [{'text': '⬅️ Назад', 'callback_data': 'wd_servers'}]
+    ]}
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
+
 def show_adm_whitedns(cfg, chat_id, user_id, msg_id=None):
     """Меню WhiteDNS в админке."""
     token = cfg['BOT_TOKEN']
-    srv = _wd_count_lines(WD_SS)
-    res = _wd_count_lines(WD_RES)
-    s3 = _wd_count_lines(WD_S3)
-    sw = _wd_count_lines(WD_SW)
-    sa = _wd_count_lines(WD_SA)
-    issued = _wd_count_lines(WD_LOG)
     NL = chr(10)
+    issued = _wd_count_lines(WD_LOG)
+    srv = _wd_read_servers()
+    srv_names = ['🇩🇪 Германия', '🇫🇮 Финляндия', '🇸🇪 Швеция']
+    srv_ready = sum(1 for s in srv if s)
+    res_counts = [len(_wd_read_resolvers(i)) for i in range(3)]
+    res_ready = sum(1 for c in res_counts if c)
+    p3 = _wd_count_lines(WD_S3)
+    pw = _wd_count_lines(WD_SW)
+    pa = _wd_count_lines(WD_SA)
+    prof_ready = sum(1 for x in (p3, pw, pa) if x)
     lines = [
         '📡 <b>WHITEDNS УПРАВЛЕНИЕ</b>',
         '━━━━━━━━━━━━━━━━━━━━',
         '',
         '📊 Выдано конфигов: <b>' + str(issued) + '</b>',
         '',
-        '━━ 🌐 Серверы ━━',
-        'Настроено: <b>' + str(srv) + '</b>',
-        '',
-        '━━ ⚙️ Профили ━━',
-        '📱 3G   : ' + (str(s3) + ' стр.' if s3 else '❌ пусто'),
-        '📶 WiFi : ' + (str(sw) + ' стр.' if sw else '❌ пусто'),
-        '🖥 ADSL : ' + (str(sa) + ' стр.' if sa else '❌ пусто'),
-        '',
-        '━━ 🔢 Резолверы ━━',
-        'IP: <b>' + str(res) + '</b>',
-        '',
-        '━━━━━━━━━━━━━━━━━━━━',
+        '━━ 🌐 Серверы (' + str(srv_ready) + '/3) ━━',
     ]
+    for i, name in enumerate(srv_names):
+        lines.append(name + ' — ' + ('✅' if srv[i] else '❌ пусто'))
+    lines.append('')
+    lines.append('━━ 🔢 Резолверы (' + str(res_ready) + '/3) ━━')
+    for i, name in enumerate(srv_names):
+        c = res_counts[i]
+        lines.append(name + ' — ' + (str(c) + ' IP ✅' if c else '❌ пусто'))
+    lines.append('')
+    lines.append('━━ ⚙️ Профили (' + str(prof_ready) + '/3) ━━')
+    lines.append('📱 3G   : ' + (str(p3) + ' стр. ✅' if p3 else '❌ пусто'))
+    lines.append('📶 WiFi : ' + (str(pw) + ' стр. ✅' if pw else '❌ пусто'))
+    lines.append('🖥 ADSL : ' + (str(pa) + ' стр. ✅' if pa else '❌ пусто'))
+    lines.append('')
+    lines.append('━━━━━━━━━━━━━━━━━━━━')
     text = NL.join(lines)
     kb = {'inline_keyboard': [
-        [{'text': '🌐 Серверы (' + str(srv) + ')', 'callback_data': 'wd_servers'},
-         {'text': '🔢 Резолверы (' + str(res) + ')', 'callback_data': 'wd_resolvers'}],
-        [{'text': '⚙️ Профили', 'callback_data': 'wd_profiles'},
-         {'text': '📊 Статистика', 'callback_data': 'wd_stats'}],
-        [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
+        [{'text': '🌐 Серверы (' + str(srv_ready) + '/3)', 'callback_data': 'wd_servers'},
+         {'text': '🔢 Резолверы (' + str(res_ready) + '/3)', 'callback_data': 'wd_resolvers'}],
+        [{'text': '⚙️ Профили (' + str(prof_ready) + '/3)', 'callback_data': 'wd_profiles'},
+         {'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
     ]}
     if msg_id:
         tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
@@ -3745,6 +4044,77 @@ def main():
                     elif cb_data == 'adm_whitedns':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         show_adm_whitedns(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                    elif cb_data == 'wd_servers':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        show_wd_servers(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                    elif cb_data == 'wd_resolvers':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        show_wd_resolvers(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                    elif cb_data == 'wd_profiles':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        show_wd_profiles(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                    elif cb_data == 'wd_stats':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        show_wd_stats(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                    elif cb_data.startswith('wd_srv_edit_'):
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        try:
+                            _idx = int(cb_data.rsplit('_', 1)[1])
+                        except:
+                            _idx = 0
+                        try:
+                            from bot_modules import db as _wddb
+                            _wddb.set_pending(cb_user_id, 'wd_srv_edit:' + str(_idx))
+                        except: pass
+                        show_wd_server_edit(cfg, cb['message']['chat']['id'], cb_user_id, _idx, cb['message']['message_id'])
+                    elif cb_data.startswith('wd_srv_clear_'):
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': '🗑 Очищено'})
+                        try:
+                            _idx = int(cb_data.rsplit('_', 1)[1])
+                        except:
+                            _idx = 0
+                        _servers = _wd_read_servers()
+                        _servers[_idx] = ''
+                        _wd_save_servers(_servers)
+                        show_wd_server_edit(cfg, cb['message']['chat']['id'], cb_user_id, _idx, cb['message']['message_id'])
+                    elif cb_data.startswith('wd_res_edit_'):
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        try:
+                            _idx = int(cb_data.rsplit('_', 1)[1])
+                        except:
+                            _idx = 0
+                        try:
+                            from bot_modules import db as _wddb
+                            _wddb.set_pending(cb_user_id, 'wd_res_edit:' + str(_idx))
+                        except: pass
+                        show_wd_resolver_edit(cfg, cb['message']['chat']['id'], cb_user_id, _idx, cb['message']['message_id'])
+                    elif cb_data.startswith('wd_res_clear_'):
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': '🗑 Очищено'})
+                        try:
+                            _idx = int(cb_data.rsplit('_', 1)[1])
+                        except:
+                            _idx = 0
+                        try:
+                            open(_wd_res_path(_idx), 'w').close()
+                        except:
+                            pass
+                        show_wd_resolver_edit(cfg, cb['message']['chat']['id'], cb_user_id, _idx, cb['message']['message_id'])
+                    elif cb_data in ('wd_prof_3g', 'wd_prof_wifi', 'wd_prof_adsl'):
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        _pidx = {'wd_prof_3g': 0, 'wd_prof_wifi': 1, 'wd_prof_adsl': 2}[cb_data]
+                        try:
+                            from bot_modules import db as _wddb
+                            _wddb.set_pending(cb_user_id, 'wd_prof_edit:' + str(_pidx))
+                        except: pass
+                        show_wd_profile_edit(cfg, cb['message']['chat']['id'], cb_user_id, _pidx, cb['message']['message_id'])
+                    elif cb_data.startswith('wd_prof_clear_'):
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': '🗑 Очищено'})
+                        try:
+                            _pidx = int(cb_data.rsplit('_', 1)[1])
+                        except:
+                            _pidx = 0
+                        _wd_save_profile(_pidx, '')
+                        show_wd_profile_edit(cfg, cb['message']['chat']['id'], cb_user_id, _pidx, cb['message']['message_id'])
                     elif cb_data == 'admin_banlist':
                         handle_banlist(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
                     elif cb_data == 'admin_post':
@@ -4086,6 +4456,88 @@ def main():
                     from bot_modules import db as _db
                     pending = _db.get_pending(user_id)
                 except: pending = None
+                if pending and pending.startswith('wd_srv_edit:') and text and not text.startswith('/'):
+                    _db.clear_pending(user_id)
+                    try:
+                        _idx = int(pending.split(':', 1)[1])
+                    except:
+                        _idx = 0
+                    _txt = text.strip()
+                    _servers = _wd_read_servers()
+                    if _txt == '-':
+                        _servers[_idx] = ''
+                    else:
+                        _servers[_idx] = _txt
+                    _wd_save_servers(_servers)
+                    NLx = chr(10)
+                    _ok_msg = NLx.join([
+                        '✅ <b>Сохранено</b>',
+                        '━━━━━━━━━━━━━━━━━━━━',
+                        'Новое значение записано.',
+                    ])
+                    _kb = {'inline_keyboard': [
+                        [{'text': '⬅️ К серверам', 'callback_data': 'wd_servers'}]
+                    ]}
+                    tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                        'chat_id': user_id, 'text': _ok_msg, 'parse_mode': 'HTML', 'reply_markup': _kb
+                    })
+                    continue
+                if pending and pending.startswith('wd_res_edit:') and text and not text.startswith('/'):
+                    _db.clear_pending(user_id)
+                    try:
+                        _idx = int(pending.split(':', 1)[1])
+                    except:
+                        _idx = 0
+                    _txt = text.strip()
+                    _path = _wd_res_path(_idx)
+                    if _txt == '-':
+                        open(_path, 'w').close()
+                    else:
+                        with open(_path, 'w') as _wf:
+                            _wf.write(_txt + chr(10))
+                    try:
+                        import os as _os
+                        _os.chmod(_path, 0o600)
+                    except: pass
+                    _cnt = len([l for l in _txt.split(chr(10)) if l.strip()]) if _txt != '-' else 0
+                    NLx = chr(10)
+                    _ok_msg = NLx.join([
+                        '✅ <b>Сохранено</b>',
+                        '━━━━━━━━━━━━━━━━━━━━',
+                        'IP в файле: <b>' + str(_cnt) + '</b>',
+                    ])
+                    _kb = {'inline_keyboard': [
+                        [{'text': '⬅️ К резолверам', 'callback_data': 'wd_resolvers'}]
+                    ]}
+                    tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                        'chat_id': user_id, 'text': _ok_msg, 'parse_mode': 'HTML', 'reply_markup': _kb
+                    })
+                    continue
+                if pending and pending.startswith('wd_prof_edit:') and text and not text.startswith('/'):
+                    _db.clear_pending(user_id)
+                    try:
+                        _pidx = int(pending.split(':', 1)[1])
+                    except:
+                        _pidx = 0
+                    _txt = text.strip()
+                    if _txt == '-':
+                        _wd_save_profile(_pidx, '')
+                    else:
+                        _wd_save_profile(_pidx, _txt)
+                    _cnt = 0 if _txt == '-' else len([l for l in _txt.split(chr(10)) if l.strip()])
+                    NLx = chr(10)
+                    _ok_msg = NLx.join([
+                        '✅ <b>Профиль сохранён</b>',
+                        '━━━━━━━━━━━━━━━━━━━━',
+                        'Строк: <b>' + str(_cnt) + '</b>',
+                    ])
+                    _kb = {'inline_keyboard': [
+                        [{'text': '⬅️ К профилям', 'callback_data': 'wd_profiles'}]
+                    ]}
+                    tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                        'chat_id': user_id, 'text': _ok_msg, 'parse_mode': 'HTML', 'reply_markup': _kb
+                    })
+                    continue
                 if pending and pending.startswith('vip_name:') and text and not text.startswith('/'):
                     _db.clear_pending(user_id)
                     try:
