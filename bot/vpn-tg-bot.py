@@ -1672,6 +1672,7 @@ EDIT_FILES = {
     'help_faq': {'file': 'help_faq.txt', 'name': '❓  FAQ', 'ph': '{primary}, {support}, {hours}, {gb}, {devices}, {location}'},
     'vip_buy': {'file': 'vip_buy.txt', 'name': '💎 Купить VIP', 'ph': '{balance}, {tariffs}'},
     'post': {'file': 'post.txt', 'name': '📢 Пост', 'ph': '{primary}, {sponsors_list}, {hours}, {gb}, {devices}, {location}, {support}'},
+    'ref_post': {'file': 'ref_post.txt', 'name': '📤 Реферальный пост', 'ph': '{bot_name}, {primary}, {sponsors_list}, {hours}, {gb}, {devices}, {location}, {support}'},
     'rate': {'file': 'rate.txt', 'name': '💰 Курс USDT', 'ph': '(число)'},
     'ssh_banner': {'file': 'ssh_banner.txt', 'name': '🖥️ SSH-баннер', 'ph': '(HTML: h5, h6, font)'},
 }

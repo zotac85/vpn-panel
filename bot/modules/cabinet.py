@@ -1245,14 +1245,19 @@ def _apply_placeholders(text, cfg):
     except:
         _chs = []
     _primary = _chs[0] if _chs else ''
+    _sponsors = [c for c in _chs if c != _primary]
+    _sponsors_list = ', '.join('@' + s for s in _sponsors) if _sponsors else '—'
     # bot.conf
     _hours = cfg.get('TEST_HOURS', '')
     _gb = cfg.get('TEST_TRAFFIC_GB', '')
     _devices = cfg.get('TEST_DEVICES', '')
     _location = cfg.get('SERVER_LOCATION', '')
+    _bot_name = cfg.get('CONFIG_NAME', 'VPN')
     return (text
         .replace('{support}', _get_support())
         .replace('{primary}', _primary)
+        .replace('{sponsors_list}', _sponsors_list)
+        .replace('{bot_name}', str(_bot_name))
         .replace('{hours}', str(_hours))
         .replace('{gb}', str(_gb))
         .replace('{devices}', str(_devices))
@@ -1614,29 +1619,13 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
             "🎁 За каждого друга — бонус 💰"
         ])
         _send(token, chat_id, share_msg)
-        # Само рекламное сообщение с кнопкой
-        NL2 = chr(10)
-        ad_text = NL2.join([
-            "⚡ <b>ArsenVipKeys — VPN который работает!</b>",
-            "",
-            "✅ Быстрое подключение",
-            "✅ Без рекламы и логов",
-            "✅ Работает на всех устройствах",
-            "✅ Поддержка 24/7",
-            "",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "🎁 <b>БЕСПЛАТНЫЙ ТЕСТ КАЖДЫЙ ДЕНЬ</b>",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "",
-            "⏰ 8 часов бесплатно",
-            "📊 50 ГБ трафика",
-            "📱 1 устройство",
-            "🇩🇪 Сервер Германия",
-            "",
-            "🔥 Хочешь ещё? Получи новый тест снова через 8 часов!",
-            "",
-            "━━━━━━━━━━━━━━━━━━━━"
-        ])
+        # Само рекламное сообщение — из ref_post.txt
+        try:
+            with open('/etc/UDPCustom/ref_post.txt') as _rf:
+                ad_text = _rf.read().strip()
+            ad_text = _apply_placeholders(ad_text, cfg)
+        except Exception:
+            ad_text = '⚡  <b>' + cfg.get('CONFIG_NAME', 'VPN') + ' — VPN который работает!</b>'
         ad_kb = {'inline_keyboard': [
             [{'text': '🎁 Получить ключ', 'url': ref_link}]
         ]}
