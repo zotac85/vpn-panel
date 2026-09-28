@@ -1235,40 +1235,63 @@ def show_create_key(cfg, chat_id, user_id, msg_id=None):
         _send(token, chat_id, text, keyboard)
 
 
-def _get_help_text():
+def _apply_placeholders(text, cfg):
+    """Подставляет все поддерживаемые плейсхолдеры в текст."""
+    if not text:
+        return text
+    # Каналы
+    try:
+        with open('/etc/UDPCustom/channels.txt') as f:
+            _chs = [l.strip().lstrip('@') for l in f if l.strip() and not l.startswith('#')]
+    except:
+        _chs = []
+    _primary = _chs[0] if _chs else ''
+    # bot.conf
+    _hours = cfg.get('TEST_HOURS', '')
+    _gb = cfg.get('TEST_TRAFFIC_GB', '')
+    _devices = cfg.get('TEST_DEVICES', '')
+    _location = cfg.get('SERVER_LOCATION', '')
+    return (text
+        .replace('{support}', _get_support())
+        .replace('{primary}', _primary)
+        .replace('{hours}', str(_hours))
+        .replace('{gb}', str(_gb))
+        .replace('{devices}', str(_devices))
+        .replace('{location}', str(_location)))
+
+
+def _get_help_text(cfg=None):
     """Главный экран /help"""
     try:
         with open('/etc/UDPCustom/help.txt') as f:
             t = f.read().strip()
-            return t.replace('{support}', _get_support()) if t else None
+            return _apply_placeholders(t, cfg or {}) if t else None
     except: return None
 
 
-def _get_help_instruction():
+def _get_help_instruction(cfg=None):
     """Инструкция подключения"""
     try:
         with open('/etc/UDPCustom/help_instruction.txt') as f:
             t = f.read().strip()
-            return t.replace('{support}', _get_support()) if t else None
+            return _apply_placeholders(t, cfg or {}) if t else None
     except: return None
 
 
-def _get_help_faq():
+def _get_help_faq(cfg=None):
     """FAQ"""
     try:
         with open('/etc/UDPCustom/help_faq.txt') as f:
             t = f.read().strip()
             if not t: return None
-            t = t.replace('{support}', _get_support())
-            # {hours} подставляем позже — здесь без cfg
-            return t
+            return _apply_placeholders(t, cfg or {})
     except: return None
 
 
 def show_help_instruction(cfg, chat_id, user_id, msg_id=None):
     """Инструкция по подключению"""
     token = cfg['BOT_TOKEN']
-    text = _get_help_instruction()
+    text = _get_help_instruction(cfg)
     if not text:
         text = "📖 <b>Инструкция</b>\n\nОтредактируй /etc/UDPCustom/help_instruction.txt"
     keyboard = {'inline_keyboard': [
@@ -1283,12 +1306,9 @@ def show_help_instruction(cfg, chat_id, user_id, msg_id=None):
 def show_help_faq(cfg, chat_id, user_id, msg_id=None):
     """FAQ"""
     token = cfg['BOT_TOKEN']
-    text = _get_help_faq()
+    text = _get_help_faq(cfg)
     if not text:
         text = "❓ <b>FAQ</b>\n\nОтредактируй /etc/UDPCustom/help_faq.txt"
-    else:
-        _hours = cfg.get('TEST_HOURS', '8')
-        text = text.replace('{hours}', str(_hours))
     keyboard = {'inline_keyboard': [
         [{'text': '⬅️ Назад', 'callback_data': 'cab_help_back'}]
     ]}
@@ -1311,7 +1331,7 @@ def show_help_back(cfg, chat_id, user_id, msg_id=None):
             pass
     primary = channels[0].lstrip('@') if channels else 'ArsenVipKeys'
 
-    tpl_help = _get_help_text()
+    tpl_help = _get_help_text(cfg)
     if tpl_help:
         text = tpl_help.replace('{primary}', primary)
     else:

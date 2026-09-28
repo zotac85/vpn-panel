@@ -54,10 +54,11 @@ if [ -d "$PANEL_DIR" ] || [ -f "/usr/local/bin/vpn" ]; then
     echo ""
     echo " 1) 🔄 Обновить скрипты и модули (базы и настройки сохранятся)"
     echo " 2) 🤖 Обновить только Telegram-бота (быстро, без сервисов)"
-    echo " 3) ⚙️ Переустановить полностью (сброс конфигурации)"
+    echo " 3) 📝 Обновить только тексты (безопасно, без конфигов и баз)"
+    echo " 4) ⚙️ Переустановить полностью (сброс конфигурации)"
     echo " 0) 🚪 Отмена"
     echo ""
-    read -p "Выберите действие [0-3]: " choice
+    read -p "Выберите действие [0-4]: " choice
     case $choice in
         1) echo -e "\n🔄 Обновление компонентов панели..." ;;
         2)
@@ -114,6 +115,56 @@ if [ -d "$PANEL_DIR" ] || [ -f "/usr/local/bin/vpn" ]; then
             exit 0
             ;;
         3)
+            echo -e "\n📝  Обновление универсальных текстов..."
+            REPO_DIR="/root/vpn-panel-sync"
+            if [ ! -d "$REPO_DIR" ]; then
+                echo -e "\033[0;31m❌  Репо не найдено: $REPO_DIR\033[0m"
+                exit 1
+            fi
+            cd "$REPO_DIR" || exit 1
+            echo "→ git pull..."
+            git pull origin main 2>&1 | tail -3 || true
+            echo ""
+            echo -e "\033[1;33m⚠️   Будут ОБНОВЛЕНЫ следующие файлы в /etc/UDPCustom/:\033[0m"
+            echo "   welcome.txt, start.txt, test_ready.txt, test_issued.txt"
+            echo "   help.txt, help_instruction.txt, help_faq.txt"
+            echo "   vip_buy.txt, post.txt, faq_keywords.txt"
+            echo ""
+            echo -e "\033[0;33mℹ️   НЕ будут затронуты:\033[0m"
+            echo "   bot.conf, support_bot.conf, channels.txt, support.txt,"
+            echo "   ssh_banner.txt, rate.txt, vpn.db, support.db"
+            echo ""
+            read -p "Продолжить? [y/N]: " confirm
+            if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+                echo "Отменено."
+                exit 0
+            fi
+            BK_TS=$(date +%F_%H%M)
+            TEXT_FILES="welcome.txt start.txt test_ready.txt test_issued.txt help.txt help_instruction.txt help_faq.txt vip_buy.txt post.txt faq_keywords.txt"
+            OK=0
+            SKIP=0
+            for f in $TEXT_FILES; do
+                SRC="$REPO_DIR/configs/$f"
+                DST="/etc/UDPCustom/$f"
+                if [ ! -f "$SRC" ]; then
+                    echo "   ⏭  $f (нет в репо)"
+                    SKIP=$((SKIP+1))
+                    continue
+                fi
+                if [ -f "$DST" ]; then
+                    cp "$DST" "${DST}.bak_${BK_TS}"
+                fi
+                cp "$SRC" "$DST"
+                echo "   ✓ $f"
+                OK=$((OK+1))
+            done
+            echo ""
+            echo -e "\033[0;32m✅  Обновлено: $OK, пропущено: $SKIP\033[0m"
+            echo "   Бэкапы: /etc/UDPCustom/*.bak_${BK_TS}"
+            echo -e "\033[0;36mℹ️   Тексты читаются ботом на лету — перезапуск не нужен\033[0m"
+            exit 0
+            ;;
+        4)
             echo -e "\n⚠️ Полная переустановка..."
             rm -rf "$PANEL_DIR"
             rm -f /usr/local/bin/vpn

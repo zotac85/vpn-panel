@@ -1,19 +1,21 @@
 🎁 ПОЛУЧИ БЕСПЛАТНЫЙ VPN 🎁
 
-⏰ 8 часов | 📊 50 ГБ | 📱 1 устройство
+📍 Сервер: {location}
 
-📲 Скачай <a href="https://play.google.com/store/apps/details?id=net.darktunnel.app">DarkTunnel</a>
+⏰ {hours} часов | 📊 {gb} ГБ | 📱 {devices} устройство
+
+📲 Скачай DarkTunnel
 
 🔑 Готовый конфиг для DarkTunnel
 
-━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━
 
 ⚠️ Для получения:
 
-1️⃣ Подпишись: {sponsors_list}
+1️⃣ Подпишись на спонсоров: {sponsors_list}
 2️⃣ Нажми кнопку ниже 👇
 
-━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━
 
 📍 Ты в: @{primary}
 💬 {support}
