@@ -9,6 +9,9 @@ TG_SERVICE="vpn-tg-bot"
 TG_BOT_SCRIPT="/usr/local/bin/vpn-tg-bot.py"
 TG_LOG="/var/log/vpn-tg-bot.log"
 TG_ISSUED="/etc/UDPCustom/bot_issued.db"
+SG_CONF="/etc/UDPCustom/support_bot.conf"
+SG_SERVICE="support-bot"
+SG_LOG="/var/log/vpn-support-bot.log"
 TG_BLACKLIST="/etc/UDPCustom/bot_blacklist"
 
 tg_bot_status() {
@@ -126,76 +129,6 @@ tg_show_log() {
     read -p "Нажмите Enter..."
 }
 
-tg_show_issued() {
-    header
-    echo -e "${YELLOW}--- 📊 Выданные тесты ---${NC}"
-    echo ""
-
-    if [ ! -f "$TG_ISSUED" ] || [ ! -s "$TG_ISSUED" ]; then
-        echo -e "${MAGENTA}Тесты ещё не выдавались.${NC}"
-        echo ""
-        read -p "Enter..."
-        return
-    fi
-
-    printf "${BLUE}%-3s %-14s %-12s %-20s${NC}\n" "№" "Telegram ID" "Логин" "Дата"
-    echo -e "${CYAN}────────────────────────────────────────────────${NC}"
-
-    local i=1
-    tail -50 "$TG_ISSUED" | tac | while IFS='|' read -r tg_id ts username; do
-        [ -z "$tg_id" ] && continue
-        local date_str=$(date -d "@$ts" '+%Y-%m-%d %H:%M' 2>/dev/null)
-        printf "%-3s %-14s %-12s %-20s\n" "$i)" "$tg_id" "$username" "$date_str"
-        ((i++))
-    done
-    echo ""
-    read -p "Нажмите Enter..."
-}
-
-tg_blacklist() {
-    while true; do
-        header
-        echo -e "${YELLOW}🚫 ЧЁРНЫЙ СПИСОК${NC}"
-        echo ""
-        if [ -f "$TG_BLACKLIST" ] && [ -s "$TG_BLACKLIST" ]; then
-            echo -e "${CYAN}Заблокированные ID:${NC}"
-            cat "$TG_BLACKLIST"
-        else
-            echo -e "${MAGENTA}Список пуст.${NC}"
-        fi
-        echo ""
-        echo -e " 1) ➕ Добавить ID"
-        echo -e " 2) 🗑️  Удалить ID"
-        echo -e " 3) 🧹 Очистить список"
-        echo -e " 0) ↩️  Назад"
-        echo ""
-        read -p "Выберите [0-3]: " bchoice
-
-        case $bchoice in
-            1)
-                read -p "Telegram ID: " id
-                [ -n "$id" ] && echo "$id" >> "$TG_BLACKLIST" && \
-                    echo -e "${GREEN}✅ Добавлено${NC}" && sleep 1
-                ;;
-            2)
-                read -p "Telegram ID для удаления: " id
-                if [ -f "$TG_BLACKLIST" ]; then
-                    sed -i "/^${id}$/d" "$TG_BLACKLIST"
-                    echo -e "${GREEN}✅ Удалено${NC}"
-                    sleep 1
-                fi
-                ;;
-            3)
-                read -p "Очистить весь чёрный список? (y/n): " c
-                [[ "$c" =~ ^[Yy]$ ]] && > "$TG_BLACKLIST" && \
-                    echo -e "${GREEN}✅ Очищено${NC}" && sleep 1
-                ;;
-            0) break ;;
-            *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
-        esac
-    done
-}
-
 tg_test_bot() {
     header
     echo -e "${YELLOW}--- 🧪 Тест бота ---${NC}"
@@ -228,125 +161,162 @@ tg_test_bot() {
     read -p "Нажмите Enter..."
 }
 
-tg_edit_start_file() {
-    header
-    echo -e "${YELLOW}--- ✏️  Редактирование /start ---${NC}"
-    echo -e "${CYAN}Файл: /etc/UDPCustom/start.txt${NC}"
-    echo -e "${CYAN}Переменные: {name}, {primary}, {sponsors_list}${NC}"
-    echo ""
-    sleep 1
-    if command -v nano >/dev/null 2>&1; then
-        nano /etc/UDPCustom/start.txt
-    elif command -v vi >/dev/null 2>&1; then
-        vi /etc/UDPCustom/start.txt
+# ──────────────────────────────────────────────────────────────
+# ФУНКЦИИ БОТА ПОДДЕРЖКИ
+# ──────────────────────────────────────────────────────────────
+sg_get_config() {
+    local field="$1"
+    grep -oP "(?<=${field}=\")[^\"]*" "$SG_CONF" 2>/dev/null | head -1
+}
+sg_set_config() {
+    local field="$1"
+    local value="$2"
+    if grep -q "^${field}=" "$SG_CONF" 2>/dev/null; then
+        sed -i "s|^${field}=.*|${field}=\"${value}\"|" "$SG_CONF"
     else
-        apt-get update -qq && apt-get install -y nano
-        nano /etc/UDPCustom/start.txt
+        echo "${field}=\"${value}\"" >> "$SG_CONF"
     fi
-    systemctl restart vpn-tg-bot 2>/dev/null
-    echo -e "${GREEN}✅ Сохранено, бот перезапущен${NC}"
-    read -p "Enter..."
+    chmod 600 "$SG_CONF"
+}
+sg_edit_field() {
+    local field="$1"
+    local desc="$2"
+    local current=$(sg_get_config "$field")
+    echo ""
+    echo -e "${CYAN}$desc${NC}"
+    echo -e "Текущее: ${GREEN}${current:-не задано}${NC}"
+    read -p "Новое значение (Enter — отмена): " new_val
+    [ -z "$new_val" ] && return
+    sg_set_config "$field" "$new_val"
+    echo -e "${GREEN}✅  Сохранено${NC}"
+    sleep 1
+}
+sg_install() {
+    header
+    echo -e "${YELLOW}--- 🚀 Установка бота поддержки ---${NC}"
+    echo ""
+    if [ ! -f /usr/local/bin/support-bot.py ]; then
+        echo -e "${CYAN}Скачиваем support-bot.py...${NC}"
+        curl -sf -o /usr/local/bin/support-bot.py "https://raw.githubusercontent.com/zotac85/vpn-panel/main/support/support-bot.py" && chmod +x /usr/local/bin/support-bot.py
+    fi
+    if [ ! -f /etc/systemd/system/support-bot.service ]; then
+        cat > /etc/systemd/system/support-bot.service << 'SVC_EOF'
+[Unit]
+Description=VPN Support Telegram Bot
+After=network.target
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root
+ExecStart=/usr/bin/python3 /usr/local/bin/support-bot.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/vpn-support-bot.log
+StandardError=append:/var/log/vpn-support-bot.log
+[Install]
+WantedBy=multi-user.target
+SVC_EOF
+        systemctl daemon-reload
+    fi
+    systemctl enable support-bot 2>/dev/null
+    systemctl restart support-bot 2>/dev/null
+    sleep 2
+    if systemctl is-active --quiet support-bot; then
+        echo -e "${GREEN}✅  Бот поддержки запущен${NC}"
+    else
+        echo -e "${RED}❌  Не запустился. Логи:${NC}"
+        tail -n 10 /var/log/vpn-support-bot.log 2>/dev/null
+    fi
+    echo ""
+    read -p "Нажмите Enter..."
 }
 
-tg_edit_welcome_file() {
+# ──────────────────────────────────────────────────────────────
+# СТАТИСТИКА
+# ──────────────────────────────────────────────────────────────
+tg_stats() {
     header
-    echo -e "${YELLOW}--- ✏️  Редактирование приветствия ---${NC}"
-    echo -e "${CYAN}Файл: /etc/UDPCustom/welcome.txt${NC}"
-    echo -e "${CYAN}Поддерживает обычные переносы строк.${NC}"
+    echo -e "${YELLOW}📊 СТАТИСТИКА${NC}"
     echo ""
-    sleep 1
-    if command -v nano >/dev/null 2>&1; then
-        nano /etc/UDPCustom/welcome.txt
-    elif command -v vi >/dev/null 2>&1; then
-        vi /etc/UDPCustom/welcome.txt
-    else
-        echo -e "${YELLOW}nano не найден. Устанавливаем...${NC}"
-        apt-get update -qq && apt-get install -y nano
-        nano /etc/UDPCustom/welcome.txt
-    fi
-    systemctl restart vpn-tg-bot 2>/dev/null
-    echo -e "${GREEN}✅ Сохранено, бот перезапущен${NC}"
-    read -p "Enter..."
+    local issued=$(wc -l < "$TG_ISSUED" 2>/dev/null || echo 0)
+    echo -e " 🎁 Выдано тестов    : ${GREEN}${issued}${NC}"
+    local users=$(grep -c . /etc/UDPCustom/users.db 2>/dev/null || echo 0)
+    echo -e " 👥 Всего юзеров     : ${GREEN}${users}${NC}"
+    local vips=$(grep -c "^vip_" /etc/UDPCustom/users.db 2>/dev/null || echo 0)
+    echo -e " 💎 VIP-ключей       : ${GREEN}${vips}${NC}"
+    local channels=$(grep -c '^[^#]' /etc/UDPCustom/channels.txt 2>/dev/null || echo 0)
+    echo -e " 📢 Каналов          : ${GREEN}${channels}${NC}"
+    local blacklist=0; [ -f "$TG_BLACKLIST" ] && blacklist=$(wc -l < "$TG_BLACKLIST" 2>/dev/null)
+    echo -e " 🚫 В чёрном списке  : ${GREEN}${blacklist}${NC}"
+    echo ""
+    echo -e "${CYAN}Основной бот:${NC}"
+    systemctl is-active --quiet "$TG_SERVICE" && echo -e "  Статус: ${GREEN}🟢 Запущен${NC}" || echo -e "  Статус: ${RED}🔴 Остановлен${NC}"
+    echo -e "${CYAN}Бот поддержки:${NC}"
+    systemctl is-active --quiet "$SG_SERVICE" 2>/dev/null && echo -e "  Статус: ${GREEN}🟢 Запущен${NC}" || echo -e "  Статус: ${RED}🔴 Остановлен${NC}"
+    echo ""
+    read -p "Нажмите Enter..."
 }
 
-tg_channels_menu() {
-    local CH_FILE="/etc/UDPCustom/channels.txt"
-    [ ! -f "$CH_FILE" ] && touch "$CH_FILE"
+# ──────────────────────────────────────────────────────────────
+# ПОДМЕНЮ: ОСНОВНОЙ БОТ
+# ──────────────────────────────────────────────────────────────
+menu_tgbot_main() {
     while true; do
         header
-        echo -e "${YELLOW}📢 УПРАВЛЕНИЕ КАНАЛАМИ${NC}"
+        echo -e "${YELLOW}🤖 ОСНОВНОЙ БОТ${NC}"
         echo ""
-        local count=$(grep -c '^[^#]' "$CH_FILE" 2>/dev/null || echo 0)
-        [ -z "$count" ] && count=0
-        echo -e " Всего каналов: ${GREEN}$count${NC}"
+        local token=$(tg_get_config "BOT_TOKEN")
+        local admin=$(tg_get_config "ADMIN_ID")
+        [ -n "$token" ] && echo -e " Токен    : ${GREEN}✅  настроен${NC}" || echo -e " Токен    : ${RED}❌  не задан${NC}"
+        [ -n "$admin" ] && echo -e " Admin ID : ${CYAN}$admin${NC}" || echo -e " Admin ID : ${RED}❌  не задан${NC}"
+        systemctl is-active --quiet "$TG_SERVICE" && echo -e " Статус   : ${GREEN}🟢 Запущен${NC}" || echo -e " Статус   : ${RED}🔴 Остановлен${NC}"
         echo ""
-        if [ "$count" -gt 0 ]; then
-            echo -e "${CYAN}Список:${NC}"
-            local i=1
-            while IFS= read -r line; do
-                [ -z "$line" ] && continue
-                [ "${line:0:1}" == "#" ] && continue
-                printf " ${GREEN}%2d)${NC} %s\n" "$i" "$line"
-                ((i++))
-            done < "$CH_FILE"
-        else
-            echo -e "${MAGENTA}Список пуст.${NC}"
-        fi
-        echo ""
-        echo -e " 1) ➕ Добавить канал"
-        echo -e " 2) 🗑️  Удалить по номеру"
-        echo -e " 3) 🧹 Очистить всё"
-        echo -e " 4) 🔄 Вкл/выкл проверку подписки"
-        echo -e " 5) 👁️  Показать текущий файл"
+        echo -e " 1) 🔑 Изменить BOT_TOKEN"
+        echo -e " 2) 👤 Изменить ADMIN_ID"
+        echo -e " 3) 🚀 Полная установка / настройка"
         echo -e " 0) ↩️  Назад"
         echo ""
-        read -p "Выберите [0-5]: " chchoice
-        case $chchoice in
-            1)
-                echo ""
-                read -p "Username канала (например @MyChannel): " newch
-                [ -z "$newch" ] && continue
-                newch=$(echo "$newch" | tr -d ' ')
-                # Добавляем @ если нет
-                [[ "$newch" != @* ]] && newch="@$newch"
-                echo "$newch" >> "$CH_FILE"
-                # sort убран — сохраняем порядок добавления
-                echo -e "${GREEN}✅ Добавлено: $newch${NC}"
-                sleep 1
-                ;;
-            2)
-                echo ""
-                read -p "Номер для удаления (0 = отмена): " num
-                [[ "$num" == "0" || -z "$num" ]] && continue
-                if ! [[ "$num" =~ ^[0-9]+$ ]]; then
-                    echo -e "${RED}Неверный номер${NC}"; sleep 1; continue
-                fi
-                sed -i "${num}d" "$CH_FILE"
-                sed -i '/^\s*$/d' "$CH_FILE"
-                echo -e "${GREEN}✅ Удалено${NC}"
-                sleep 1
-                ;;
-            3)
-                read -p "Очистить весь список? (y/n): " cfm
-                [[ "$c" =~ ^[Yy]$ ]] || [[ "$cfm" =~ ^[Yy]$ ]] && > "$CH_FILE" && \
-                    echo -e "${GREEN}✅ Очищено${NC}" && sleep 1
-                ;;
+        read -p "Выберите [0-3]: " choice
+        case $choice in
+            1) tg_edit_field "BOT_TOKEN" "Токен бота (от @BotFather)" ;;
+            2) tg_edit_field "ADMIN_ID" "Telegram ID админа (от @userinfobot)" ;;
+            3) tg_install ;;
+            0) break ;;
+            *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
+        esac
+    done
+}
+
+# ──────────────────────────────────────────────────────────────
+# ПОДМЕНЮ: БОТ ПОДДЕРЖКИ
+# ──────────────────────────────────────────────────────────────
+menu_tgbot_support() {
+    while true; do
+        header
+        echo -e "${YELLOW}💬 БОТ ПОДДЕРЖКИ${NC}"
+        echo ""
+        local token=$(sg_get_config "BOT_TOKEN")
+        local admin=$(sg_get_config "ADMIN_ID")
+        [ -n "$token" ] && echo -e " Токен    : ${GREEN}✅  настроен${NC}" || echo -e " Токен    : ${RED}❌  не задан${NC}"
+        [ -n "$admin" ] && echo -e " Admin ID : ${CYAN}$admin${NC}" || echo -e " Admin ID : ${RED}❌  не задан${NC}"
+        systemctl is-active --quiet "$SG_SERVICE" 2>/dev/null && echo -e " Статус   : ${GREEN}🟢 Запущен${NC}" || echo -e " Статус   : ${RED}🔴 Остановлен${NC}"
+        echo ""
+        echo -e " 1) 🔑 Изменить BOT_TOKEN"
+        echo -e " 2) 👤 Изменить ADMIN_ID"
+        echo -e " 3) 🚀 Установка / переустановка сервиса"
+        echo -e " 4) 🛑 Отключить (disable)"
+        echo -e " 0) ↩️  Назад"
+        echo ""
+        read -p "Выберите [0-4]: " choice
+        case $choice in
+            1) sg_edit_field "BOT_TOKEN" "Токен бота поддержки (от @BotFather)" ;;
+            2) sg_edit_field "ADMIN_ID" "Telegram ID админа (от @userinfobot)" ;;
+            3) sg_install ;;
             4)
-                local cur=$(tg_get_config "REQUIRE_SUBSCRIPTION")
-                if [ "$cur" == "1" ]; then
-                    tg_set_config "REQUIRE_SUBSCRIPTION" "0"
-                    echo -e "${YELLOW}Проверка подписки выключена${NC}"
-                else
-                    tg_set_config "REQUIRE_SUBSCRIPTION" "1"
-                    echo -e "${GREEN}Проверка подписки включена${NC}"
-                fi
+                systemctl stop "$SG_SERVICE" 2>/dev/null
+                systemctl disable "$SG_SERVICE" 2>/dev/null
+                echo -e "${YELLOW}Бот поддержки отключён${NC}"
                 sleep 1
-                ;;
-            5)
-                echo ""
-                cat "$CH_FILE"
-                echo ""
-                read -p "Enter..."
                 ;;
             0) break ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
@@ -354,43 +324,24 @@ tg_channels_menu() {
     done
 }
 
+# ──────────────────────────────────────────────────────────────
+# ГЛАВНОЕ МЕНЮ TELEGRAM-БОТ
+# ──────────────────────────────────────────────────────────────
 menu_tgbot() {
     while true; do
         header
         echo -e "${YELLOW}🤖 TELEGRAM-БОТ${NC}"
         echo ""
         echo -e " Статус   : $(tg_bot_status)"
-
         local token=$(tg_get_config "BOT_TOKEN")
         local admin=$(tg_get_config "ADMIN_ID")
-        local channel=$(tg_get_config "CHANNEL_ID")
         local require_sub=$(tg_get_config "REQUIRE_SUBSCRIPTION")
         local cooldown=$(tg_get_config "COOLDOWN_HOURS")
-
-        if [ -n "$token" ]; then
-            echo -e " Токен    : ${GREEN}✅ настроен${NC}"
-        else
-            echo -e " Токен    : ${RED}❌ не задан${NC}"
-        fi
-
-        if [ -n "$admin" ]; then
-            echo -e " Admin ID : ${CYAN}$admin${NC}"
-        else
-            echo -e " Admin ID : ${RED}❌ не задан${NC}"
-        fi
-
-        local ch_count=0
-        [ -f "/etc/UDPCustom/channels.txt" ] && ch_count=$(grep -c '^[^#]' /etc/UDPCustom/channels.txt 2>/dev/null)
-        [ -z "$ch_count" ] && ch_count=0
-        echo -e " Каналов  : ${CYAN}$ch_count${NC}"
-
+        [ -n "$token" ] && echo -e " Токен    : ${GREEN}✅  настроен${NC}" || echo -e " Токен    : ${RED}❌  не задан${NC}"
+        [ -n "$admin" ] && echo -e " Admin ID : ${CYAN}$admin${NC}" || echo -e " Admin ID : ${RED}❌  не задан${NC}"
         [ "$require_sub" == "1" ] && RS="${GREEN}🟢 Да${NC}" || RS="${RED}🔴 Нет${NC}"
         echo -e " Проверка : $RS"
         echo -e " Кулдаун  : ${CYAN}${cooldown} ч${NC}"
-
-        local issued_count=0
-        [ -f "$TG_ISSUED" ] && issued_count=$(wc -l < "$TG_ISSUED" 2>/dev/null || echo 0)
-        echo -e " Выдано   : ${GREEN}$issued_count${NC}"
         echo ""
         echo -e "${CYAN}─── 📊 Управление ───${NC}"
         echo -e " 1) 🚀 Запустить бота"
@@ -400,37 +351,26 @@ menu_tgbot() {
         echo -e " 5) 📜 Логи бота"
         echo ""
         echo -e "${CYAN}─── ⚙️  Настройки ───${NC}"
-        echo -e " 6) ⚙️  Установка / первичная настройка"
-        echo -e " 7) 🔑 Изменить BOT_TOKEN"
-        echo -e " 8) 👤 Изменить ADMIN_ID"
-        echo -e " 9) 📢 Управление каналами (список)"
-        echo -e " 10) 🔄 Вкл/выкл проверку подписки"
-        echo ""
-        echo -e "${CYAN}─── ✏️  Тексты ───${NC}"
-        echo -e " 11) ✏️  Текст /start (nano)"
-        echo -e " 12) ✏️  Текст «Подпишись» (nano)"
-        echo -e " 13) ✏️  Шаблон выдачи"
-        echo -e " 14) ⏰ Кулдаун / срок / лимиты"
+        echo -e " 6) 🤖 Основной бот"
+        echo -e " 7) 💬 Бот поддержки"
+        echo -e " 8) 🔄 Вкл/выкл проверку подписки"
+        echo -e " 9) ⏰ Кулдаун / срок / лимиты"
         echo ""
         echo -e "${CYAN}─── 📋 Просмотр ───${NC}"
-        echo -e " 15) 📊 Выданные тесты"
-        echo -e " 16) 🚫 Чёрный список"
+        echo -e " 10) 📊 Статистика"
         echo ""
         echo -e " 0) ↩️  Назад"
         echo ""
-        read -p "Выберите [0-16]: " tg_choice
-
+        read -p "Выберите [0-10]: " tg_choice
         case $tg_choice in
-            1) systemctl restart "$TG_SERVICE" 2>/dev/null; sleep 1; systemctl is-active --quiet "$TG_SERVICE" && echo -e "${GREEN}✅ Бот запущен${NC}" || echo -e "${RED}❌ Ошибка${NC}"; sleep 1 ;;
+            1) systemctl restart "$TG_SERVICE" 2>/dev/null; sleep 1; systemctl is-active --quiet "$TG_SERVICE" && echo -e "${GREEN}✅  Бот запущен${NC}" || echo -e "${RED}❌  Ошибка${NC}"; sleep 1 ;;
             2) systemctl restart "$TG_SERVICE" 2>/dev/null; echo -e "${GREEN}Бот перезапущен${NC}"; sleep 1 ;;
             3) systemctl stop "$TG_SERVICE" 2>/dev/null; echo -e "${YELLOW}Бот остановлен${NC}"; sleep 1 ;;
             4) tg_test_bot ;;
             5) tg_show_log ;;
-            6) tg_install ;;
-            7) tg_edit_field "BOT_TOKEN" "Токен бота (от @BotFather)" ;;
-            8) tg_edit_field "ADMIN_ID" "Telegram ID админа (от @userinfobot)" ;;
-            9) tg_channels_menu ;;
-            10)
+            6) menu_tgbot_main ;;
+            7) menu_tgbot_support ;;
+            8)
                 local cur=$(tg_get_config "REQUIRE_SUBSCRIPTION")
                 if [ "$cur" == "1" ]; then
                     tg_set_config "REQUIRE_SUBSCRIPTION" "0"
@@ -439,20 +379,18 @@ menu_tgbot() {
                     tg_set_config "REQUIRE_SUBSCRIPTION" "1"
                     echo -e "${GREEN}Проверка подписки включена${NC}"
                 fi
+                systemctl restart "$TG_SERVICE" 2>/dev/null
                 sleep 1
                 ;;
-            11) tg_edit_start_file ;;
-            12) tg_edit_welcome_file ;;
-            13) tg_edit_field "SUCCESS_TEMPLATE" "Шаблон выдачи" ;;
-            14)
+            9)
                 tg_edit_field "COOLDOWN_HOURS" "Кулдаун между тестами (часы)"
                 tg_edit_field "TEST_HOURS" "Срок тестового (часы)"
-                tg_edit_field "VERIFIED_MINUTES" "Срок verified (минуты) — через сколько снова в канал"
+                tg_edit_field "VERIFIED_MINUTES" "Срок verified (минуты)"
                 tg_edit_field "TEST_DEVICES" "Лимит устройств (шт)"
                 tg_edit_field "TEST_TRAFFIC_GB" "Лимит трафика (ГБ)"
+                systemctl restart "$TG_SERVICE" 2>/dev/null
                 ;;
-            15) tg_show_issued ;;
-            16) tg_blacklist ;;
+            10) tg_stats ;;
             0) break ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
         esac
