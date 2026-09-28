@@ -256,7 +256,7 @@ def get_payload():
     return ""
 
 
-def _format_config_name(username):
+def _format_config_name(username, loc='VPN'):
     """Красивое имя для DarkTunnel."""
     u = username.lower()
     if u.startswith('test'):
@@ -265,20 +265,19 @@ def _format_config_name(username):
             if row and row.get('created_at'):
                 from datetime import datetime as _dt
                 date_str = _dt.fromtimestamp(row['created_at']).strftime('%d.%m')
-                return f"🎁 TEST VPN ⭐ {date_str}"
+                return f"🎁 TEST {loc} | {date_str}"
         except: pass
         suffix = username[4:]
-        return f"🎁 TEST VPN ⭐ {suffix}" if suffix else "🎁 TEST VPN"
+        return f"🎁 TEST {loc} | {suffix}" if suffix else f"🎁 TEST {loc}"
     if u.startswith('vip_'):
         suffix = username[4:]
         parts = suffix.split('_')
         if len(parts) > 1 and parts[0].isdigit():
             suffix = parts[-1]
-        return f"💎 VIP ArsenVpn ⭐ {suffix}" if suffix else "💎 VIP ArsenVpn"
-    return f"⭐ {username}"
+        return f"💎 VIP {loc} | {suffix}" if suffix else f"💎 VIP {loc}"
+    return f"⭐  {username}"
 
-
-def make_darktunnel_url(username, password, domain, ws_port, proxy):
+def make_darktunnel_url(username, password, domain, ws_port, proxy, loc='VPN'):
     """Генерирует darktunnel:// ссылку"""
     if not (username and password and domain):
         return None
@@ -295,7 +294,7 @@ def make_darktunnel_url(username, password, domain, ws_port, proxy):
 
     config = {
         "type": "SSH",
-        "name": _format_config_name(username),
+        "name": _format_config_name(username, loc),
         "sshTunnelConfig": {
             "sshConfig": {
                 "host": domain,
@@ -314,7 +313,7 @@ def make_darktunnel_url(username, password, domain, ws_port, proxy):
     }
     try:
         j = json.dumps(config, ensure_ascii=False, separators=(',', ':'))
-        b = base64.b64encode(j.encode('utf-8')).decode('ascii')
+        b = base64.urlsafe_b64encode(j.encode("utf-8")).decode("ascii").rstrip("=")
         return "darktunnel://" + b
     except Exception as e:
         cab_log.error(f"make_darktunnel_url: {e}")
@@ -761,7 +760,7 @@ def show_darktunnel_url(cfg, chat_id, user_id, key_name, msg_id=None):
     domain = get_domain()
     ws_port = get_ws_port()
     proxy = get_random_proxy()
-    dt_url = make_darktunnel_url(key_name, password, domain, ws_port, proxy)
+    dt_url = make_darktunnel_url(key_name, password, domain, ws_port, proxy, cfg.get("SERVER_LOCATION", "VPN"))
     if not dt_url:
         _send(token, chat_id, "❌ Не удалось создать конфиг")
         return

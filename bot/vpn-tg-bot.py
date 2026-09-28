@@ -471,7 +471,7 @@ def generate_darktunnel_url(username, password, domain, ws_port, proxy, cfg):
     proxy_port = int(ws_port) if str(ws_port).isdigit() else 2052
     config = {
         "type": "SSH",
-        "name": (cfg.get('CONFIG_NAME','VPN') + "_" + username),
+        "name": (f"💎 VIP {cfg.get('SERVER_LOCATION','VPN')} | {username[4:]}" if username.startswith('vip_') else f"🎁 TEST {cfg.get('SERVER_LOCATION','VPN')} | {username[4:]}" if username.startswith('test') else username),
         "sshTunnelConfig": {
             "sshConfig": {
                 "host": domain,
@@ -489,7 +489,7 @@ def generate_darktunnel_url(username, password, domain, ws_port, proxy, cfg):
         }
     }
     j = json.dumps(config, ensure_ascii=False, separators=(',', ':'))
-    b = base64.b64encode(j.encode('utf-8')).decode('ascii')
+    b = base64.urlsafe_b64encode(j.encode("utf-8")).decode("ascii").rstrip("=")
     return "darktunnel://" + b
 
 
