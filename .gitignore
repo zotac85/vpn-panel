@@ -3,3 +3,10 @@
 modules.bak_*/
 *.pyc
 __pycache__/
+
+# Секреты (на случай, если случайно скопируют в корень репо)
+/bot.conf
+/support_bot.conf
+*.db
+*.sqlite
+*.sqlite3
