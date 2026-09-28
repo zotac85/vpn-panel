@@ -370,9 +370,9 @@ fi
 # SSH ТАЙМАУТЫ (быстрое закрытие мёртвых сессий)
 # ──────────────────────────────────────────────────────────────
 if ! grep -qE '^[[:space:]]*ClientAliveInterval' /etc/ssh/sshd_config; then
-    echo "ClientAliveInterval 30" >> /etc/ssh/sshd_config
+    echo "ClientAliveInterval 5" >> /etc/ssh/sshd_config
 fi
-sed -i 's|^[[:space:]]*#\?[[:space:]]*ClientAliveInterval.*|ClientAliveInterval 30|' /etc/ssh/sshd_config
+sed -i 's|^[[:space:]]*#\?[[:space:]]*ClientAliveInterval.*|ClientAliveInterval 5|' /etc/ssh/sshd_config
 sed -i 's|^[[:space:]]*#\?[[:space:]]*ClientAliveCountMax.*|ClientAliveCountMax 2|' /etc/ssh/sshd_config
 sed -i 's|^[[:space:]]*#\?[[:space:]]*TCPKeepAlive.*|TCPKeepAlive yes|' /etc/ssh/sshd_config
 echo -e "\033[0;32m✅  SSH-таймауты настроены.\033[0m"
