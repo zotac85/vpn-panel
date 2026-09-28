@@ -142,7 +142,7 @@ create_backup() {
     echo -e "${CYAN}Создаём архив...${NC}"
     tar -czf "$file" \
         /etc/UDPCustom \
-        /etc/bannerssh \
+        /etc/UDPCustom/ssh_banner.txt \
         /etc/pam.d/sshd \
         /etc/security/limits.conf \
         /etc/cron.d/vpn-device-limit \

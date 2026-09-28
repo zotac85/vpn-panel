@@ -4,7 +4,7 @@
 # МОДУЛЬ БАННЕРА (HTML через sshd Banner)
 # ──────────────────────────────────────────────────────────────
 
-BANNER_FILE="/etc/bannerssh"
+BANNER_FILE="/etc/UDPCustom/ssh_banner.txt"
 
 banner_ensure_hook() {
     if ! grep -qE '^[[:space:]]*Banner' /etc/ssh/sshd_config; then

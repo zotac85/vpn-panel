@@ -1671,6 +1671,7 @@ EDIT_FILES = {
     'vip_buy': {'file': 'vip_buy.txt', 'name': '💎 Купить VIP', 'ph': '{balance}, {tariffs}'},
     'post': {'file': 'post.txt', 'name': '📢 Пост', 'ph': '(нет)'},
     'rate': {'file': 'rate.txt', 'name': '💰 Курс USDT', 'ph': '(число)'},
+    'ssh_banner': {'file': 'ssh_banner.txt', 'name': '🖥️ SSH-баннер', 'ph': '(HTML: h5, h6, font)'},
 }
 
 
@@ -1720,6 +1721,9 @@ def show_edit_text_file(cfg, chat_id, user_id, key, msg_id=None):
     try:
         with open(path) as f:
             content = f.read()
+            # Для SSH-баннера — экранируем HTML чтобы Telegram не падал
+            if key == 'ssh_banner':
+                content = content.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
     except Exception as e:
         content = '❌ Не удалось прочитать: ' + str(e)
     NL = chr(10)
@@ -4084,6 +4088,11 @@ def main():
                             try:
                                 with open(_path, 'w') as _f:
                                     _f.write(text)
+                                    # Для SSH-баннера — перезапуск SSH
+                                    if _key == 'ssh_banner':
+                                        import subprocess as _sp
+                                        _sp.run(['systemctl', 'restart', 'ssh'], capture_output=True, timeout=10)
+                                        _sp.run(['systemctl', 'restart', 'sshd'], capture_output=True, timeout=10)
                                 NLx = chr(10)
                                 _ok = NLx.join([
                                     '✅ <b>ТЕКСТ СОХРАНЁН</b>',

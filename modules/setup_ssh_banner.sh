@@ -6,7 +6,7 @@
 
 echo -e "\n🎨 Настройка баннера..."
 
-BANNER_FILE="/etc/bannerssh"
+BANNER_FILE="/etc/UDPCustom/ssh_banner.txt"
 
 if ! grep -qE '^[[:space:]]*Banner' /etc/ssh/sshd_config; then
     echo "Banner $BANNER_FILE" >> /etc/ssh/sshd_config
