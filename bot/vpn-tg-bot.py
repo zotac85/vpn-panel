@@ -4568,7 +4568,8 @@ def main():
                         except: pass
                         continue
                     name = result
-                    # Проверяем что логин свободен, иначе добавляем суффикс
+                    name = result
+                    # Проверяем что логин свободен
                     full_login = _make_vip_login(name)
                     # Показываем финальное подтверждение
                     try:
@@ -4576,8 +4577,8 @@ def main():
                         show_vip_final_confirm(cfg, chat_id, user_id, tariff_idx, name)
                     except Exception as e:
                         log.error(f"show_vip_final_confirm: {e}")
-                        send_message(cfg['BOT_TOKEN'], chat_id, f"❌ Ошибка: {e}")
-                    # Сохраняем выбранное имя (для использования при покупке)
+                        send_message(cfg['BOT_TOKEN'], chat_id, f"❌  Ошибка: {e}")
+                    # Сохраняем выбранное имя
                     try:
                         _db.set_pending(user_id, f'vip_ready:{tariff_idx}:{name}')
                     except: pass

@@ -291,7 +291,6 @@ def make_darktunnel_url(username, password, domain, ws_port, proxy, loc='VPN'):
         sport = int(ws_port) if str(ws_port).isdigit() else 2052
     except:
         sport = 2052
-
     config = {
         "type": "SSH",
         "name": _format_config_name(username, loc),
@@ -318,12 +317,6 @@ def make_darktunnel_url(username, password, domain, ws_port, proxy, loc='VPN'):
     except Exception as e:
         cab_log.error(f"make_darktunnel_url: {e}")
         return None
-
-
-# ═══════════════════════════════════════════════════════════════
-# UI КАБИНЕТА
-# ═══════════════════════════════════════════════════════════════
-
 def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
     """Главное меню кабинета — данные из БД"""
     token = cfg['BOT_TOKEN']
@@ -764,7 +757,7 @@ def show_darktunnel_url(cfg, chat_id, user_id, key_name, msg_id=None):
     proxy = get_random_proxy()
     dt_url = make_darktunnel_url(key_name, password, domain, ws_port, proxy, cfg.get("SERVER_LOCATION", "VPN"))
     if not dt_url:
-        _send(token, chat_id, "❌ Не удалось создать конфиг")
+        _send(token, chat_id, "❌  Не удалось создать конфиг")
         return
 
     NL = chr(10)

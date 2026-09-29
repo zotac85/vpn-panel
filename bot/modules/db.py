@@ -231,14 +231,14 @@ def get_vip_keys(tg_id, active_only=False):
 
 def create_vip_key(login, tg_id, password, expires_at, devices=1,
                    traffic_limit=0, tariff="vip_30d",
-                   price_paid=0, paid_via="manual"):
+                   price_paid=0, paid_via="manual", hwid=None):
     execute("""INSERT OR REPLACE INTO vip_keys
         (login, tg_id, password, created_at, expires_at, devices,
-         traffic_used, traffic_limit, tariff, price_paid, paid_via)
-        VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)""",
+         traffic_used, traffic_limit, tariff, price_paid, paid_via, hwid)
+        VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)""",
         (login, int(tg_id), password, int(time.time()),
          int(expires_at), int(devices), int(traffic_limit),
-         tariff, float(price_paid), paid_via))
+         tariff, float(price_paid), paid_via, hwid))
     return query_one("SELECT * FROM vip_keys WHERE login=?", (login,))
 
 
@@ -528,7 +528,8 @@ def init_schema():
         price_paid REAL DEFAULT 0,
         paid_via TEXT,
         notified_24h INTEGER DEFAULT 0,
-        notified_1h INTEGER DEFAULT 0
+        notified_1h INTEGER DEFAULT 0,
+        hwid TEXT DEFAULT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_vip_tg  ON vip_keys(tg_id);
     CREATE INDEX IF NOT EXISTS idx_vip_exp ON vip_keys(expires_at);
