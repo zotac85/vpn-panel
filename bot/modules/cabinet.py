@@ -1772,12 +1772,26 @@ def show_whitedns_menu(cfg, chat_id, user_id, msg_id=None):
             [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
         ]}
     else:
+        _srv = _wd_c_read_servers()
+        _srv_lines = []
+        for _i in range(3):
+            _ok = bool(_srv[_i]) and bool(_wd_c_read_file(WD_RES_PATHS[_i]))
+            _srv_lines.append(WD_SRV_NAMES[_i] + (' — ✅ активен' if _ok else ' — ⏳ настройка'))
         text = NL.join([
             "📡 <b>WHITEDNS ДОСТУП</b>",
             "━━━━━━━━━━━━━━━━━━━━",
             "",
-            "✅ Твой VIP активен",
+            "✅  Твой VIP активен",
             "",
+            "📌 <b>КАК ПОЛУЧИТЬ:</b>",
+            "1️⃣ Выбери сервер",
+            "2️⃣ Выбери профиль",
+            "3️⃣ Подтверди и получи файлы",
+            "",
+            "━━ 🌐 <b>СЕРВЕРЫ</b> ━━",
+        ] + _srv_lines + [
+            "",
+            "━━━━━━━━━━━━━━━━━━━━",
             "1️⃣ <b>ВЫБЕРИ СЕРВЕР:</b>",
         ])
         kb = {'inline_keyboard': [
