@@ -60,6 +60,24 @@ def generate(hwid, host=DEF_HOST, port=DEF_PORT, user=DEF_USER, pw=DEF_PASS,
     lac['HardwareIdList']   = [build_hwid(hwid)]
     lac['IsSshLocked']      = True
 
+    # ===== ПРАВИЛА DarkTunnel (НЕ УДАЛЯТЬ!) =====
+    # 1) ConnectedMessage обязательно непустое
+    # 2) SSH host/port/user/pw — обязательно непустые
+    # 3) Proxy proxyhost/proxyport/payload — обязательно непустые
+    # 4) HardwareIdList обязательно заполнен
+    if not lac.get('ConnectedMessage'):
+        raise ValueError('DarkTunnel: ConnectedMessage НЕ МОЖЕТ быть пустым!')
+    for _fn, _fv in (('host',host),('port',port),('user',user),('pw',pw)):
+        if not _fv:
+            raise ValueError(f'DarkTunnel: SSH-поле {_fn!r} не может быть пустым')
+    for _fn, _fv in (('proxyhost',proxyhost),('proxyport',proxyport)):
+        if not _fv:
+            raise ValueError(f'DarkTunnel: proxy-поле {_fn!r} не может быть пустым')
+    if not DEF_PAYLOAD:
+        raise ValueError('DarkTunnel: payload не может быть пустым')
+    if not lac.get('HardwareIdList'):
+        raise ValueError('DarkTunnel: HardwareIdList не может быть пустым')
+
     # SshConfig
     ssh = locked['SshConfig']
     ssh['IsEncrypted']       = True
