@@ -636,6 +636,14 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         keyboard = {"inline_keyboard": kb_start}
     
     # Сохраняем message_id приветствия для авто-удаления
+    # Убираем старую reply-клавиатуру (если была) + отправляем inline
+    try:
+        tg_request(token, 'sendMessage', {
+            'chat_id': chat_id,
+            'text': '\u2060',  # zero-width
+            'reply_markup': {'remove_keyboard': True},
+        })
+    except: pass
     result = smart_send(token, chat_id, text, reply_markup=keyboard, parse_mode='HTML')
     if result and result.get('ok'):
         msg_id = result['result']['message_id']
@@ -2180,30 +2188,13 @@ def show_admin_panel(cfg, chat_id, user_id, msg_id=None):
 
 
 def handle_help(cfg, chat_id):
-    token = cfg['BOT_TOKEN']
-    channels = get_channels()
-    primary = channels[0].lstrip('@') if channels else 'ArsenVipKeys'
-    tpl_help = None
+    """Открывает раздел Помощи (тот же, что из кабинета)."""
     try:
-        with open("/etc/UDPCustom/help.txt") as _f:
-            tpl_help = _f.read().strip()
-    except: pass
-    if tpl_help:
-        text = tpl_help.replace("{primary}", primary)
-    else:
-        text = (f"📖 <b>Как получить тестовый ключ?</b>\n\n"
-                f"1️⃣ Зайди в канал 👉 @{primary}\n"
-                f"2️⃣ Найди пост с кнопкой <b>«🎁 Получить тест»</b>\n"
-                f"3️⃣ Нажми на неё — ключ придёт в этот бот\n")
-    keyboard = {'inline_keyboard': [
-        [{'text': '📖 Инструкция', 'callback_data': 'cab_help_instruction'},
-         {'text': '❓ FAQ', 'callback_data': 'cab_help_faq'}],
-        [{'text': '🎬 Видео', 'url': f'https://t.me/{primary}'},
-         {'text': '👤 Кабинет', 'callback_data': 'cab_main'}],
-        [{'text': f'📢 Перейти в @{primary}', 'url': f'https://t.me/{primary}'}]
-    ]}
-    smart_send(token, chat_id, text, reply_markup=keyboard, parse_mode='HTML')
-
+        from bot_modules.cabinet import show_help_back
+        show_help_back(cfg, chat_id, 0)
+    except Exception as e:
+        log.error(f"handle_help: {e}")
+        send_message(cfg['BOT_TOKEN'], chat_id, "❌ Ошибка открытия помощи")
 
 
 
@@ -4664,7 +4655,9 @@ def main():
                             "",
                             "Попробуй ещё раз:"
                         ])
-                        send_message(cfg['BOT_TOKEN'], chat_id, err_msg, parse_mode='HTML')
+                        from bot_modules.cabinet import _send as _csend
+                        _cancel_kb = {'inline_keyboard': [[{'text': '\u274C Отмена', 'callback_data': 'cab_buy_vip'}]]}
+                        _csend(cfg['BOT_TOKEN'], chat_id, err_msg, reply_markup=_cancel_kb)
                         # Снова запрашиваем
                         try:
                             from bot_modules import db as _db2
@@ -5067,7 +5060,7 @@ def main():
                         handle_start(cfg, chat_id, user_id, first_name, True)
                     else:
                         handle_start(cfg, chat_id, user_id, first_name)
-                elif text.startswith('/test'): handle_test(cfg, chat_id, user_id, first_name)
+                elif text == '\U0001F4F2 Тест' or text.startswith('/test'): handle_test(cfg, chat_id, user_id, first_name)
                 elif text.startswith('/post'): post_to_channel(cfg, chat_id, user_id)
                 elif text.startswith('/stats'): handle_stats(cfg, chat_id, user_id)
                 elif text.startswith('/banlist'): handle_banlist(cfg, chat_id, user_id)
@@ -5091,9 +5084,9 @@ def main():
                 elif text.startswith('/deladmin'): handle_deladmin(cfg, chat_id, user_id, text[9:].strip())
                 elif text.startswith('/autopost'): handle_autopost(cfg, chat_id, user_id, text[9:].strip())
                 elif text.startswith('/restart'): handle_restart(cfg, chat_id, user_id, text[8:].strip())
-                elif text.startswith('/cabinet'): show_cabinet(cfg, chat_id, user_id, first_name)
-                elif text.startswith('/admin'): show_admin_panel(cfg, chat_id, user_id)
-                elif text.startswith('/help'): handle_help(cfg, chat_id)
+                elif text == '\U0001F464 Кабинет' or text.startswith('/cabinet'): show_cabinet(cfg, chat_id, user_id, first_name)
+                elif text == '\u2699\uFE0F Админка' or text.startswith('/admin'): show_admin_panel(cfg, chat_id, user_id)
+                elif text == '\U0001F381 Помощь' or text.startswith('/help'): handle_help(cfg, chat_id)
         except KeyboardInterrupt: log.info("Остановка"); break
         except Exception as e: log.error(f"Ошибка в main loop: {e}"); time.sleep(5)
 

@@ -51,18 +51,24 @@ def _tg(token, method, params=None, timeout=35):
 
 
 def _send(token, chat_id, text, reply_markup=None, parse_mode='HTML'):
-    """Отправляет сообщение, удаляя предыдущее (умный чат)."""
+    """Умный чат: редактирует предыдущее сообщение (не скрывает reply-клавиатуру)."""
     try:
         os.makedirs(SMART_DIR, exist_ok=True)
         path = f"{SMART_DIR}/{chat_id}"
+        old_id = None
         if os.path.exists(path):
             try:
                 old_id = int(open(path).read().strip())
-                _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': old_id})
             except: pass
-            try: os.remove(path)
-            except: pass
-        params = {'chat_id': chat_id, 'text': text, 'disable_web_page_preview': True, 'parse_mode': parse_mode}
+        # 1) Пробуем отредактировать старое (сохраняет reply-клавиатуру)
+        if old_id:
+            r = _edit(token, chat_id, old_id, text, reply_markup)
+            if r and r.get('ok'):
+                return r
+            # если edit упал (не изменилось / удалено) — падаем на новый send
+        # 2) Новое сообщение
+        params = {'chat_id': chat_id, 'text': text,
+                  'disable_web_page_preview': True, 'parse_mode': parse_mode}
         if reply_markup:
             params['reply_markup'] = reply_markup
         result = _tg(token, 'sendMessage', params)
@@ -74,10 +80,12 @@ def _send(token, chat_id, text, reply_markup=None, parse_mode='HTML'):
         return result
     except Exception as e:
         cab_log.error(f"_send smart error: {e}")
-        params = {'chat_id': chat_id, 'text': text, 'disable_web_page_preview': True, 'parse_mode': parse_mode}
+        params = {'chat_id': chat_id, 'text': text,
+                  'disable_web_page_preview': True, 'parse_mode': parse_mode}
         if reply_markup:
             params['reply_markup'] = reply_markup
         return _tg(token, 'sendMessage', params)
+
 
 
 def _edit(token, chat_id, msg_id, text, reply_markup=None):
@@ -85,7 +93,43 @@ def _edit(token, chat_id, msg_id, text, reply_markup=None):
               'disable_web_page_preview': True}
     if reply_markup:
         params['reply_markup'] = reply_markup
-    return _tg(token, 'editMessageText', params)
+    r = _tg(token, 'editMessageText', params)
+    # Обновляем SMART_DIR чтобы _send знал актуальный msg_id
+    if r and r.get('ok'):
+        try:
+            os.makedirs(SMART_DIR, exist_ok=True)
+            with open(f"{SMART_DIR}/{chat_id}", 'w') as _f:
+                _f.write(str(msg_id))
+        except: pass
+    return r
+
+
+def _send_new(token, chat_id, text, reply_markup=None, parse_mode='HTML'):
+    """Удаляет старое бот-сообщение и шлёт новое (для команд)."""
+    try:
+        os.makedirs(SMART_DIR, exist_ok=True)
+        path = f"{SMART_DIR}/{chat_id}"
+        if os.path.exists(path):
+            try:
+                old_id = int(open(path).read().strip())
+                _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': old_id})
+            except: pass
+            try: os.remove(path)
+            except: pass
+        params = {'chat_id': chat_id, 'text': text,
+                  'disable_web_page_preview': True, 'parse_mode': parse_mode}
+        if reply_markup:
+            params['reply_markup'] = reply_markup
+        result = _tg(token, 'sendMessage', params)
+        if result and result.get('ok'):
+            try:
+                with open(path, 'w') as f:
+                    f.write(str(result['result']['message_id']))
+            except: pass
+        return result
+    except Exception as e:
+        cab_log.error(f"_send_new error: {e}")
+        return None
 
 
 def _human_bytes(b):
@@ -356,14 +400,14 @@ def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
          {'text': '💎 VIP UDP', 'callback_data': 'cab_udp_soon'},
          {'text': '💎 VIP DNS', 'callback_data': 'cab_whitedns'}],
         [{'text': '👥 Рефералы', 'callback_data': 'cab_refs'},
-         {'text': '💬 Поддержка', 'url': f'https://t.me/{_get_support().lstrip(chr(64))}'},
+         {'text': '\U0001F6DF Помощь', 'callback_data': 'cab_help'},
          {'text': '🏠 Меню', 'callback_data': 'cab_exit'}]
     ]}
 
     if msg_id:
         _edit(token, chat_id, msg_id, text, keyboard)
     else:
-        _send(token, chat_id, text, keyboard)
+        _send_new(token, chat_id, text, keyboard)
 
 
 def show_my_keys(cfg, chat_id, user_id, kind='all', msg_id=None):
@@ -1370,40 +1414,93 @@ def show_help_faq(cfg, chat_id, user_id, msg_id=None):
         _send(token, chat_id, text, keyboard)
 
 
-def show_help_back(cfg, chat_id, user_id, msg_id=None):
-    """Назад к /help"""
+def _get_help_generic(fname, cfg=None):
+    try:
+        with open(fname) as f:
+            t = f.read().strip()
+            if not t: return None
+            return _apply_placeholders(t, cfg or {})
+    except: return None
+
+
+def _help_back_kb():
+    return {'inline_keyboard': [
+        [{'text': '\u2B05\uFE0F Назад', 'callback_data': 'cab_help'}]
+    ]}
+
+
+def show_help_darktunnel(cfg, chat_id, user_id, msg_id=None):
     token = cfg['BOT_TOKEN']
-    channels = []
-    # Получаем каналы
+    text = _get_help_generic('/etc/UDPCustom/help_darktunnel.txt', cfg) or \
+        "\u2699\uFE0F <b>DarkTunnel</b>\n\nОтредактируй /etc/UDPCustom/help_darktunnel.txt"
+    kb = _help_back_kb()
+    if msg_id:
+        _edit(token, chat_id, msg_id, text, kb)
+    else:
+        _send(token, chat_id, text, kb)
+
+
+def show_help_httpcustom(cfg, chat_id, user_id, msg_id=None):
+    token = cfg['BOT_TOKEN']
+    text = _get_help_generic('/etc/UDPCustom/help_httpcustom.txt', cfg) or \
+        "\u2699\uFE0F <b>HttpCustom</b>\n\nОтредактируй /etc/UDPCustom/help_httpcustom.txt"
+    kb = _help_back_kb()
+    if msg_id:
+        _edit(token, chat_id, msg_id, text, kb)
+    else:
+        _send(token, chat_id, text, kb)
+
+
+def show_help_whitedns(cfg, chat_id, user_id, msg_id=None):
+    token = cfg['BOT_TOKEN']
+    text = _get_help_generic('/etc/UDPCustom/help_whitedns.txt', cfg) or \
+        "\u2699\uFE0F <b>WhiteDns</b>\n\nОтредактируй /etc/UDPCustom/help_whitedns.txt"
+    kb = _help_back_kb()
+    if msg_id:
+        _edit(token, chat_id, msg_id, text, kb)
+    else:
+        _send(token, chat_id, text, kb)
+
+
+def show_help_video(cfg, chat_id, user_id, msg_id=None):
+    token = cfg['BOT_TOKEN']
+    text = _get_help_generic('/etc/UDPCustom/help_video.txt', cfg) or \
+        "\U0001F3AC <b>Видео</b>\n\nОтредактируй /etc/UDPCustom/help_video.txt"
+    kb = _help_back_kb()
+    if msg_id:
+        _edit(token, chat_id, msg_id, text, kb)
+    else:
+        _send(token, chat_id, text, kb)
+
+
+def show_help_back(cfg, chat_id, user_id, msg_id=None):
+    """Главное меню Помощи."""
+    token = cfg['BOT_TOKEN']
     ch_file = "/etc/UDPCustom/channels.txt"
+    channels = []
     if os.path.exists(ch_file):
         try:
             channels = [l.strip() for l in open(ch_file) if l.strip() and not l.startswith('#')]
-        except:
-            pass
+        except: pass
     primary = channels[0].lstrip('@') if channels else 'ArsenVipKeys'
-
-    tpl_help = _get_help_text(cfg)
-    if tpl_help:
-        text = tpl_help.replace('{primary}', primary)
-    else:
-        text = (
-            f"📖 <b>Как получить тестовый ключ?</b>\n\n"
-            f"1️⃣ Зайди в канал 👉 @{primary}\n"
-            f"2️⃣ Найди пост с кнопкой <b>«🎁 Получить тест»</b>\n"
-            f"3️⃣ Нажми на неё — ключ придёт в этот бот\n"
-        )
-    keyboard = {'inline_keyboard': [
-        [{'text': '📖 Инструкция', 'callback_data': 'cab_help_instruction'},
-         {'text': '❓ FAQ', 'callback_data': 'cab_help_faq'}],
-        [{'text': '🎬 Видео', 'url': f'https://t.me/{primary}'},
-         {'text': '👤 Кабинет', 'callback_data': 'cab_main'}],
-        [{'text': f'📢 Перейти в @{primary}', 'url': f'https://t.me/{primary}'}]
+    support = _get_support().lstrip('@') if hasattr(_get_support, '__call__') else 'ArsenSupportBot'
+    text = "\U0001F4D6 <b>ПОМОЩЬ</b>"
+    kb = {'inline_keyboard': [
+        [{'text': '\u2699\uFE0F DarkTunnel', 'callback_data': 'cab_help_darktunnel'},
+         {'text': '\u2699\uFE0F HttpCustom', 'callback_data': 'cab_help_httpcustom'},
+         {'text': '\u2699\uFE0F WhiteDns', 'callback_data': 'cab_help_whitedns'}],
+        [{'text': '\u2753 Вопросы', 'callback_data': 'cab_help_faq'},
+         {'text': '\U0001F3AC Видео', 'callback_data': 'cab_help_video'},
+         {'text': '\U0001F4AC Поддержка', 'url': f'https://t.me/{support}'}],
+        [{'text': '\U0001F464 Кабинет', 'callback_data': 'cab_main'},
+         {'text': f'\U0001F4E2 Канал', 'url': f'https://t.me/{primary}'},
+         {'text': '\U0001F3E0 Меню', 'callback_data': 'cab_exit'}]
     ]}
     if msg_id:
-        _edit(token, chat_id, msg_id, text, keyboard)
+        _edit(token, chat_id, msg_id, text, kb)
     else:
-        _send(token, chat_id, text, keyboard)
+        _send_new(token, chat_id, text, kb)
+
 
 
 def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
@@ -1438,6 +1535,21 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
     if cb_data == 'cab_help_back':
         show_help_back(cfg, chat_id, user_id, msg_id)
         return True
+    if cb_data == 'cab_help':
+        show_help_back(cfg, chat_id, user_id, msg_id)
+        return True
+    if cb_data == 'cab_help_darktunnel':
+        show_help_darktunnel(cfg, chat_id, user_id, msg_id)
+        return True
+    if cb_data == 'cab_help_httpcustom':
+        show_help_httpcustom(cfg, chat_id, user_id, msg_id)
+        return True
+    if cb_data == 'cab_help_whitedns':
+        show_help_whitedns(cfg, chat_id, user_id, msg_id)
+        return True
+    if cb_data == 'cab_help_video':
+        show_help_video(cfg, chat_id, user_id, msg_id)
+        return True
     if cb_data == 'cab_main':
         show_cabinet(cfg, chat_id, user_id, first_name, msg_id)
         return True
@@ -1451,6 +1563,9 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         show_my_keys(cfg, chat_id, user_id, 'vip', msg_id)
         return True
     if cb_data == 'cab_buy_vip':
+        try:
+            db.clear_pending(user_id)
+        except: pass
         show_buy_vip(cfg, chat_id, user_id, msg_id)
         return True
     if cb_data == 'cab_udp_soon':
