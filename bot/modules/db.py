@@ -191,12 +191,12 @@ def get_test_keys(tg_id, active_only=False):
 
 
 def create_test_key(login, tg_id, password, expires_at, devices=1,
-                    traffic_limit=0, traffic_used=0):
+                    traffic_limit=0, traffic_used=0, hwid=None):
     execute("""INSERT OR REPLACE INTO test_keys
-        (login, tg_id, password, created_at, expires_at, devices, traffic_used, traffic_limit)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (login, tg_id, password, created_at, expires_at, devices, traffic_used, traffic_limit, hwid)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (login, int(tg_id), password, int(time.time()),
-         int(expires_at), int(devices), int(traffic_used), int(traffic_limit)))
+         int(expires_at), int(devices), int(traffic_used), int(traffic_limit), hwid))
     return query_one("SELECT * FROM test_keys WHERE login=?", (login,))
 
 
@@ -511,7 +511,8 @@ def init_schema():
         expires_at INTEGER,
         devices INTEGER DEFAULT 1,
         traffic_used INTEGER DEFAULT 0,
-        traffic_limit INTEGER DEFAULT 0
+        traffic_limit INTEGER DEFAULT 0,
+        hwid TEXT DEFAULT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_test_tg  ON test_keys(tg_id);
     CREATE INDEX IF NOT EXISTS idx_test_exp ON test_keys(expires_at);

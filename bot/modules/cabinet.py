@@ -755,9 +755,43 @@ def show_darktunnel_url(cfg, chat_id, user_id, key_name, msg_id=None):
     domain = get_domain()
     ws_port = get_ws_port()
     proxy = get_random_proxy()
-    dt_url = make_darktunnel_url(key_name, password, domain, ws_port, proxy, cfg.get("SERVER_LOCATION", "VPN"))
+    # HWID ключа (если есть)
+    try:
+        _hwid = key['hwid']
+    except (KeyError, IndexError, TypeError):
+        _hwid = None
+    _loc = cfg.get("SERVER_LOCATION", "VPN")
+    if _hwid:
+        # Зашифрованный конфиг с привязкой к устройству
+        try:
+            from bot_modules import dark_gen
+            _proxy_str = proxy or '162.159.228.0'
+            _proxyhost = _proxy_str.split(':')[0] if ':' in _proxy_str else _proxy_str
+            if key_name.startswith('vip_'):
+                _cfg_name = f"💎 VIP {_loc} {key_name[4:]}"
+            elif key_name.startswith('test'):
+                _cfg_name = f"🎁 TEST {_loc} {key_name[4:]}"
+            else:
+                _cfg_name = f"⭐ {key_name}"
+            dt_url = dark_gen.generate(
+                hwid=_hwid,
+                host=domain,
+                port=str(ws_port),
+                user=key_name,
+                pw=password,
+                proxyhost=_proxyhost,
+                proxyport=str(ws_port),
+                name=_cfg_name,
+            )
+            cab_log.info(f"dark_gen encrypted config for {key_name} (hwid={_hwid[:8]}...)")
+        except Exception as e:
+            cab_log.error(f"dark_gen generate error: {e}")
+            dt_url = None
+    else:
+        # Открытый конфиг (старый способ)
+        dt_url = make_darktunnel_url(key_name, password, domain, ws_port, proxy, _loc)
     if not dt_url:
-        _send(token, chat_id, "❌  Не удалось создать конфиг")
+        _send(token, chat_id, "❌   Не удалось создать конфиг")
         return
 
     NL = chr(10)

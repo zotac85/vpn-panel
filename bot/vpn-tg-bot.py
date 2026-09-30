@@ -243,7 +243,7 @@ def get_payload():
     return None
 
 
-def create_test_user(cfg, tg_id=0):
+def create_test_user(cfg, tg_id=0, hwid=None):
     for _ in range(20):
         username = "test" + gen_random(6)
         r = subprocess.run(['id', username], capture_output=True)
@@ -288,7 +288,8 @@ echo "OK"
                 exp_ts = int(time.time()) + hours * 3600
                 traffic_bytes = traffic_gb * 1073741824
                 db.create_test_key(username, tg_id, password, exp_ts,
-                                   devices=devices, traffic_limit=traffic_bytes)
+                                   devices=devices, traffic_limit=traffic_bytes,
+                                   hwid=hwid)
                 log.info(f"Test key saved to DB: {username} (tg_id={tg_id})")
             except Exception as e:
                 log.error(f"DB save failed: {e}")
@@ -329,7 +330,7 @@ def _make_vip_login(name):
     return f"vip_{name}_{''.join(_sec.choice('0123456789') for _ in range(4))}"
 
 
-def create_vip_user(cfg, tg_id, days, price, traffic_gb, devices, custom_login=None):
+def create_vip_user(cfg, tg_id, days, price, traffic_gb, devices, custom_login=None, hwid=None):
     """Создаёт VIP-юзера: Linux-юзер vip_<tg_id>_<rnd> + запись в vip_keys."""
     import secrets as _sec, string as _str
     if custom_login:
@@ -391,7 +392,8 @@ echo "OK"
             from bot_modules import db as _db
             _db.create_vip_key(username, tg_id, password, exp_ts,
                                devices=devices, traffic_limit=traffic_bytes,
-                               tariff=f"vip_{days}d", price_paid=price, paid_via='balance')
+                               tariff=f"vip_{days}d", price_paid=price, paid_via='balance',
+                               hwid=hwid)
         except Exception as e:
             log.error(f"VIP DB save error: {e}")
         log.info(f"VIP создан: {username} (tg_id={tg_id}, {days}д, ${price})")
@@ -657,7 +659,7 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         threading.Thread(target=_auto_del, daemon=True).start()
 
 
-def handle_test(cfg, chat_id, user_id, first_name, cb_id=None):
+def handle_test(cfg, chat_id, user_id, first_name, cb_id=None, hwid=None):
     token = cfg['BOT_TOKEN']
     if is_blacklisted(user_id):
         send_message(token, chat_id, f"🚫 Ты в чёрном списке. {get_support()}"); return
@@ -689,8 +691,32 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None):
         ok, remaining = check_cooldown(user_id, cooldown_hours)
         if not ok:
             send_message_ttl(token, chat_id, f"⏰ Попробуй через {format_time(remaining)}.", ttl=15); return
-    send_message_ttl(token, chat_id, "⏳ Создаём аккаунт...", ttl=3)
-    username, password = create_test_user(cfg, user_id)
+    # --- FSM: спрашиваем HWID ---
+    if hwid is None:
+        _is_adm = is_admin(cfg, user_id)
+        try:
+            from bot_modules import db as _tdb
+            _tdb.set_pending(user_id, 'test_hwid')
+        except Exception as _e:
+            log.error(f"set_pending test_hwid: {_e}")
+        _hw_msg = (
+            "\U0001F194 <b>Отправь свой HWID</b>\n"
+            + "\u2501"*20 + "\n"
+            "HWID \u2014 это ID устройства.\n"
+            "Ключ будет работать только на этом устройстве.\n\n"
+            "Как узнать:\n"
+            "DarkTunnel \u2192 \u2699\uFE0F Settings \u2192 внизу <b>Hardware ID</b>\n\n"
+            "\U0001F4CB Скопируй и отправь сюда:"
+        )
+        if _is_adm:
+            _kb = {'inline_keyboard': [
+                [{'text': '\u27A1\uFE0F Пропустить', 'callback_data': 'test_hwid_skip'}]
+            ]}
+            send_message(token, chat_id, _hw_msg, parse_mode='HTML', reply_markup=_kb)
+        else:
+            send_message(token, chat_id, _hw_msg, parse_mode='HTML')
+        return
+    username, password = create_test_user(cfg, user_id, hwid=hwid)
     if not username:
         send_message_ttl(token, chat_id, "❌ Ошибка. Попробуй позже.", ttl=15); return
     record_issue(user_id, username)
@@ -1001,14 +1027,17 @@ def _do_vip_purchase(cfg, cb, tg_id, idx):
         tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': f'Ошибка: {e}', 'show_alert': True})
         return
 
-    # Читаем сохранённое имя из pending
+    # Читаем имя + HWID из pending
     custom_name = None
+    custom_hwid = None
     try:
         pending = _db.get_pending(tg_id)
         if pending and pending.startswith('vip_ready:'):
-            parts_p = pending.split(':', 2)
+            parts_p = pending.split(':', 3)
             if len(parts_p) >= 3:
                 custom_name = parts_p[2]
+            if len(parts_p) >= 4 and parts_p[3]:
+                custom_hwid = parts_p[3]
             _db.clear_pending(tg_id)
     except: pass
 
@@ -1039,7 +1068,7 @@ def _do_vip_purchase(cfg, cb, tg_id, idx):
     # Создаём ключ
     # Формируем логин из имени
     full_login = _make_vip_login(custom_name)
-    username, password = create_vip_user(cfg, tg_id, t['days'], t['price'], t['gb'], t['devices'], custom_login=full_login)
+    username, password = create_vip_user(cfg, tg_id, t['days'], t['price'], t['gb'], t['devices'], custom_login=full_login, hwid=custom_hwid)
     if not username:
         # Возвращаем деньги
         try:
@@ -2262,7 +2291,7 @@ def post_to_channel(cfg, chat_id, user_id):
         send_message(token, chat_id, f"❌ Не удалось опубликовать ни в один канал\n\n{err_text}")
 
 
-def handle_channel_test(cfg, user_id, first_name):
+def handle_channel_test(cfg, user_id, first_name, hwid=None):
     """Обработка кнопки из КАНАЛА — проверка спонсора + выдача в личку"""
     token = cfg['BOT_TOKEN']
     
@@ -2312,7 +2341,32 @@ def handle_channel_test(cfg, user_id, first_name):
         return
     
     # Всё ОК — создаём аккаунт
-    username, password = create_test_user(cfg, user_id)
+    # --- FSM: спрашиваем HWID ---
+    if hwid is None:
+        _is_adm = is_admin(cfg, user_id)
+        try:
+            from bot_modules import db as _tdb
+            _tdb.set_pending(user_id, 'test_hwid_ch')
+        except Exception as _e:
+            log.error(f"set_pending test_hwid: {_e}")
+        _hw_msg = (
+            "\U0001F194 <b>Отправь свой HWID</b>\n"
+            + "\u2501"*20 + "\n"
+            "HWID \u2014 это ID устройства.\n"
+            "Ключ будет работать только на этом устройстве.\n\n"
+            "Как узнать:\n"
+            "DarkTunnel \u2192 \u2699\uFE0F Settings \u2192 внизу <b>Hardware ID</b>\n\n"
+            "\U0001F4CB Скопируй и отправь сюда:"
+        )
+        if _is_adm:
+            _kb = {'inline_keyboard': [
+                [{'text': '\u27A1\uFE0F Пропустить', 'callback_data': 'test_hwid_skip'}]
+            ]}
+            tg_request(token, 'sendMessage', {'chat_id': user_id, 'text': _hw_msg, 'parse_mode': 'HTML', 'reply_markup': _kb})
+        else:
+            tg_request(token, 'sendMessage', {'chat_id': user_id, 'text': _hw_msg, 'parse_mode': 'HTML'})
+        return
+    username, password = create_test_user(cfg, user_id, hwid=hwid)
     if not username:
         send_message_ttl(token, user_id, "❌ Ошибка создания. Попробуй позже.", ttl=15)
         return
@@ -2323,7 +2377,25 @@ def handle_channel_test(cfg, user_id, first_name):
     domain = get_domain()
     ws_port = get_ws_port()
     proxy = get_random_proxy()
-    dt_url = generate_darktunnel_url(username, password, domain, ws_port, proxy, cfg)
+    if hwid:
+        try:
+            from bot_modules import dark_gen
+            _proxy_str = proxy or '162.159.228.0'
+            _proxyhost = _proxy_str.split(':')[0] if ':' in _proxy_str else _proxy_str
+            _loc = cfg.get("SERVER_LOCATION", "VPN")
+            _cfg_name = (f"\U0001F381 TEST {_loc} {username[4:]}" if username.startswith('test') else username)
+            dt_url = dark_gen.generate(
+                hwid=hwid, host=domain, port=str(ws_port),
+                user=username, pw=password,
+                proxyhost=_proxyhost, proxyport=str(ws_port),
+                name=_cfg_name,
+            )
+            log.info(f"channel_test dark_gen ok for {username}")
+        except Exception as _e:
+            log.error(f"channel_test dark_gen error: {_e}")
+            dt_url = generate_darktunnel_url(username, password, domain, ws_port, proxy, cfg)
+    else:
+        dt_url = generate_darktunnel_url(username, password, domain, ws_port, proxy, cfg)
     traffic = cfg.get('TEST_TRAFFIC_GB', '50')
     devices = cfg.get('TEST_DEVICES', '1')
     hours = cfg.get('TEST_HOURS', '8')
@@ -3056,19 +3128,17 @@ def handle_addproxy(cfg, chat_id, user_id, args):
     if not args:
         send_message(token, chat_id, "📖 Формат: <code>/addproxy 1.2.3.4</code>", parse_mode='HTML'); return
     ip = args.split()[0]
-    # Простая валидация IP
     if not ip.replace('.', '').isdigit() or ip.count('.') != 3:
-        send_message(token, chat_id, f"❌ Неверный IP: {ip}"); return
+        send_message(token, chat_id, f"❌  Неверный IP: {ip}"); return
     try:
         with open(PROXIES_FILE, 'a') as f:
-            f.write(ip + "\n")
-        # Сортируем и убираем дубли
+            f.write(ip + chr(10))
         ips = sorted(set(l.strip() for l in open(PROXIES_FILE) if l.strip()))
         with open(PROXIES_FILE, 'w') as f:
-            f.write("\n".join(ips) + "\n")
-        send_message(token, chat_id, f"✅ Прокси добавлен: <code>{ip}</code>\nВсего: <b>{len(ips)}</b>", parse_mode='HTML')
+            f.write(chr(10).join(ips) + chr(10))
+        send_message(token, chat_id, f"✅  Прокси добавлен: <code>{ip}</code>" + chr(10) + f"Всего: <b>{len(ips)}</b>", parse_mode='HTML')
     except Exception as e:
-        send_message(token, chat_id, f"❌ Ошибка: {e}")
+        send_message(token, chat_id, f"❌  Ошибка: {e}")
 
 
 def handle_delproxy(cfg, chat_id, user_id, args):
@@ -4294,6 +4364,26 @@ def main():
                             send_message(cfg['BOT_TOKEN'], cb['message']['chat']['id'], f'❌ Ошибка счёта: {_err}')
                             log.error(f'Stars invoice error: {_err}')
                         continue
+                    elif cb_data.startswith('vip_hwid_skip:'):
+                        # Админ пропустил ввод HWID
+                        try:
+                            _parts_skip = cb_data.split(':', 2)
+                            _tariff_skip = int(_parts_skip[1])
+                        except:
+                            _tariff_skip = 1
+                        _name_skip = _parts_skip[2] if len(_parts_skip) > 2 else ""
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        try:
+                            from bot_modules import db as _dbsk
+                            _dbsk.clear_pending(cb_user_id)
+                            _dbsk.set_pending(cb_user_id, f'vip_ready:{_tariff_skip}:{_name_skip}:')
+                        except: pass
+                        try:
+                            from bot_modules.cabinet import show_vip_final_confirm as _svfc
+                            _svfc(cfg, cb['message']['chat']['id'], cb_user_id, _tariff_skip, _name_skip)
+                        except Exception as _e:
+                            log.error(f"show_vip_final_confirm (skip): {_e}")
+                        continue
                     elif cb_data.startswith('cab_vip_confirm:'):
                         try:
                             idx = int(cb_data.split(':', 1)[1])
@@ -4393,6 +4483,20 @@ def main():
                                 'show_alert': True
                             })
                             handle_start(cfg, cb['message']['chat']['id'], cb_user_id, cb_first_name, False)
+                    # Пропустить HWID (только админ)
+                    elif cb_data == 'test_hwid_skip':
+                        if not is_admin(cfg, cb_user_id):
+                            tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
+                                'callback_query_id': cb['id'],
+                                'text': '\u274C Только для админа',
+                                'show_alert': True
+                            })
+                            continue
+                        try:
+                            from bot_modules import db as _tdbs
+                            _tdbs.clear_pending(cb_user_id)
+                        except: pass
+                        handle_test(cfg, cb['message']['chat']['id'], cb_user_id, cb_first_name, cb['id'], hwid='')
                     # Кнопка из ЛИЧКИ → обычный /test
                     elif cb_data == 'get_test':
                         handle_test(cfg, cb['message']['chat']['id'], cb_user_id, cb_first_name, cb['id'])
@@ -4568,19 +4672,117 @@ def main():
                         except: pass
                         continue
                     name = result
-                    name = result
-                    # Проверяем что логин свободен
-                    full_login = _make_vip_login(name)
-                    # Показываем финальное подтверждение
+                    # NEW: запрашиваем HWID (обязательно для клиента)
+                    try:
+                        from bot_modules.admin import is_admin as _is_adm
+                        _adm = _is_adm(cfg, user_id)
+                    except Exception:
+                        _adm = False
+                    _hw_kb = None
+                    if _adm:
+                        _hw_msg = chr(10).join([
+                            "📱 <b>ВВЕДИ HWID</b>",
+                            "━━━━━━━━━━━━━━━━━━━━",
+                            "",
+                            "Ты админ. Выбери:",
+                            "• <b>Ввести HWID</b> — зашифрованный с привязкой",
+                            "• <b>Пропустить</b> — открытый конфиг",
+                            "",
+                            "Введи HWID или нажми кнопку:",
+                        ])
+                        _hw_kb = {'inline_keyboard': [
+                            [{'text': '➡️ Пропустить',
+                              'callback_data': f'vip_hwid_skip:{tariff_idx}:{name}'}]
+                        ]}
+                    else:
+                        _hw_msg = chr(10).join([
+                            "📱 <b>ВВЕДИ HWID</b>",
+                            "━━━━━━━━━━━━━━━━━━━━",
+                            "",
+                            "HWID — это ID устройства.",
+                            "Ключ будет работать только на этом устройстве.",
+                            "",
+                            "Как узнать:",
+                            "DarkTunnel → ⚙️ Settings → внизу <b>Hardware ID</b>",
+                            "",
+                            "📋 Скопируй и отправь сюда:",
+                        ])
+                    if _hw_kb:
+                        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                            'chat_id': chat_id, 'text': _hw_msg,
+                            'parse_mode': 'HTML', 'reply_markup': _hw_kb
+                        })
+                    else:
+                        send_message(cfg['BOT_TOKEN'], chat_id, _hw_msg, parse_mode='HTML')
+                    try:
+                        _db.set_pending(user_id, f'vip_hwid:{tariff_idx}:{name}')
+                    except: pass
+                    continue
+
+                if pending == 'test_hwid_ch' and text and not text.startswith('/'):
+                    _db.clear_pending(user_id)
+                    _in = text.strip()
+                    _clean = _in.replace(':', '').replace(' ', '').replace('-', '')
+                    if len(_clean) < 10 or len(_clean) > 80:
+                        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {'chat_id': chat_id, 'text': '\u274C   Неверная длина HWID (10-80). Попробуй снова:', 'parse_mode': 'HTML'})
+                        try:
+                            _db.set_pending(user_id, 'test_hwid_ch')
+                        except: pass
+                        continue
+                    handle_channel_test(cfg, user_id, first_name, hwid=_in)
+                    continue
+                if pending == 'test_hwid' and text and not text.startswith('/'):
+                    _db.clear_pending(user_id)
+                    _in = text.strip()
+                    _clean = _in.replace(':', '').replace(' ', '').replace('-', '')
+                    if len(_clean) < 10 or len(_clean) > 80:
+                        send_message(cfg['BOT_TOKEN'], chat_id, '\u274C   Неверная длина HWID (10-80). Попробуй снова:', parse_mode='HTML')
+                        try:
+                            _db.set_pending(user_id, 'test_hwid')
+                        except: pass
+                        continue
+                    handle_test(cfg, chat_id, user_id, first_name, hwid=_in)
+                    continue
+                if pending and pending.startswith('vip_hwid:') and text and not text.startswith('/'):
+                    _db.clear_pending(user_id)
+                    _parts = pending.split(':', 2)
+                    try:
+                        _tariff_idx = int(_parts[1])
+                    except:
+                        _tariff_idx = 1
+                    _name = _parts[2] if len(_parts) > 2 else ""
+                    try:
+                        from bot_modules.admin import is_admin as _is_adm2
+                        _adm2 = _is_adm2(cfg, user_id)
+                    except Exception:
+                        _adm2 = False
+                    _hwid_in = text.strip()
+                    if _hwid_in == "-" and _adm2:
+                        _hwid_val = None
+                    elif _hwid_in == "-" and not _adm2:
+                        send_message(cfg['BOT_TOKEN'], chat_id, "❌  HWID обязателен. Введи значение.", parse_mode='HTML')
+                        try:
+                            _db.set_pending(user_id, f'vip_hwid:{_tariff_idx}:{_name}')
+                        except: pass
+                        continue
+                    else:
+                        _clean = _hwid_in.replace(":", "").replace(" ", "").replace("-", "")
+                        if len(_clean) < 10 or len(_clean) > 80:
+                            send_message(cfg['BOT_TOKEN'], chat_id, "❌  Неверная длина HWID. Попробуй снова:", parse_mode='HTML')
+                            try:
+                                _db.set_pending(user_id, f'vip_hwid:{_tariff_idx}:{_name}')
+                            except: pass
+                            continue
+                        _hwid_val = _hwid_in
                     try:
                         from bot_modules.cabinet import show_vip_final_confirm
-                        show_vip_final_confirm(cfg, chat_id, user_id, tariff_idx, name)
+                        show_vip_final_confirm(cfg, chat_id, user_id, _tariff_idx, _name)
                     except Exception as e:
                         log.error(f"show_vip_final_confirm: {e}")
                         send_message(cfg['BOT_TOKEN'], chat_id, f"❌  Ошибка: {e}")
-                    # Сохраняем выбранное имя
                     try:
-                        _db.set_pending(user_id, f'vip_ready:{tariff_idx}:{name}')
+                        _hwid_store = _hwid_val if _hwid_val else ""
+                        _db.set_pending(user_id, f'vip_ready:{_tariff_idx}:{_name}:{_hwid_store}')
                     except: pass
                     continue
 
