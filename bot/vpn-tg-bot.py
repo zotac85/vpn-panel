@@ -623,16 +623,12 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
                 "🎁 Тест:  8 часов · 50 ГБ · 1 устр.",
                 f"💎 VIP:   {get_support()}"
             ])
-        kb_start = []
-        for i in range(0, len(sponsors_start), 2):
-            row = [{"text": f"📢 @{sponsors_start[i]}", "url": f"https://t.me/{sponsors_start[i]}"}]
-            if i + 1 < len(sponsors_start):
-                row.append({"text": f"📢 @{sponsors_start[i+1]}", "url": f"https://t.me/{sponsors_start[i+1]}"})
-            kb_start.append(row)
-        kb_start.append([
-            {"text": "📣 Реклама", "url": f"https://t.me/{get_support().lstrip(chr(64))}"},
-            {"text": "👤 Личный кабинет", "callback_data": "cab_main"}
-        ])
+        kb_start = [
+            [
+                {"text": "\U0001F4E3 Реклама", "callback_data": "cab_ad"},
+                {"text": "\U0001F464 Личный кабинет", "callback_data": "cab_main"}
+            ]
+        ]
         keyboard = {"inline_keyboard": kb_start}
     
     # Сохраняем message_id приветствия для авто-удаления

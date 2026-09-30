@@ -396,9 +396,9 @@ def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
         [{'text': f'🔑 Мои ключи ({active_count})', 'callback_data': 'cab_keys'},
          {'text': '💰 Баланс', 'callback_data': 'cab_balance'},
          {'text': '🎫 Промокод', 'callback_data': 'cab_promo'}],
-        [{'text': '💎 VIP SSH', 'callback_data': 'cab_buy_vip'},
-         {'text': '💎 VIP UDP', 'callback_data': 'cab_udp_soon'},
-         {'text': '💎 VIP DNS', 'callback_data': 'cab_whitedns'}],
+        [{'text': '💎 DarkTunnel', 'callback_data': 'cab_buy_vip'},
+         {'text': '💎 HttpCustom', 'callback_data': 'cab_udp_soon'},
+         {'text': '💎 WhiteDns', 'callback_data': 'cab_whitedns'}],
         [{'text': '👥 Рефералы', 'callback_data': 'cab_refs'},
          {'text': '\U0001F6DF Помощь', 'callback_data': 'cab_help'},
          {'text': '🏠 Меню', 'callback_data': 'cab_exit'}]
@@ -1473,6 +1473,28 @@ def show_help_video(cfg, chat_id, user_id, msg_id=None):
         _send(token, chat_id, text, kb)
 
 
+def show_ad(cfg, chat_id, user_id, msg_id=None):
+    """Раздел Реклама — условия спонсорства."""
+    token = cfg['BOT_TOKEN']
+    try:
+        with open('/etc/UDPCustom/ad.txt') as f:
+            text = f.read().strip()
+        if not text:
+            text = "\U0001F4E3 <b>Реклама</b>\n\nОтредактируй /etc/UDPCustom/ad.txt"
+        text = _apply_placeholders(text, cfg)
+    except Exception as e:
+        cab_log.error(f"show_ad: {e}")
+        text = "\U0001F4E3 <b>Реклама</b>\n\nОтредактируй /etc/UDPCustom/ad.txt"
+    kb = {'inline_keyboard': [
+        [{'text': '\U0001F4AC Поддержка', 'url': f'https://t.me/{_get_support().lstrip(chr(64))}'}],
+        [{'text': '\U0001F3E0 Меню', 'callback_data': 'cab_exit'}],
+    ]}
+    if msg_id:
+        _edit(token, chat_id, msg_id, text, kb)
+    else:
+        _send_new(token, chat_id, text, kb)
+
+
 def show_help_back(cfg, chat_id, user_id, msg_id=None):
     """Главное меню Помощи."""
     token = cfg['BOT_TOKEN']
@@ -1534,6 +1556,9 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         return True
     if cb_data == 'cab_help_back':
         show_help_back(cfg, chat_id, user_id, msg_id)
+        return True
+    if cb_data == 'cab_ad':
+        show_ad(cfg, chat_id, user_id, msg_id)
         return True
     if cb_data == 'cab_help':
         show_help_back(cfg, chat_id, user_id, msg_id)
@@ -1848,15 +1873,20 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         show_ref_list(cfg, chat_id, user_id, msg_id)
         return True
     if cb_data == 'cab_exit':
-        # Возврат в /start
-        _tg(token, 'answerCallbackQuery', {
-            'callback_query_id': cb['id'],
-            'text': '🏠 Отправь /start чтобы вернуться'
-        })
-        _edit(token, chat_id, msg_id,
-              "🏠 <b>Выход из кабинета</b>\n\nНапиши /start для возврата в главное меню.",
-              {'inline_keyboard': []})
+        # Возврат в главное меню (/start)
+        _tg(token, 'answerCallbackQuery', {'callback_query_id': cb['id']})
+        try:
+            import sys as _sys
+            _main = _sys.modules.get('__main__')
+            if _main and hasattr(_main, 'handle_start'):
+                _main.handle_start(cfg, chat_id, user_id, first_name or '')
+            else:
+                _send_new(token, chat_id, 'Напиши /start для возврата', {'inline_keyboard': []})
+        except Exception as _e:
+            cab_log.error(f'cab_exit: {_e}')
+            _send_new(token, chat_id, 'Напиши /start для возврата', {'inline_keyboard': []})
         return True
+
     if cb_data.startswith('cab_key_reset:'):
         key_name = cb_data.split(':', 1)[1]
         show_key_reset_confirm(cfg, chat_id, user_id, key_name, msg_id)
