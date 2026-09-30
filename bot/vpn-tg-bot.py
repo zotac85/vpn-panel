@@ -4743,6 +4743,24 @@ def main():
                         continue
                     handle_test(cfg, chat_id, user_id, first_name, hwid=_in)
                     continue
+                if pending and pending.startswith('cab_key_hwid:') and text and not text.startswith('/'):
+                    _db.clear_pending(user_id)
+                    _key_name = pending.split(':', 1)[1]
+                    _in = text.strip()
+                    _clean = _in.replace(':', '').replace(' ', '').replace('-', '')
+                    if len(_clean) < 10 or len(_clean) > 80:
+                        send_message(cfg['BOT_TOKEN'], chat_id, '\u274C   Неверная длина HWID (10-80). Попробуй снова:', parse_mode='HTML')
+                        try:
+                            _db.set_pending(user_id, 'cab_key_hwid:' + _key_name)
+                        except: pass
+                        continue
+                    try:
+                        from bot_modules.cabinet import do_key_reset_hwid as _dkrh
+                        _dkrh(cfg, chat_id, user_id, _key_name, _in)
+                    except Exception as _e:
+                        log.error(f'cab_key_hwid handler: {_e}')
+                        send_message(cfg['BOT_TOKEN'], chat_id, f'\u274C   Ошибка: {_e}')
+                    continue
                 if pending and pending.startswith('vip_hwid:') and text and not text.startswith('/'):
                     _db.clear_pending(user_id)
                     _parts = pending.split(':', 2)

@@ -477,38 +477,41 @@ def show_my_keys(cfg, chat_id, user_id, kind='all', msg_id=None):
 
 
 def show_key_reset_confirm(cfg, chat_id, user_id, key_name, msg_id=None):
-    """Подтверждение сброса пароля ключа"""
+    """Подтверждение обновления конфига (HWID + пароль)."""
     token = cfg['BOT_TOKEN']
     key = db.get_test_key(key_name) or db.get_vip_key(key_name)
     if not key or int(key['tg_id']) != int(user_id):
-        _send(token, chat_id, "❌ Ключ не найден")
+        _send(token, chat_id, "\u274C  Ключ не найден")
         return
-
     NL = chr(10)
     text = NL.join([
-        "🔄 <b>СБРОСИТЬ ПАРОЛЬ?</b>",
-        "━━━━━━━━━━━━━━━━━━━━",
+        "\U0001F504 <b>ОБНОВИТЬ КОНФИГ?</b>",
+        "\u2501"*20,
         "",
-        f"🔑 Логин: <code>{key_name}</code>",
-        f"🔐 Текущий пароль: <code>{key['password']}</code>",
+        f"\U0001F511 Логин: <code>{key_name}</code>",
         "",
-        "━━━━━━━━━━━━━━━━━━━━",
-        "⚠️ <b>Важно!</b>",
+        "\u2501"*20,
+        "\u26A0\uFE0F <b>Важно!</b>",
         "",
-        "После сброса <b>старый пароль перестанет работать</b>.",
-        "В DarkTunnel нужно будет заново импортировать конфиг:",
-        "удали старый и добавь новый из ЛК.",
+        "Будет создан новый конфиг,",
+        "привязанный к <b>текущему устройству</b>.",
         "",
-        "📌 Логин, срок и трафик — не изменятся."
+        "\U0001F4F2 <b>Пригодится, если:</b>",
+        "  \u2022 сменил телефон",
+        "  \u2022 переустановил приложение",
+        "  \u2022 сменился HWID",
+        "",
+        "Старый конфиг <b>перестанет работать</b>.",
     ])
     kb = {'inline_keyboard': [
-        [{'text': '✅ Сбросить пароль', 'callback_data': f'cab_key_resetok:{key_name}'}],
-        [{'text': '⬅️ Отмена', 'callback_data': f'cab_key:{key_name}'}]
+        [{'text': '\U0001F504 Обновить', 'callback_data': f'cab_key_resethwid:{key_name}'}],
+        [{'text': '\u2B05\uFE0F Отмена', 'callback_data': f'cab_key:{key_name}'}]
     ]}
     if msg_id:
         _edit(token, chat_id, msg_id, text, kb)
     else:
         _send(token, chat_id, text, kb)
+
 
 
 def do_key_reset(cfg, chat_id, user_id, key_name, msg_id=None):
@@ -577,6 +580,90 @@ def do_key_reset(cfg, chat_id, user_id, key_name, msg_id=None):
         _send(token, chat_id, text, kb)
 
     cab_log.info(f"Password reset: {key_name} by tg={user_id}")
+
+
+def ask_key_hwid(cfg, chat_id, user_id, key_name, msg_id=None):
+    """Просит HWID для обновления конфига. Сохраняет pending."""
+    token = cfg['BOT_TOKEN']
+    key = db.get_test_key(key_name) or db.get_vip_key(key_name)
+    if not key or int(key['tg_id']) != int(user_id):
+        _send(token, chat_id, "\u274C  Ключ не найден")
+        return
+    try:
+        db.set_pending(user_id, f'cab_key_hwid:{key_name}')
+    except Exception as e:
+        cab_log.error(f"set_pending cab_key_hwid: {e}")
+    NL = chr(10)
+    text = NL.join([
+        "\U0001F194 <b>Отправь свой HWID</b>",
+        "\u2501"*20,
+        "HWID \u2014 это ID устройства.",
+        "Новый конфиг будет привязан к нему.",
+        "",
+        "Как узнать:",
+        "DarkTunnel \u2192 \u2699\uFE0F Settings \u2192 внизу <b>Hardware ID</b>",
+        "",
+        "\U0001F4CB Скопируй и отправь сюда:",
+    ])
+    kb = {'inline_keyboard': [
+        [{'text': '\u2B05\uFE0F Отмена', 'callback_data': f'cab_key:{key_name}'}]
+    ]}
+    if msg_id:
+        _edit(token, chat_id, msg_id, text, kb)
+    else:
+        _send(token, chat_id, text, kb)
+
+
+def do_key_reset_hwid(cfg, chat_id, user_id, key_name, new_hwid, msg_id=None):
+    """Меняет пароль Linux-юзера + обновляет hwid и password в БД."""
+    import subprocess as _sp
+    import secrets as _sec
+    import string as _str
+    import os as _os
+    token = cfg['BOT_TOKEN']
+    key = db.get_test_key(key_name) or db.get_vip_key(key_name)
+    if not key or int(key['tg_id']) != int(user_id):
+        _send(token, chat_id, "\u274C  Ключ не найден")
+        return
+    alphabet = _str.ascii_letters + _str.digits
+    new_password = ''.join(_sec.choice(alphabet) for _ in range(12))
+    try:
+        _sp.run(['chpasswd'], input=f"{key_name}:{new_password}",
+                text=True, capture_output=True, timeout=10)
+    except Exception as e:
+        cab_log.error(f"chpasswd error: {e}")
+    try:
+        with open(f"{PASSWORDS_DIR}/{key_name}", 'w') as f:
+            f.write(new_password)
+        _os.chmod(f"{PASSWORDS_DIR}/{key_name}", 0o600)
+    except Exception as e:
+        cab_log.error(f"password file error: {e}")
+    try:
+        db.update_key_hwid_password(key_name, new_hwid, new_password)
+    except Exception as e:
+        cab_log.error(f"db update error: {e}")
+    NL = chr(10)
+    text = NL.join([
+        "\u2705  <b>КОНФИГ ОБНОВЛЁН</b>",
+        "\u2501"*20,
+        "",
+        f"\U0001F511 Логин: <code>{key_name}</code>",
+        "",
+        "\u2501"*20,
+        "\U0001F4F2 <b>Что делать:</b>",
+        "1. Удали старый конфиг из DarkTunnel",
+        "2. Нажми \u00ab\U0001F4F2 Получить конфиг\u00bb ниже",
+        "3. Импортируй новый и подключись",
+    ])
+    kb = {'inline_keyboard': [
+        [{'text': '\U0001F4F2 Получить конфиг', 'callback_data': f'cab_dt:{key_name}'}],
+        [{'text': '\u2B05\uFE0F К ключу', 'callback_data': f'cab_key:{key_name}'}]
+    ]}
+    if msg_id:
+        _edit(token, chat_id, msg_id, text, kb)
+    else:
+        _send(token, chat_id, text, kb)
+    cab_log.info(f"Key config reset (hwid+pw): {key_name} by tg={user_id}")
 
 
 def show_key_delete_confirm(cfg, chat_id, user_id, key_name, msg_id=None):
@@ -1396,7 +1483,7 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
 
     # Тосты для разных callback'ов
     _toast = None
-    if cb_data.startswith('cab_key_resetok:'):
+    if cb_data.startswith('cab_key_resethwid:'):
         _toast = '🔄 Пароль обновлён'
     elif cb_data.startswith('cab_key_reset:'):
         _toast = '⚠️ Подтверди сброс'
@@ -1727,9 +1814,9 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         key_name = cb_data.split(':', 1)[1]
         show_key_reset_confirm(cfg, chat_id, user_id, key_name, msg_id)
         return True
-    if cb_data.startswith('cab_key_resetok:'):
+    if cb_data.startswith('cab_key_resethwid:'):
         key_name = cb_data.split(':', 1)[1]
-        do_key_reset(cfg, chat_id, user_id, key_name, msg_id)
+        ask_key_hwid(cfg, chat_id, user_id, key_name, msg_id)
         return True
     if cb_data.startswith('cab_key_del:'):
         key_name = cb_data.split(':', 1)[1]

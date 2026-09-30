@@ -242,6 +242,17 @@ def create_vip_key(login, tg_id, password, expires_at, devices=1,
     return query_one("SELECT * FROM vip_keys WHERE login=?", (login,))
 
 
+def update_key_hwid_password(login, hwid, new_password):
+    """Обновляет hwid и password у test_keys или vip_keys."""
+    for tbl in ('test_keys', 'vip_keys'):
+        r = query_one(f"SELECT login FROM {tbl} WHERE login=?", (login,))
+        if r:
+            execute(f"UPDATE {tbl} SET hwid=?, password=? WHERE login=?",
+                    (hwid, new_password, login))
+            return True
+    return False
+
+
 def get_vip_key(login):
     return query_one("SELECT * FROM vip_keys WHERE login=?", (login,))
 
