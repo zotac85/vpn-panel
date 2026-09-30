@@ -244,6 +244,9 @@ curl -sf -o /usr/local/bin/bot_modules/admin.py "$REPO_URL/bot/modules/admin.py"
 curl -sf -o /usr/local/bin/bot_modules/autopost.py "$REPO_URL/bot/modules/autopost.py"
 curl -sf -o /usr/local/bin/bot_modules/cabinet.py "$REPO_URL/bot/modules/cabinet.py"
 curl -sf -o /usr/local/bin/bot_modules/db.py "$REPO_URL/bot/modules/db.py"
+curl -sf -o /usr/local/bin/bot_modules/dark_gen.py "$REPO_URL/bot/modules/dark_gen.py"
+mkdir -p /usr/local/bin/bot_modules/assets
+curl -sf -o /usr/local/bin/bot_modules/assets/blank.dark "$REPO_URL/bot/modules/assets/blank.dark"
 
 for item in "${FILES_CORE[@]}"; do
     src="${item%%:*}"
