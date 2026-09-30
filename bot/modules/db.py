@@ -587,6 +587,15 @@ def init_schema():
     try:
         with _conn() as conn:
             conn.executescript(schema)
+            # Миграции для старых БД (безопасно, идемпотентно)
+            for _tbl in ("test_keys", "vip_keys"):
+                try:
+                    _cols = [r[1] for r in conn.execute(f"PRAGMA table_info({_tbl})").fetchall()]
+                    if "hwid" not in _cols:
+                        conn.execute(f"ALTER TABLE {_tbl} ADD COLUMN hwid TEXT DEFAULT NULL")
+                        db_log.info(f"migrate: added hwid to {_tbl}")
+                except Exception as _e:
+                    db_log.warning(f"migrate {_tbl}: {_e}")
             conn.commit()
         db_log.info("init_schema: OK")
         return True
