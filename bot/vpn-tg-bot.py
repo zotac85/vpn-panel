@@ -4723,8 +4723,8 @@ def main():
                     _db.clear_pending(user_id)
                     _in = text.strip()
                     _clean = _in.replace(':', '').replace(' ', '').replace('-', '')
-                    if len(_clean) < 10 or len(_clean) > 80:
-                        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {'chat_id': chat_id, 'text': '\u274C   Неверная длина HWID (10-80). Попробуй снова:', 'parse_mode': 'HTML'})
+                    if not __import__('re').match(r'^[0-9A-Fa-f]{40}$', _clean):
+                        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {'chat_id': chat_id, 'text': '\u274C   HWID должен быть 40 hex-символов. Попробуй снова:', 'parse_mode': 'HTML'})
                         try:
                             _db.set_pending(user_id, 'test_hwid_ch')
                         except: pass
@@ -4735,8 +4735,8 @@ def main():
                     _db.clear_pending(user_id)
                     _in = text.strip()
                     _clean = _in.replace(':', '').replace(' ', '').replace('-', '')
-                    if len(_clean) < 10 or len(_clean) > 80:
-                        send_message(cfg['BOT_TOKEN'], chat_id, '\u274C   Неверная длина HWID (10-80). Попробуй снова:', parse_mode='HTML')
+                    if not __import__('re').match(r'^[0-9A-Fa-f]{40}$', _clean):
+                        send_message(cfg['BOT_TOKEN'], chat_id, '\u274C   HWID должен быть 40 hex-символов. Попробуй снова:', parse_mode='HTML')
                         try:
                             _db.set_pending(user_id, 'test_hwid')
                         except: pass
@@ -4748,8 +4748,8 @@ def main():
                     _key_name = pending.split(':', 1)[1]
                     _in = text.strip()
                     _clean = _in.replace(':', '').replace(' ', '').replace('-', '')
-                    if len(_clean) < 10 or len(_clean) > 80:
-                        send_message(cfg['BOT_TOKEN'], chat_id, '\u274C   Неверная длина HWID (10-80). Попробуй снова:', parse_mode='HTML')
+                    if not __import__('re').match(r'^[0-9A-Fa-f]{40}$', _clean):
+                        send_message(cfg['BOT_TOKEN'], chat_id, '\u274C   HWID должен быть 40 hex-символов. Попробуй снова:', parse_mode='HTML')
                         try:
                             _db.set_pending(user_id, 'cab_key_hwid:' + _key_name)
                         except: pass
@@ -4785,8 +4785,8 @@ def main():
                         continue
                     else:
                         _clean = _hwid_in.replace(":", "").replace(" ", "").replace("-", "")
-                        if len(_clean) < 10 or len(_clean) > 80:
-                            send_message(cfg['BOT_TOKEN'], chat_id, "❌  Неверная длина HWID. Попробуй снова:", parse_mode='HTML')
+                        if not __import__('re').match(r'^[0-9A-Fa-f]{40}$', _clean):
+                            send_message(cfg['BOT_TOKEN'], chat_id, "❌  HWID должен быть 40 hex-символов:", parse_mode='HTML')
                             try:
                                 _db.set_pending(user_id, f'vip_hwid:{_tariff_idx}:{_name}')
                             except: pass
