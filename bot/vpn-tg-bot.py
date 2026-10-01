@@ -681,6 +681,46 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         threading.Thread(target=_auto_del, daemon=True).start()
 
 
+def _has_username(token, user_id):
+    """Проверяет есть ли @username у юзера."""
+    try:
+        r = tg_request(token, 'getChat', {'chat_id': user_id})
+        _u = (r or {}).get('result', {}).get('username', '') or ''
+        return bool(_u)
+    except Exception:
+        return False
+
+
+def _send_username_required(cfg, chat_id):
+    """Просит клиента создать @username в Telegram."""
+    NL = chr(10)
+    text = NL.join([
+        '\U0001F4DB <b>У ТЕБЯ НЕТ @username В TELEGRAM</b>',
+        '\u2501'*20,
+        '',
+        'Для получения ключа нужен <b>@username</b> —',
+        'это твой ник в Telegram.',
+        '',
+        '<b>Он нужен чтобы:</b>',
+        '  \u2022 Мы могли найти тебя в поддержке',
+        '  \u2022 Отличать тебя от других клиентов',
+        '',
+        '\u2501'*20,
+        '\U0001F4DD <b>КАК ДОБАВИТЬ:</b>',
+        '',
+        '1\uFE0F\u20E3 Открой Telegram \u2192 \u2699\uFE0F Настройки',
+        '2\uFE0F\u20E3 Тапни «Имя пользователя»',
+        '3\uFE0F\u20E3 Придумай ник (латиница a-z, цифры, _)',
+        '   Например: <code>ivan_vpn</code>',
+        '4\uFE0F\u20E3 Сохрани',
+        '',
+        '\u2501'*20,
+        'После этого напиши /start снова \U0001F447',
+    ])
+    kb = {'inline_keyboard': [[{'text': '\U0001F504 Проверить снова', 'callback_data': 'check_username'}]]}
+    send_message(cfg['BOT_TOKEN'], chat_id, text, reply_markup=kb, parse_mode='HTML')
+
+
 def handle_test(cfg, chat_id, user_id, first_name, cb_id=None, hwid=None):
     # Если юзер пришёл из канала — редирект на channel_test
     try:
@@ -720,6 +760,12 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None, hwid=None):
         ok, remaining = check_cooldown(user_id, cooldown_hours)
         if not ok:
             send_message_ttl(token, chat_id, f"⏰ Попробуй через {format_time(remaining)}.", ttl=15); return
+    # Проверка @username (только для не-админов)
+    if not is_admin(cfg, user_id):
+        if not _has_username(token, user_id):
+            _send_username_required(cfg, chat_id)
+            return
+
     # --- FSM: спрашиваем HWID ---
     if hwid is None:
         _is_adm = is_admin(cfg, user_id)
@@ -1099,6 +1145,12 @@ def _do_vip_purchase(cfg, cb, tg_id, idx):
     except Exception as e:
         tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': f'Ошибка: {e}', 'show_alert': True})
         return
+
+    # Проверка @username
+    if not is_admin(cfg, tg_id):
+        if not _has_username(token, tg_id):
+            _send_username_required(cfg, chat_id)
+            return
 
     # Читаем имя + HWID из pending
     custom_name = None
@@ -2404,6 +2456,12 @@ def handle_channel_test(cfg, user_id, first_name, hwid=None):
         return
     
     # Всё ОК — создаём аккаунт
+    # Проверка @username (только для не-админов)
+    if not is_admin(cfg, user_id):
+        if not _has_username(token, user_id):
+            _send_username_required(cfg, user_id)
+            return
+
     # --- FSM: спрашиваем HWID ---
     if hwid is None:
         _is_adm = is_admin(cfg, user_id)
@@ -4541,6 +4599,17 @@ def main():
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
                             'callback_query_id': cb['id']
                         })
+                    elif cb_data == 'check_username':
+                        # Проверка @username после создания
+                        if _has_username(cfg['BOT_TOKEN'], cb_user_id):
+                            handle_start(cfg, cb['message']['chat']['id'], cb_user_id, cb_first_name)
+                        else:
+                            tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
+                                'callback_query_id': cb['id'],
+                                'text': '\u274C  @username не найден. Создай его в настройках Telegram.',
+                                'show_alert': True
+                            })
+                        continue
                     # Юзер нажал "Я зашёл и поставил реакцию"
                     elif cb_data == 'check_verified':
                         channels = get_channels()
