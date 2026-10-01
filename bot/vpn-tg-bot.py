@@ -2510,7 +2510,7 @@ def handle_channel_test(cfg, user_id, first_name, hwid=None):
         log.error(f"channel_test send_dark_file: {_e}")
     
     # Уведомляем админа — только если это НЕ админ
-    if not _is_adm_local and admin_id:
+    if admin_id:
         from datetime import datetime
         channels = get_channels()
         ch_name = channels[0].lstrip('@') if channels else 'ArsenVipKeys'
