@@ -439,6 +439,24 @@ def check_subscription(token, user_id, channel):
     status = r.get('result', {}).get('status', '')
     return status in ('member', 'administrator', 'creator', 'restricted')
 
+def notify_log(cfg, text, parse_mode='HTML'):
+    """Отправляет неважное уведомление через LOG-бота (support)."""
+    try:
+        _tok = cfg.get('LOG_BOT_TOKEN', '')
+        _chat = cfg.get('LOG_CHAT_ID', '')
+        if not _tok or not _chat:
+            # fallback — в основной бот
+            tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                'chat_id': cfg.get('ADMIN_ID', ''), 'text': text, 'parse_mode': parse_mode
+            })
+            return
+        tg_request(_tok, 'sendMessage', {
+            'chat_id': _chat, 'text': text, 'parse_mode': parse_mode
+        })
+    except Exception as e:
+        log.error(f"notify_log: {e}")
+
+
 def send_message(token, chat_id, text, reply_markup=None, parse_mode=None):
     params = {'chat_id': chat_id, 'text': text, 'disable_web_page_preview': True}
     if reply_markup: params['reply_markup'] = reply_markup
@@ -664,6 +682,13 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
 
 
 def handle_test(cfg, chat_id, user_id, first_name, cb_id=None, hwid=None):
+    # Если юзер пришёл из канала — редирект на channel_test
+    try:
+        from bot_modules import db as _db_src
+        if _db_src.get_user_source(user_id) == 'channel':
+            return handle_channel_test(cfg, user_id, first_name, hwid=hwid)
+    except Exception as _e:
+        log.error(f"handle_test redirect: {_e}")
     token = cfg['BOT_TOKEN']
     if is_blacklisted(user_id):
         send_message(token, chat_id, f"🚫 Ты в чёрном списке. {get_support()}"); return
@@ -773,20 +798,25 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None, hwid=None):
     if admin_id:
         from datetime import datetime
         now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        # @username клиента
+        try:
+            _ch = tg_request(token, 'getChat', {'chat_id': user_id})
+            _un = (_ch or {}).get('result', {}).get('username', '') or ''
+            _un = ('@' + _un) if _un else '—'
+        except Exception:
+            _un = '—'
         admin_msg = (
-            f"🔔 <b>Новая выдача из бота</b>\n\n"
-            f"👤 Telegram: {first_name or '—'} (ID: {user_id})\n"
-            f"📱 Логин : <code>{username}</code>\n"
-            f"🔑 Пароль: <code>{password}</code>\n"
+            f"🎁 <b>ТЕСТ — НОВАЯ ВЫДАЧА</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"👤 Юзер: {first_name or '—'}\n"
+            f"📧 TG: {_un}\n"
+            f"🆔 ID: <code>{user_id}</code>\n"
+            f"🔑 Ключ: <code>{username}</code>\n"
             f"🌐 Сервер: {domain}\n"
-            f"🔌 Порт  : {ws_port}\n"
-            f"🕐 {now_str}"
+            f"🔌 Порт: {ws_port}\n"
+            f"⏰  {now_str}"
         )
-        tg_request(token, 'sendMessage', {
-            'chat_id': admin_id,
-            'text': admin_msg,
-            'parse_mode': 'HTML'
-        })
+        notify_log(cfg, admin_msg)
     log.info(f"Выдан тест: {username}")
 
 
@@ -2387,7 +2417,7 @@ def handle_channel_test(cfg, user_id, first_name, hwid=None):
     devices = cfg.get('TEST_DEVICES', '1')
     hours = cfg.get('TEST_HOURS', '8')
     
-    is_admin = str(user_id) == str(admin_id)
+    _is_adm_local = str(user_id) == str(admin_id)
     
     # ─── Одно красивое сообщение ───
     text = (
@@ -2404,7 +2434,7 @@ def handle_channel_test(cfg, user_id, first_name, hwid=None):
     if dt_url:
         text += f"\n🔗 <b>Ссылка-конфиг:</b>\n<code>{dt_url}</code>\n"
     
-    if is_admin:
+    if _is_adm_local:
         channels = get_channels()
         ch_name = channels[0].lstrip('@') if channels else 'ArsenVipKeys'
         from datetime import datetime
@@ -2434,23 +2464,27 @@ def handle_channel_test(cfg, user_id, first_name, hwid=None):
     send_message_ttl(token, user_id, text, ttl=1800, parse_mode='HTML')
     
     # Уведомляем админа — только если это НЕ админ
-    if not is_admin and admin_id:
+    if not _is_adm_local and admin_id:
         from datetime import datetime
         channels = get_channels()
         ch_name = channels[0].lstrip('@') if channels else 'ArsenVipKeys'
         now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        try:
+            _ch2 = tg_request(token, 'getChat', {'chat_id': user_id})
+            _un2 = (_ch2 or {}).get('result', {}).get('username', '') or ''
+            _un2 = ('@' + _un2) if _un2 else '—'
+        except Exception:
+            _un2 = '—'
         admin_msg = (
-            f"🔔 <b>Новая выдача из канала @{ch_name}</b>\n\n"
-            f"👤 Telegram: {first_name or '—'} (ID: {user_id})\n"
-            f"📱 Логин : <code>{username}</code>\n"
-            f"🔑 Пароль: <code>{password}</code>\n"
-            f"🕐 {now_str}"
+            f"🎁 <b>ТЕСТ из канала @{ch_name} — НОВАЯ ВЫДАЧА</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"👤 Юзер: {first_name or '—'}\n"
+            f"📧 TG: {_un2}\n"
+            f"🆔 ID: <code>{user_id}</code>\n"
+            f"🔑 Ключ: <code>{username}</code>\n"
+            f"⏰  {now_str}"
         )
-        tg_request(token, 'sendMessage', {
-            'chat_id': admin_id,
-            'text': admin_msg,
-            'parse_mode': 'HTML'
-        })
+        notify_log(cfg, admin_msg)
     
     log.info(f"Выдан тест из канала: {username} (user_id={user_id})")
 
@@ -5052,9 +5086,19 @@ def main():
                         mins = int(cfg.get('VERIFIED_MINUTES', '60'))
                         hours = mins / 60
                         mark_verified(user_id, hours)
+                        try:
+                            from bot_modules import db as _dbsrc
+                            _dbsrc.set_user_source(user_id, 'channel')
+                        except Exception as _e:
+                            log.error(f"set_user_source ch: {_e}")
                         log.info(f"Юзер {user_id} verified через канал (на {hours}ч)")
                         handle_start(cfg, chat_id, user_id, first_name, True)
                     else:
+                        try:
+                            from bot_modules import db as _dbsrc
+                            _dbsrc.set_user_source(user_id, 'bot')
+                        except Exception as _e:
+                            log.error(f"set_user_source bot: {_e}")
                         handle_start(cfg, chat_id, user_id, first_name)
                 elif text == '\U0001F4F2 Тест' or text.startswith('/test'): handle_test(cfg, chat_id, user_id, first_name)
                 elif text.startswith('/post'): post_to_channel(cfg, chat_id, user_id)

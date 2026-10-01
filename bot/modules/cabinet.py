@@ -2029,35 +2029,62 @@ def show_whitedns_menu(cfg, chat_id, user_id, msg_id=None):
     NL = chr(10)
     if not has_vip:
         text = NL.join([
-            "📡 <b>WHITEDNS — ДОСТУП ПО VIP</b>",
+            "📡 <b>WHITEDNS — БОНУС К VIP</b>",
             "━━━━━━━━━━━━━━━━━━━━",
             "",
-            "🔒 Этот раздел доступен",
-            "только VIP-подписчикам.",
+            "🔒 Раздел откроется <b>автоматически</b>",
+            "после покупки <b>Vip ключа 💎 DarkTunnel</b>.",
             "",
-            "💎 WhiteDNS идёт в комплекте",
-            "с основным VIP-ключом.",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "🎁 <b>ЧТО ТЫ ПОЛУЧАЕШЬ:</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
             "",
-            "<b>━━━ ЧТО ВНУТРИ ━━━</b>",
+            "💎 <b>Купил 1 Vip ключ DarkTunnel → получаешь 2 входа:</b>",
             "",
-            "🌐 3 сервера на выбор:",
-            "   🇩🇪 Германия",
-            "   🇫🇮 Финляндия",
-            "   🇸🇪 Швеция",
+            "1️⃣ <b>Vip ключ 💎 DarkTunnel</b> — основной VPN",
+            "   (работает как обычно)",
             "",
-            "⚙️ 3 профиля настроек:",
-            "   📱 3G",
-            "   📶 WiFi",
-            "   🖥 ADSL",
+            "2️⃣ <b>WhiteDNS</b> — второй VPN",
+            "   🎁 <b>в подарок</b>, для мобильного",
+            "   интернета и обхода блокировок",
             "",
-            "📲 Готовые конфиги для WhiteDNS",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "📦 <b>ЧТО ВНУТРИ WhiteDNS:</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "🌐 <b>3 сервера на выбор:</b>",
+            "   🇩🇪 Германия  ·  🇫🇮 Финляндия  ·  🇸🇪 Швеция",
+            "",
+            "⚙️ <b>3 профиля под твой интернет:</b>",
+            "   📱 3G — мобильная сеть (LTE/4G/5G)",
+            "   📶 WiFi — домашний роутер",
+            "   🖥 ADSL — проводной интернет",
+            "",
+            "📲 <b>Готовые конфиги — загрузил и работает</b>",
+            "",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "💡 <b>ЗАЧЕМ ЭТО НУЖНО:</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "✅ <b>Два VPN по цене одного</b>",
+            "   Платишь за Vip ключ 💎 DarkTunnel один раз —",
+            "   пользуешься двумя сервисами.",
+            "",
+            "✅ <b>Страховка</b>",
+            "   Если 💎 DarkTunnel не работает —",
+            "   переключаешься на WhiteDNS.",
+            "",
+            "✅ <b>Больше устройств</b>",
+            "   Разные протоколы — разные сети.",
+            "   Мобильный + домашний Wi-Fi без проблем.",
             "",
             "━━━━━━━━━━━━━━━━━━━━",
             "",
-            "Оформи VIP — раздел откроется.",
+            "💎 <b>Оформи Vip ключ DarkTunnel</b> — раздел откроется сам.",
+            "Купить: кнопка ниже 👇",
         ])
         kb = {'inline_keyboard': [
-            [{'text': '💎 Купить VIP SSH', 'callback_data': 'cab_buy_vip'}],
+            [{'text': '💎 Vip ключ DarkTunnel', 'callback_data': 'cab_buy_vip'}],
             [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
         ]}
     else:
@@ -2290,13 +2317,39 @@ def send_whitedns_files(cfg, chat_id, user_id, server_idx, prof_idx, username=''
         admin_id = cfg.get('ADMIN_ID', '')
         if admin_id:
             from datetime import datetime as _dt
+            # @username клиента через getChat
+            try:
+                _chat = _tg(token, 'getChat', {'chat_id': user_id})
+                _tg_uname = (_chat or {}).get('result', {}).get('username', '') or ''
+                _tg_uname = ('@' + _tg_uname) if _tg_uname else '—'
+            except Exception:
+                _tg_uname = '—'
+            # Логин ключа клиента (первый активный VIP)
+            try:
+                _vk = db.get_vip_keys(user_id, active_only=True)
+                _key_login = _vk[0]['login'] if _vk else '—'
+            except Exception:
+                _key_login = '—'
             adm_msg = NL.join([
                 '📡 <b>WHITEDNS — НОВАЯ ВЫДАЧА</b>',
                 '━━━━━━━━━━━━━━━━━━━━',
-                '👤 Юзер: <code>' + str(user_id) + '</code>',
+                '👤 Юзер: ' + (username or '—'),
+                '📧 TG: ' + _tg_uname,
+                '🆔 ID: <code>' + str(user_id) + '</code>',
+                '🔑 Ключ: <code>' + _key_login + '</code>',
                 '🌐 Сервер: ' + srv_name,
                 '⚙️ Профиль: ' + prof_name,
                 '⏰ ' + _dt.now().strftime('%F %H:%M'),
             ])
-            _send(token, str(admin_id), adm_msg)
+            # Лог через LOG-бота (support), не в основной чат
+            _log_tok = cfg.get('LOG_BOT_TOKEN', '')
+            _log_chat = cfg.get('LOG_CHAT_ID', '')
+            if _log_tok and _log_chat:
+                _tg(_log_tok, 'sendMessage', {
+                    'chat_id': _log_chat,
+                    'text': adm_msg,
+                    'parse_mode': 'HTML',
+                })
+            else:
+                _send(token, str(admin_id), adm_msg)
     except: pass

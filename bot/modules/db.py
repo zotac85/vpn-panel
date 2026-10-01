@@ -253,6 +253,23 @@ def update_key_hwid_password(login, hwid, new_password):
     return False
 
 
+def set_user_source(tg_id, source):
+    """Устанавливает источник захода юзера: 'bot' или 'channel'."""
+    try:
+        execute("UPDATE users SET source=? WHERE tg_id=?", (source, int(tg_id)))
+    except Exception as e:
+        db_log.error(f"set_user_source: {e}")
+
+
+def get_user_source(tg_id):
+    """Возвращает 'bot' / 'channel' / None."""
+    try:
+        r = query_one("SELECT source FROM users WHERE tg_id=?", (int(tg_id),))
+        return r['source'] if r else None
+    except Exception:
+        return None
+
+
 def get_vip_key(login):
     return query_one("SELECT * FROM vip_keys WHERE login=?", (login,))
 
@@ -599,6 +616,14 @@ def init_schema():
         with _conn() as conn:
             conn.executescript(schema)
             # Миграции для старых БД (безопасно, идемпотентно)
+            # source для users
+            try:
+                _ucols = [r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
+                if "source" not in _ucols:
+                    conn.execute("ALTER TABLE users ADD COLUMN source TEXT DEFAULT 'bot'")
+                    db_log.info("migrate: added source to users")
+            except Exception as _e:
+                db_log.warning(f"migrate users.source: {_e}")
             for _tbl in ("test_keys", "vip_keys"):
                 try:
                     _cols = [r[1] for r in conn.execute(f"PRAGMA table_info({_tbl})").fetchall()]
@@ -619,6 +644,15 @@ try:
     _check = query_one("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
     if not _check:
         init_schema()
+    else:
+        # Миграции для существующих БД
+        try:
+            _ucols = [r[1] for r in query("PRAGMA table_info(users)")]
+            if "source" not in _ucols:
+                execute("ALTER TABLE users ADD COLUMN source TEXT DEFAULT 'bot'")
+                db_log.info("migrate: added source to users")
+        except Exception as _me:
+            db_log.warning(f"migrate source: {_me}")
 except Exception:
     pass
 
