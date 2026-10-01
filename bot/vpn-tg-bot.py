@@ -5027,12 +5027,56 @@ def main():
                     balance = _db.get_balance(user_id)
                     u_name = user.get('first_name') or '—'
                     u_uname = user.get('username') or ''
+                    # 0. ИИ-проверка через Gemini
+                    _ai_caption = f"\U0001F4B5 \u0427\u0435\u043a \u043e\u0442 {u_name} (ID {user_id})"
+                    _ai_admin_lines = []
+                    try:
+                        from bot_modules import gemini_check as _gc
+                        _ai = _gc.check_receipt(cfg, _file_id, expected_sum=amount)
+                        if _ai.get('ok'):
+                            _susp = _ai.get('suspicious', False)
+                            _conf = _ai.get('confidence', 0)
+                            _sum_ai = _ai.get('sum') or '—'
+                            _date_ai = _ai.get('date') or '—'
+                            _notes = _ai.get('notes', '')
+                            _is_rcpt = _ai.get('is_receipt', False)
+                            if not _is_rcpt:
+                                _ai_admin_lines = [
+                                    '\u2501'*20,
+                                    '\U0001F916 <b>\u0418\u0418-\u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430:</b> \u274C \u041d\u0415 \u0427\u0415\u041a',
+                                    f'<i>{_notes}</i>',
+                                ]
+                                _ai_caption += '\n\n\u274C \u0418\u0418: \u041d\u0415 \u0427\u0415\u041a'
+                            elif _susp:
+                                _ai_admin_lines = [
+                                    '\u2501'*20,
+                                    f'\U0001F916 <b>\u0418\u0418-\u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430:</b> \u26A0\uFE0F \u041f\u041e\u0414\u041e\u0417\u0420\u0418\u0422\u0415\u041b\u042c\u041d\u041e ({int(_conf*100)}%)',
+                                    f'\U0001F4B0 \u0421\u0443\u043c\u043c\u0430 \u043d\u0430 \u0447\u0435\u043a\u0435: <b>{_sum_ai}</b>',
+                                    f'\U0001F4C5 \u0414\u0430\u0442\u0430: <b>{_date_ai}</b>',
+                                    f'\U0001F4DD <i>{_notes}</i>',
+                                ]
+                                _ai_caption += f'\n\n\u26A0\uFE0F \u0418\u0418: \u041f\u041e\u0414\u041e\u0417\u0420\u0418\u0422\u0415\u041b\u042c\u041d\u041e ({int(_conf*100)}%)'
+                            else:
+                                _ai_admin_lines = [
+                                    '\u2501'*20,
+                                    f'\U0001F916 <b>\u0418\u0418-\u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430:</b> \u2705 \u041e\u041a ({int(_conf*100)}%)',
+                                    f'\U0001F4B0 \u0421\u0443\u043c\u043c\u0430: <b>{_sum_ai}</b>  \U0001F4C5 {_date_ai}',
+                                ]
+                        else:
+                            _ai_admin_lines = [
+                                '\u2501'*20,
+                                f'\U0001F916 \u0418\u0418: \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d ({str(_ai.get("error","?"))[:80]})',
+                            ]
+                    except Exception as _ai_e:
+                        log.error(f"gemini_check wrapper: {_ai_e}")
+                        _ai_admin_lines = []
+
                     # 1. Отправляем фото по file_id (forward не сработает — фото в другом сообщении)
                     try:
                         tg_request(cfg['BOT_TOKEN'], 'sendPhoto', {
                             'chat_id': admin_id,
                             'photo': _file_id,
-                            'caption': f'💵 Чек от {u_name} (ID {user_id})'
+                            'caption': _ai_caption
                         })
                     except Exception as e:
                         log.error(f'topup sendPhoto error: {e}')
@@ -5051,7 +5095,8 @@ def main():
                         "",
                         "━━━━━━━━━━━━━━━━━━━━",
                         f"Начислить: /admin → 💰 Начислить баланс",
-                        f"Ввести: <code>{user_id} {amount:.2f}</code>"
+                        f"Ввести: <code>{user_id} {amount:.2f}</code>",
+                        *_ai_admin_lines,
                     ])
                     kb_admin = {'inline_keyboard': [
                         [{'text': '💰 Начислить баланс', 'callback_data': 'admin_addbalance'}]
