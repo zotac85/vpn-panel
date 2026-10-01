@@ -49,6 +49,30 @@ if ! locale | grep -q "UTF-8"; then
     update-locale LANG=en_US.UTF-8 >/dev/null 2>&1
 fi
 
+# ──────────────────────────────────────────────────────────────
+# Python-зависимости для бота (pycryptodome, msgpack)
+# ──────────────────────────────────────────────────────────────
+PY_DEPS_OK=1
+python3 -c "import Crypto" 2>/dev/null || PY_DEPS_OK=0
+python3 -c "import msgpack" 2>/dev/null || PY_DEPS_OK=0
+if [ "$PY_DEPS_OK" = "0" ]; then
+    echo "→ Установка Python-зависимостей (pycryptodome, msgpack)..."
+    # Пробуем apt (Debian/Ubuntu)
+    apt install -y python3-cryptodome python3-msgpack >/dev/null 2>&1 || true
+    # Проверяем ещё раз
+    python3 -c "import Crypto" 2>/dev/null || {
+        # Fallback — pip (без ломания system packages)
+        apt install -y python3-pip >/dev/null 2>&1 || true
+        pip3 install --break-system-packages pycryptodome msgpack >/dev/null 2>&1 || \
+        pip3 install pycryptodome msgpack >/dev/null 2>&1 || true
+    }
+    if python3 -c "import Crypto" 2>/dev/null && python3 -c "import msgpack" 2>/dev/null; then
+        echo -e "\033[0;32m✅   Python-зависимости установлены\033[0m"
+    else
+        echo -e "\033[0;31m⚠️  Не удалось установить pycryptodome/msgpack — бот может работать некорректно\033[0m"
+    fi
+fi
+
 if [ -d "$PANEL_DIR" ] || [ -f "/usr/local/bin/vpn" ]; then
     echo -e "\033[1;33mОбнаружена ранее установленная панель.\033[0m"
     echo ""

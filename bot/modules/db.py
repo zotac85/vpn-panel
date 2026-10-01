@@ -640,12 +640,10 @@ def init_schema():
         return False
 
 
-try:
-    _check = query_one("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
-    if not _check:
-        init_schema()
-    else:
-        # Миграции для существующих БД
+def _run_migrations():
+    """Прогоняет миграции для существующей БД (идемпотентно)."""
+    try:
+        # users.source
         try:
             _ucols = [r['name'] for r in query("PRAGMA table_info(users)")]
             if "source" not in _ucols:
@@ -653,8 +651,27 @@ try:
                 db_log.info("migrate: added source to users")
         except Exception as _me:
             db_log.warning(f"migrate source: {_me}")
-except Exception:
-    pass
+        # test_keys.hwid, vip_keys.hwid
+        for _tbl in ("test_keys", "vip_keys"):
+            try:
+                _cols = [r['name'] for r in query(f"PRAGMA table_info({_tbl})")]
+                if "hwid" not in _cols:
+                    execute(f"ALTER TABLE {_tbl} ADD COLUMN hwid TEXT DEFAULT NULL")
+                    db_log.info(f"migrate: added hwid to {_tbl}")
+            except Exception as _me:
+                db_log.warning(f"migrate {_tbl}.hwid: {_me}")
+    except Exception as _e:
+        db_log.error(f"_run_migrations: {_e}")
+
+
+try:
+    _check = query_one("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+    if not _check:
+        init_schema()
+    else:
+        _run_migrations()
+except Exception as _e:
+    db_log.error(f"db init: {_e}")
 
 
 if __name__ == '__main__':
