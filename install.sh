@@ -85,12 +85,18 @@ if [ -d "$PANEL_DIR" ] || [ -f "/usr/local/bin/vpn" ]; then
             cp "$REPO_DIR/bot/vpn-tg-bot.py" /usr/local/bin/vpn-tg-bot.py
             chmod +x /usr/local/bin/vpn-tg-bot.py
             mkdir -p /usr/local/bin/bot_modules
-            for f in __init__.py admin.py autopost.py cabinet.py db.py; do
+            for f in __init__.py admin.py autopost.py cabinet.py db.py dark_gen.py support_db.py; do
                 if [ -f "$REPO_DIR/bot/modules/$f" ]; then
                     cp "$REPO_DIR/bot/modules/$f" "/usr/local/bin/bot_modules/$f"
                     echo "   ✓ $f"
                 fi
             done
+            # assets (blank.dark для dark_gen)
+            mkdir -p /usr/local/bin/bot_modules/assets
+            if [ -f "$REPO_DIR/bot/modules/assets/blank.dark" ]; then
+                cp "$REPO_DIR/bot/modules/assets/blank.dark" /usr/local/bin/bot_modules/assets/
+                echo "   ✓ assets/blank.dark"
+            fi
             echo "→ Проверка синтаксиса..."
             if ! python3 -m py_compile /usr/local/bin/vpn-tg-bot.py; then
                 echo -e "\033[0;31m❌ Синтаксическая ошибка!\033[0m"
