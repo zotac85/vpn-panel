@@ -63,13 +63,25 @@ if [ "$PY_DEPS_OK" = "0" ]; then
     python3 -c "import Crypto" 2>/dev/null || {
         # Fallback — pip (без ломания system packages)
         apt install -y python3-pip >/dev/null 2>&1 || true
-        pip3 install --break-system-packages pycryptodome msgpack >/dev/null 2>&1 || \
-        pip3 install pycryptodome msgpack >/dev/null 2>&1 || true
+        pip3 install --break-system-packages pycryptodome msgpack google-genai >/dev/null 2>&1 || \
+        pip3 install pycryptodome msgpack google-genai >/dev/null 2>&1 || true
     }
     if python3 -c "import Crypto" 2>/dev/null && python3 -c "import msgpack" 2>/dev/null; then
         echo -e "\033[0;32m✅   Python-зависимости установлены\033[0m"
     else
         echo -e "\033[0;31m⚠️  Не удалось установить pycryptodome/msgpack — бот может работать некорректно\033[0m"
+    # Проверка google-genai
+    python3 -c "import google.genai" 2>/dev/null || {
+        apt install -y python3-pip >/dev/null 2>&1 || true
+        pip3 install --break-system-packages google-genai >/dev/null 2>&1 || \
+        pip3 install google-genai >/dev/null 2>&1 || true
+    }
+    if python3 -c "import google.genai" 2>/dev/null; then
+        echo -e "\033[0;32m✅    google-genai установлен (ИИ-проверка чеков)\033[0m"
+    else
+        echo -e "\033[0;33m⚠️  google-genai не установлен — ИИ-проверка чеков недоступна\033[0m"
+    fi
+
     fi
 fi
 
