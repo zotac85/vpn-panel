@@ -28,10 +28,31 @@ if [ -f "$BOT_CONF" ]; then
     [ -n "$_loc" ] && LOCATION="$_loc"
 fi
 
+# Читаем devices из bot.conf
+DEVICES="1"
+if [ -f "$BOT_CONF" ]; then
+    _dev=$(grep -E '^TEST_DEVICES=' "$BOT_CONF" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')
+    [ -n "$_dev" ] && DEVICES="$_dev"
+fi
+
+# Читаем support (без @)
+SUPPORT="ArsenSupportBot"
+if [ -f /etc/UDPCustom/support.txt ]; then
+    _s=$(head -1 /etc/UDPCustom/support.txt 2>/dev/null | tr -d '@ ' | head -c 100)
+    [ -n "$_s" ] && SUPPORT="$_s"
+fi
+
+# Читаем основной канал (первая строка channels.txt, без @)
+CHANNEL="ArsenVipKeys"
+if [ -f /etc/UDPCustom/channels.txt ]; then
+    _ch=$(head -1 /etc/UDPCustom/channels.txt 2>/dev/null | tr -d '@ ' | head -c 100)
+    [ -n "$_ch" ] && CHANNEL="$_ch"
+fi
+
 # Обновляем из шаблона репы (если есть)
 if [ -f "$TEMPLATE" ]; then
-    # Подставляем {location}
-    _new=$(sed "s|{location}|$LOCATION|g" "$TEMPLATE")
+    # Подставляем {location}, {devices}, {support}, {channel}
+    _new=$(sed -e "s|{location}|$LOCATION|g" -e "s|{devices}|$DEVICES|g" -e "s|{support}|$SUPPORT|g" -e "s|{channel}|$CHANNEL|g" "$TEMPLATE")
     # Сравниваем с текущим
     if [ -f "$BANNER_FILE" ]; then
         _cur=$(cat "$BANNER_FILE")

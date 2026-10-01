@@ -195,6 +195,9 @@ if [ -d "$PANEL_DIR" ] || [ -f "/usr/local/bin/vpn" ]; then
             echo -e "\033[0;32m✅  Обновлено: $OK, пропущено: $SKIP\033[0m"
             echo "   Бэкапы: /etc/UDPCustom/*.bak_${BK_TS}"
             echo -e "\033[0;36mℹ️   Тексты читаются ботом на лету — перезапуск не нужен\033[0m"
+            # Обновляем SSH-баннер (с подстановкой локации/devices/support/channel)
+            bash "$REPO_DIR/modules/setup_ssh_banner.sh" 2>/dev/null || true
+
             exit 0
             ;;
         4)
