@@ -771,6 +771,34 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None, hwid=None):
                 f"━━━━━━━━━━━━━━━━━━━━\n"
                 f"🔑 Логин, пароль и конфиг — в личном кабинете")
     # Убираем кнопку "Получить тест" из welcome-сообщения
+    # Генерим зашифрованный конфиг (если есть HWID)
+    dt_url = None
+    try:
+        _real_hwid = hwid
+        if not _real_hwid:
+            # fallback — берём из БД
+            try:
+                from bot_modules import db as _dbt
+                _k = _dbt.get_test_key(username)
+                _real_hwid = _k['hwid'] if _k else None
+            except Exception:
+                _real_hwid = None
+        if _real_hwid:
+            from bot_modules import dark_gen
+            _proxy_str = proxy or '162.159.228.0'
+            _proxyhost = _proxy_str.split(':')[0] if ':' in _proxy_str else _proxy_str
+            _loc = cfg.get("SERVER_LOCATION", "VPN")
+            _cfg_name = (f"\U0001F381 TEST {_loc} {username[4:]}" if username.startswith('test') else username)
+            dt_url = dark_gen.generate(
+                hwid=_real_hwid, host=domain, port=str(ws_port),
+                user=username, pw=password,
+                proxyhost=_proxyhost, proxyport=str(ws_port),
+                name=_cfg_name,
+            )
+            log.info(f"handle_test dark_gen ok for {username}")
+    except Exception as _e:
+        log.error(f"handle_test dark_gen error: {_e}")
+        dt_url = None
     welcome_file = f"/etc/UDPCustom/welcome_msgs/{user_id}"
     if os.path.exists(welcome_file):
         try:
@@ -795,6 +823,13 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None, hwid=None):
         [{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
     ]}
     smart_send(token, chat_id, text, reply_markup=kb_test, parse_mode="HTML")
+    # Авто-отправка .dark файла (если конфиг зашифрован)
+    try:
+        if dt_url and 'encryptedLockedConfig' in dt_url:
+            from bot_modules.cabinet import send_dark_file as _sdf
+            _sdf(cfg, chat_id, user_id, username)
+    except Exception as _e:
+        log.error(f"handle_test send_dark_file: {_e}")
     if admin_id:
         from datetime import datetime
         now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -2466,6 +2501,13 @@ def handle_channel_test(cfg, user_id, first_name, hwid=None):
             os.remove(welcome_file)
         except: pass
     send_message_ttl(token, user_id, text, ttl=1800, parse_mode='HTML')
+    # Авто-отправка .dark файла (если конфиг зашифрован)
+    try:
+        if dt_url and 'encryptedLockedConfig' in dt_url:
+            from bot_modules.cabinet import send_dark_file as _sdf
+            _sdf(cfg, user_id, user_id, username)
+    except Exception as _e:
+        log.error(f"channel_test send_dark_file: {_e}")
     
     # Уведомляем админа — только если это НЕ админ
     if not _is_adm_local and admin_id:
