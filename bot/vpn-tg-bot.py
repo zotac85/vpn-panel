@@ -825,7 +825,7 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None, hwid=None):
     smart_send(token, chat_id, text, reply_markup=kb_test, parse_mode="HTML")
     # Авто-отправка .dark файла (если конфиг зашифрован)
     try:
-        if dt_url and 'encryptedLockedConfig' in dt_url:
+        if dt_url and dt_url.startswith('darktunnel://'):
             from bot_modules.cabinet import send_dark_file as _sdf
             _sdf(cfg, chat_id, user_id, username)
     except Exception as _e:
@@ -2503,7 +2503,7 @@ def handle_channel_test(cfg, user_id, first_name, hwid=None):
     send_message_ttl(token, user_id, text, ttl=1800, parse_mode='HTML')
     # Авто-отправка .dark файла (если конфиг зашифрован)
     try:
-        if dt_url and 'encryptedLockedConfig' in dt_url:
+        if dt_url and dt_url.startswith('darktunnel://'):
             from bot_modules.cabinet import send_dark_file as _sdf
             _sdf(cfg, user_id, user_id, username)
     except Exception as _e:
