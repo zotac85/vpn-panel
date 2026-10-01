@@ -325,6 +325,147 @@ menu_tgbot_support() {
 }
 
 # ──────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────
+# ИИ-ПРОВЕРКА ЧЕКОВ (GEMINI)
+# ──────────────────────────────────────────────────────────────
+tg_test_gemini() {
+    local key=$(tg_get_config "GEMINI_API_KEY")
+    if [ -z "$key" ]; then
+        echo -e "${RED}❌  GEMINI_API_KEY не задан${NC}"
+        sleep 2
+        return
+    fi
+    echo -e "${CYAN}Проверка Gemini API...${NC}"
+    local resp=$(curl -s -X POST \
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${key}" \
+        -H "Content-Type: application/json" \
+        -d '{"contents":[{"parts":[{"text":"say OK"}]}]}' \
+        --max-time 15 2>/dev/null)
+    if echo "$resp" | grep -q '"text"\|"candidates"'; then
+        echo -e "${GREEN}✅  Gemini API работает${NC}"
+    else
+        echo -e "${RED}❌  Ошибка Gemini${NC}"
+        echo "$resp" | head -c 300
+        echo ""
+    fi
+    sleep 2
+}
+
+menu_ai_settings() {
+    while true; do
+        header
+        echo -e "${YELLOW}🧠 GEMINI — ИИ-ПРОВЕРКА ЧЕКОВ${NC}"
+        echo ""
+        local key=$(tg_get_config "GEMINI_API_KEY")
+        if [ -n "$key" ]; then
+            echo -e " Ключ : ${GREEN}✅  настроен${NC} (${#key} символов)"
+        else
+            echo -e " Ключ : ${RED}❌  не задан${NC}"
+        fi
+        echo ""
+        echo -e "${CYAN}─── Действия ───${NC}"
+        echo -e " 1) 🔑 Установить/изменить GEMINI_API_KEY"
+        echo -e " 2) 🧪 Проверить API"
+        echo -e " 3) 🗑  Очистить ключ"
+        echo ""
+        echo -e " 0) ↩️  Назад"
+        echo ""
+        read -p "Выберите [0-3]: " ai_choice
+        case $ai_choice in
+            1)
+                echo ""
+                echo -e "${CYAN}Получить ключ: https://aistudio.google.com/apikey${NC}"
+                echo -e "Формат: начинается с ${YELLOW}AQ.${NC} или ${YELLOW}AIza${NC}"
+                read -p "Вставь ключ (Enter — отмена): " new_key
+                [ -z "$new_key" ] && continue
+                tg_set_config "GEMINI_API_KEY" "$new_key"
+                echo -e "${GREEN}✅  Сохранено${NC}"
+                sleep 1
+                ;;
+            2) tg_test_gemini ;;
+            3)
+                tg_set_config "GEMINI_API_KEY" ""
+                echo -e "${YELLOW}Ключ очищен${NC}"
+                sleep 1
+                ;;
+            0) break ;;
+            *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
+        esac
+    done
+}
+
+# ──────────────────────────────────────────────────────────────
+# ЛОГИ (SUPPORT-БОТ)
+# ──────────────────────────────────────────────────────────────
+menu_log_settings() {
+    while true; do
+        header
+        echo -e "${YELLOW}📋 ЛОГИ — ОТДЕЛЬНЫЙ БОТ${NC}"
+        echo ""
+        local log_tok=$(tg_get_config "LOG_BOT_TOKEN")
+        local log_chat=$(tg_get_config "LOG_CHAT_ID")
+        if [ -n "$log_tok" ]; then
+            echo -e " Токен : ${GREEN}✅  настроен${NC} (${#log_tok} символов)"
+        else
+            echo -e " Токен : ${RED}❌  не задан${NC}"
+        fi
+        if [ -n "$log_chat" ]; then
+            echo -e " Chat  : ${CYAN}$log_chat${NC}"
+        else
+            echo -e " Chat  : ${RED}❌  не задан${NC}"
+        fi
+        echo ""
+        echo -e "${CYAN}─── Действия ───${NC}"
+        echo -e " 1) 🔑 Изменить LOG_BOT_TOKEN (токен support-бота)"
+        echo -e " 2) 💬 Изменить LOG_CHAT_ID (куда шлём логи)"
+        echo -e " 3) 🧪 Отправить тестовое сообщение"
+        echo -e " 4) 🗑  Отключить логи (очистить оба поля)"
+        echo ""
+        echo -e " 0) ↩️  Назад"
+        echo ""
+        read -p "Выберите [0-4]: " lg_choice
+        case $lg_choice in
+            1)
+                read -p "Токен support-бота (Enter — отмена): " nv
+                [ -z "$nv" ] && continue
+                tg_set_config "LOG_BOT_TOKEN" "$nv"
+                echo -e "${GREEN}✅  Сохранено${NC}"
+                sleep 1
+                ;;
+            2)
+                read -p "Chat ID (например 1738878748): " nv
+                [ -z "$nv" ] && continue
+                tg_set_config "LOG_CHAT_ID" "$nv"
+                echo -e "${GREEN}✅  Сохранено${NC}"
+                sleep 1
+                ;;
+            3)
+                local _t=$(tg_get_config "LOG_BOT_TOKEN")
+                local _c=$(tg_get_config "LOG_CHAT_ID")
+                if [ -z "$_t" ] || [ -z "$_c" ]; then
+                    echo -e "${RED}❌  Заполни токен и chat_id${NC}"
+                else
+                    curl -s -X POST "https://api.telegram.org/bot${_t}/sendMessage" \
+                        -d "chat_id=${_c}" \
+                        -d "text=🧪 Тестовое сообщение из панели" \
+                        --max-time 10 >/dev/null
+                    echo -e "${GREEN}✅  Отправлено${NC}"
+                fi
+                sleep 2
+                ;;
+            4)
+                tg_set_config "LOG_BOT_TOKEN" ""
+                tg_set_config "LOG_CHAT_ID" ""
+                echo -e "${YELLOW}Логи отключены${NC}"
+                sleep 1
+                ;;
+            0) break ;;
+            *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
+        esac
+    done
+}
+
+
 # ГЛАВНОЕ МЕНЮ TELEGRAM-БОТ
 # ──────────────────────────────────────────────────────────────
 menu_tgbot() {
@@ -355,13 +496,14 @@ menu_tgbot() {
         echo -e " 7) 💬 Бот поддержки"
         echo -e " 8) 🔄 Вкл/выкл проверку подписки"
         echo -e " 9) ⏰ Кулдаун / срок / лимиты"
+        echo -e " 11) 🧠 Gemini — ИИ-проверка чеков"
         echo ""
         echo -e "${CYAN}─── 📋 Просмотр ───${NC}"
         echo -e " 10) 📊 Статистика"
         echo ""
         echo -e " 0) ↩️  Назад"
         echo ""
-        read -p "Выберите [0-10]: " tg_choice
+        read -p "Выберите [0-11]: " tg_choice
         case $tg_choice in
             1) systemctl restart "$TG_SERVICE" 2>/dev/null; sleep 1; systemctl is-active --quiet "$TG_SERVICE" && echo -e "${GREEN}✅  Бот запущен${NC}" || echo -e "${RED}❌  Ошибка${NC}"; sleep 1 ;;
             2) systemctl restart "$TG_SERVICE" 2>/dev/null; echo -e "${GREEN}Бот перезапущен${NC}"; sleep 1 ;;
@@ -391,6 +533,7 @@ menu_tgbot() {
                 systemctl restart "$TG_SERVICE" 2>/dev/null
                 ;;
             10) tg_stats ;;
+            11) menu_ai_settings ;;
             0) break ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
         esac

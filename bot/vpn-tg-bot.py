@@ -2526,18 +2526,19 @@ def handle_channel_test(cfg, user_id, first_name, hwid=None):
     # ─── Одно красивое сообщение ───
     text = (
         f"🎉 <b>Тестовый доступ готов!</b>\n\n"
-        f"📱 Логин : <code>{username}</code>\n"
-        f"🔑 Пароль: <code>{password}</code>\n"
-        f"🌐 Сервер: {domain}\n"
-        f"🔌 Порт  : {ws_port}\n"
+        f"⏰  Срок: <b>{hours} ч</b>  |  📊 <b>{traffic} ГБ</b>  |  💻 <b>{devices} устр.</b>\n"
     )
-    if proxy:
-        text += f"🛡️ Прокси: {proxy}:80\n"
-    text += f"\n⏰ {hours} ч | 📊 {traffic} ГБ | 💻 {devices} устр.\n"
-    
     if dt_url:
-        text += f"\n🔗 <b>Ссылка-конфиг:</b>\n<code>{dt_url}</code>\n"
-    
+        text += (
+            "\n━━━━━━━━━━━━━━━━━━━━\n"
+            "🔗 <b>Твой конфиг:</b>\n\n"
+            f"<code>{dt_url}</code>\n\n"
+            "📲 <b>Как подключиться:</b>\n"
+            "1. Тапни ссылку выше — скопируется\n"
+            "2. Открой DarkTunnel → ⋮ → Import → Clipboard\n"
+            "3. Нажми CONNECT 🚀\n\n"
+            "⚠️ Конфиг привязан к твоему устройству (HWID)"
+        )
     if _is_adm_local:
         channels = get_channels()
         ch_name = channels[0].lstrip('@') if channels else 'ArsenVipKeys'
