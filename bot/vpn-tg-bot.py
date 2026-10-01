@@ -1042,7 +1042,11 @@ def _do_key_delete(cfg, cb, tg_id, key_name):
             f"📱 Ключ: <code>{key_name}</code> ({kind})",
             f"💵 Возврат: <b>{refund:.2f} USDT</b>"
         ])
-        tg_request(token, 'sendMessage', {'chat_id': admin_id, 'text': a_msg, 'parse_mode': 'HTML'})
+        # Если был возврат денег — важно (в основной), иначе — в лог
+        if refund and refund > 0:
+            tg_request(token, 'sendMessage', {'chat_id': admin_id, 'text': a_msg, 'parse_mode': 'HTML'})
+        else:
+            notify_log(cfg, a_msg)
 
     log.info(f"Key deleted: {key_name} ({kind}) by tg={tg_id}, refund={refund}")
 
