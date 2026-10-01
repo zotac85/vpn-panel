@@ -647,7 +647,7 @@ try:
     else:
         # Миграции для существующих БД
         try:
-            _ucols = [r[1] for r in query("PRAGMA table_info(users)")]
+            _ucols = [r['name'] for r in query("PRAGMA table_info(users)")]
             if "source" not in _ucols:
                 execute("ALTER TABLE users ADD COLUMN source TEXT DEFAULT 'bot'")
                 db_log.info("migrate: added source to users")
