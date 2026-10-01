@@ -374,12 +374,15 @@ def forward_to_admin(cfg, ticket_id, user_id, first_name, username, text, is_fol
     token = cfg['BOT_TOKEN']
     admin_id = cfg.get('ADMIN_ID', '')
     NL = chr(10)
+    _un = ('@' + username) if username else '—'
     if is_followup:
         header = f'👤 <b>{first_name or "Клиент"}</b> · #{ticket_id}'
     else:
         header = f'🆕 <b>{first_name or "Клиент"}</b> · тикет #{ticket_id}'
     out = NL.join([
         header,
+        f'📧 TG: {_un}',
+        f'🆔 ID: <code>{user_id}</code>',
         '',
         text
     ])
