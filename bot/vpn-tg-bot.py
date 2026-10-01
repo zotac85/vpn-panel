@@ -2310,6 +2310,13 @@ def post_to_channel(cfg, chat_id, user_id):
         # Спонсоры = все КРОМЕ текущего канала
         sponsors = [c2.lstrip('@') for c2 in channels if c2.lstrip('@') != primary_clean]
         sponsors_list = ", ".join([f"@{s}" for s in sponsors]) if sponsors else "—"
+        # Уникальный deep-link для этого канала: ?start=ch_<channel>
+        _ch_deeplink = f'https://t.me/{bot_username}?start=ch_{primary_clean}'
+        _keyboard_ch = {
+            'inline_keyboard': [
+                [{'text': '🎁 Получить тест', 'url': _ch_deeplink, 'style': 'success'}]
+            ]
+        }
         
         # Подстановка переменных
         _hours = cfg.get('TEST_HOURS', '')
@@ -2326,7 +2333,7 @@ def post_to_channel(cfg, chat_id, user_id):
         result = tg_request(token, 'sendMessage', {
             'chat_id': target_channel,
             'text': personalized,
-            'reply_markup': keyboard,
+            'reply_markup': _keyboard_ch,
             'parse_mode': 'HTML'
         })
         if result and result.get('ok'):
@@ -2512,8 +2519,16 @@ def handle_channel_test(cfg, user_id, first_name, hwid=None):
     # Уведомляем админа — только если это НЕ админ
     if admin_id:
         from datetime import datetime
-        channels = get_channels()
-        ch_name = channels[0].lstrip('@') if channels else 'ArsenVipKeys'
+        # Реальный канал-источник (из ?start=ch_<channel>)
+        try:
+            from bot_modules import db as _dbsrc2
+            _real_ch = _dbsrc2.get_user_source_channel(user_id)
+        except Exception:
+            _real_ch = None
+        if not _real_ch:
+            _chs_fb = get_channels()
+            _real_ch = _chs_fb[0].lstrip('@') if _chs_fb else 'ArsenVipKeys'
+        ch_name = _real_ch
         now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         try:
             _ch2 = tg_request(token, 'getChat', {'chat_id': user_id})
@@ -5128,16 +5143,27 @@ def main():
                         except Exception as e:
                             log.error(f"ref_ error: {e}")
                     # Проверяем deep link параметр (пришёл из канала)
-                    if 'from_channel' in text:
+                    if 'ch_' in text or 'from_channel' in text:
                         mins = int(cfg.get('VERIFIED_MINUTES', '60'))
                         hours = mins / 60
                         mark_verified(user_id, hours)
+                        # Парсим имя канала из ?start=ch_<channel>
+                        _src_ch = None
+                        try:
+                            import re as _re_ch
+                            _m = _re_ch.search(r'ch_([A-Za-z0-9_]+)', text)
+                            if _m:
+                                _src_ch = _m.group(1)
+                        except Exception:
+                            _src_ch = None
                         try:
                             from bot_modules import db as _dbsrc
                             _dbsrc.set_user_source(user_id, 'channel')
+                            if _src_ch:
+                                _dbsrc.set_user_source_channel(user_id, _src_ch)
                         except Exception as _e:
                             log.error(f"set_user_source ch: {_e}")
-                        log.info(f"Юзер {user_id} verified через канал (на {hours}ч)")
+                        log.info(f"Юзер {user_id} verified через канал {_src_ch or '(нет)'} (на {hours}ч)")
                         handle_start(cfg, chat_id, user_id, first_name, True)
                     else:
                         try:

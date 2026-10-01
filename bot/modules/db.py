@@ -270,6 +270,23 @@ def get_user_source(tg_id):
         return None
 
 
+def set_user_source_channel(tg_id, channel):
+    """Сохраняет канал-источник захода (без @)."""
+    try:
+        execute("UPDATE users SET source_channel=? WHERE tg_id=?", (channel, int(tg_id)))
+    except Exception as e:
+        db_log.error(f"set_user_source_channel: {e}")
+
+
+def get_user_source_channel(tg_id):
+    """Возвращает имя канала-источника (без @) или None."""
+    try:
+        r = query_one("SELECT source_channel FROM users WHERE tg_id=?", (int(tg_id),))
+        return r['source_channel'] if r else None
+    except Exception:
+        return None
+
+
 def get_vip_key(login):
     return query_one("SELECT * FROM vip_keys WHERE login=?", (login,))
 
@@ -651,6 +668,14 @@ def _run_migrations():
                 db_log.info("migrate: added source to users")
         except Exception as _me:
             db_log.warning(f"migrate source: {_me}")
+        # users.source_channel
+        try:
+            _ucols2 = [r['name'] for r in query("PRAGMA table_info(users)")]
+            if "source_channel" not in _ucols2:
+                execute("ALTER TABLE users ADD COLUMN source_channel TEXT DEFAULT NULL")
+                db_log.info("migrate: added source_channel to users")
+        except Exception as _me:
+            db_log.warning(f"migrate users.source_channel: {_me}")
         # test_keys.hwid, vip_keys.hwid
         for _tbl in ("test_keys", "vip_keys"):
             try:
