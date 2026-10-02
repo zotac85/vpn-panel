@@ -714,6 +714,82 @@ monitoring_htop() {
 # ──────────────────────────────────────────────────────────────
 # ГЛАВНОЕ МЕНЮ
 # ──────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────
+# 🛡️  БЛОКИРОВКА ICMP (анти-DPI)
+# ──────────────────────────────────────────────────────────────
+icmp_block_status() {
+    if iptables -C INPUT -p icmp --icmp-type echo-request -j DROP 2>/dev/null; then
+        echo -e "${GREEN}🟢 Включена${NC}"
+    else
+        echo -e "${RED}🔴 Выключена${NC}"
+    fi
+}
+
+icmp_block_enable() {
+    header
+    echo -e "${YELLOW}🛡  БЛОКИРОВКА ICMP (ping)${NC}"
+    echo ""
+    echo "  • Сервер не отвечает на ping — не найдут сканеры"
+    echo "  • Не мешает SSH, VPN, WS-прокси"
+    echo "  • Ты сам не сможешь пинговать этот сервер"
+    echo ""
+    iptables -D INPUT -p icmp --icmp-type echo-request -j DROP 2>/dev/null
+    iptables -A INPUT -p icmp --icmp-type echo-request -j DROP
+    if iptables -C INPUT -p icmp --icmp-type echo-request -j DROP 2>/dev/null; then
+        echo -e "${GREEN}✅  Правило добавлено${NC}"
+    else
+        echo -e "${RED}❌  Не удалось${NC}"; sleep 3; return
+    fi
+    if command -v netfilter-persistent >/dev/null 2>&1; then
+        netfilter-persistent save >/dev/null 2>&1 && \
+            echo -e "${GREEN}✅  Правила сохранены${NC}"
+    elif command -v iptables-save >/dev/null 2>&1; then
+        mkdir -p /etc/iptables
+        iptables-save > /etc/iptables/rules.v4 2>/dev/null && \
+            echo -e "${GREEN}✅  Сохранено в /etc/iptables/rules.v4${NC}"
+    fi
+    echo ""
+    echo -e "${CYAN}Проверь с другого хоста: ping $(hostname -I | awk '{print $1}')${NC}"
+    read -p "Нажмите Enter..."
+}
+
+icmp_block_disable() {
+    header
+    iptables -D INPUT -p icmp --icmp-type echo-request -j DROP 2>/dev/null
+    if iptables -C INPUT -p icmp --icmp-type echo-request -j DROP 2>/dev/null; then
+        echo -e "${RED}❌  Не удалось снять правило${NC}"
+    else
+        echo -e "${GREEN}✅  Ping разрешён${NC}"
+        command -v netfilter-persistent >/dev/null 2>&1 && netfilter-persistent save >/dev/null 2>&1
+    fi
+    read -p "Нажмите Enter..."
+}
+
+menu_icmp_block() {
+    while true; do
+        header
+        echo -e "${YELLOW}🛡  БЛОКИРОВКА ICMP (анти-DPI)${NC}"
+        echo ""
+        echo -e " Статус : $(icmp_block_status)"
+        echo ""
+        echo -e "${CYAN}─── Действия ───${NC}"
+        echo -e " 1) 🟢 Включить блокировку ping"
+        echo -e " 2) 🔴 Отключить блокировку ping"
+        echo -e " 3) 📋 Показать ICMP-правила"
+        echo ""
+        echo -e " 0) ↩️  Назад"
+        echo ""
+        read -p "Выберите [0-3]: " icmp_choice
+        case $icmp_choice in
+            1) icmp_block_enable ;;
+            2) icmp_block_disable ;;
+            3) echo ""; iptables -L INPUT -n --line-numbers | grep -i icmp; read -p "Enter..." ;;
+            0) break ;;
+            *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
+        esac
+    done
+}
+
 menu_sec() {
     while true; do
         header
@@ -803,10 +879,11 @@ fi
         echo -e " 14) 📊 Мониторинг (htop)"
         echo -e " 15) 🔄 Перезагрузка сервера"
         echo -e " 16) 🛑 Выключение сервера"
+        echo -e " 17) 🛡  Блокировка ICMP (анти-DPI)"
         echo ""
         echo -e " 0) ↩️  Назад в главное меню"
         echo ""
-        read -p "Выберите раздел [0-16]: " sec_choice
+        read -p "Выберите раздел [0-17]: " sec_choice
 
         case $sec_choice in
             1) system_update ;;
@@ -825,6 +902,7 @@ fi
             14) monitoring_htop ;;
             15) server_reboot ;;
             16) server_shutdown ;;
+            17) menu_icmp_block ;;
             0) break ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
         esac
