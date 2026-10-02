@@ -55,8 +55,8 @@ def generate(hwid, host=DEF_HOST, port=DEF_PORT, user=DEF_USER, pw=DEF_PASS,
 
     # LockedAppConfig: HWID + обязательный непустой ConnectedMessage
     lac = inner['LockedAppConfig']
-    lac['ConnectedMessage'] = '\u041f\u043e\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u043e !'.encode()
-    lac['Message'] = b'<b>ArsenVipKeys</b><br>t.me/ArsenVipKeys'
+    lac['ConnectedMessage'] = b'Connected'
+    lac['Message'] = b'Connected'
     lac['HardwareIdList']   = [build_hwid(hwid)]
     lac['IsSshLocked']      = True
 
