@@ -353,40 +353,36 @@ cat << 'PAM_EOF' > /usr/local/bin/check-device-limit-pam
 USER="$PAM_USER"
 LIMITS_DIR="/etc/UDPCustom/limits"
 DB_USERS="/etc/UDPCustom/users.db"
-
 [ "$USER" == "root" ] && exit 0
 [ -z "$USER" ] && exit 0
 grep -q "^${USER}$" "$DB_USERS" 2>/dev/null || exit 0
-
 LIMIT=3
 [ -f "$LIMITS_DIR/$USER" ] && LIMIT=$(cat "$LIMITS_DIR/$USER")
 [[ "$LIMIT" =~ ^[0-9]+$ ]] || LIMIT=3
 [ "$LIMIT" -le 0 ] && exit 0
-
 WS_P=""
 [ -f /usr/local/bin/ws-proxy.py ] && \
     WS_P=$(awk -F'=' '/listen_port/ {print $2}' /usr/local/bin/ws-proxy.py | tr -dc '0-9')
-
 FILTER="( sport = :22 or sport = :36712 or sport = :7300"
 [[ "$WS_P" =~ ^[0-9]+$ ]] && FILTER="$FILTER or sport = :$WS_P"
 FILTER="$FILTER )"
-
-COUNT=0
+# Считаем УНИКАЛЬНЫЕ IP (не PID)
+declare -A seen
 while IFS= read -r line; do
     [ -z "$line" ] && continue
+    peer=$(echo "$line" | awk '{print $5}' | sed 's/:[0-9]*$//')
     pids=$(echo "$line" | grep -oP 'pid=\K[0-9]+' 2>/dev/null)
-    [ -z "$pids" ] && continue
     for p in $pids; do
         owner=$(ps -o user= -p "$p" 2>/dev/null | tr -d ' ')
-        if [ -n "$owner" ] && [ "$owner" != "root" ]; then
-            [ "$owner" == "$USER" ] && COUNT=$((COUNT + 1))
+        if [ -n "$owner" ] && [ "$owner" == "$USER" ]; then
+            seen["$peer"]=1
             break
         fi
     done
 done <<< "$(ss -H -tnp state established "$FILTER" 2>/dev/null)"
-
-if [ "$COUNT" -ge "$LIMIT" ]; then
-    echo "❌ ПРЕВЫШЕН ЛИМИТ УСТРОЙСТВ ($COUNT/$LIMIT). Отключите другое устройство."
+COUNT=${#seen[@]}
+if [ "$COUNT" -gt "$LIMIT" ]; then
+    echo "\u274C  \u041F\u0420\u0415\u0412\u042B\u0428\u0415\u041D \u041B\u0418\u041C\u0418\u0422 \u0423\u0421\u0422\u0420\u041E\u0419\u0421\u0422\u0412 ($COUNT/$LIMIT). \u041E\u0442\u043A\u043B\u044E\u0447\u0438\u0442\u0435 \u0434\u0440\u0443\u0433\u043E\u0435 \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u043E."
     exit 1
 fi
 exit 0
