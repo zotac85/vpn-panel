@@ -36,7 +36,7 @@ if [ -f "$BOT_CONF" ]; then
 fi
 
 # Читаем support (без @)
-SUPPORT="ArsenSupportBot"
+SUPPORT="support"
 if [ -f /etc/UDPCustom/support.txt ]; then
     _s=$(head -1 /etc/UDPCustom/support.txt 2>/dev/null | tr -d '@ ' | head -c 100)
     [ -n "$_s" ] && SUPPORT="$_s"

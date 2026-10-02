@@ -1596,7 +1596,8 @@ def show_help_back(cfg, chat_id, user_id, msg_id=None):
             channels = [l.strip() for l in open(ch_file) if l.strip() and not l.startswith('#')]
         except: pass
     primary = channels[0].lstrip('@') if channels else 'ArsenVipKeys'
-    support = _get_support().lstrip('@') if hasattr(_get_support, '__call__') else 'ArsenSupportBot'
+    _sup = _get_support() or ''
+    support = _sup.lstrip('@') or 'support'
     text = "\U0001F4D6 <b>ПОМОЩЬ</b>"
     kb = {'inline_keyboard': [
         [{'text': '\u2699\uFE0F DarkTunnel', 'callback_data': 'cab_help_darktunnel'},

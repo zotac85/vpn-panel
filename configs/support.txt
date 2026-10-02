@@ -1,1 +1,3 @@
-@ArsenSupportBot
+# Username support-бота для этой ноды (с @)
+# Пример: @ArsenSupportBot
+@support

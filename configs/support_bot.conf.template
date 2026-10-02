@@ -1,5 +1,6 @@
 BOT_TOKEN=""
 ADMIN_ID=""
 MAIN_BOT="ArsenVipKeysBot"
-SUPPORT_BOT="ArsenSupportBot"
+# Username support-бота для этой ноды (без @)
+SUPPORT_BOT=""
 AUTO_CLOSE_HOURS="1"
