@@ -142,6 +142,28 @@ if [ -d "$PANEL_DIR" ] || [ -f "/usr/local/bin/vpn" ]; then
                 chmod +x /usr/local/bin/support-bot.py
                 echo "   ✓ support-bot.py"
             fi
+            # ─── Панель: core.sh + modules/*.sh ───
+            echo "→ Обновление модулей панели..."
+            mkdir -p "$PANEL_DIR/modules"
+            if [ -f "$REPO_DIR/core.sh" ]; then
+                cp "$REPO_DIR/core.sh" "$PANEL_DIR/core.sh"
+                chmod +x "$PANEL_DIR/core.sh"
+                echo "   ✓ core.sh"
+            fi
+            for f in "$REPO_DIR/modules/"*.sh; do
+                if [ -f "$f" ]; then
+                    base=$(basename "$f")
+                    cp "$f" "$PANEL_DIR/modules/$base"
+                    echo "   ✓ modules/$base"
+                fi
+            done
+            chmod +x "$PANEL_DIR/modules/"*.sh 2>/dev/null || true
+            # Обновляем скрипт vpn
+            if [ -f "$REPO_DIR/vpn" ]; then
+                cp "$REPO_DIR/vpn" /usr/local/bin/vpn
+                chmod +x /usr/local/bin/vpn
+                echo "   ✓ vpn"
+            fi
             echo "→ Проверка синтаксиса..."
             if ! python3 -m py_compile /usr/local/bin/vpn-tg-bot.py; then
                 echo -e "\033[0;31m❌ Синтаксическая ошибка!\033[0m"
