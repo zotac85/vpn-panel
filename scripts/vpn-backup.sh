@@ -11,7 +11,14 @@ mkdir -p "$BACKUP_DIR"
 chmod 700 "$BACKUP_DIR"
 
 DB_FILES="bot_issued.db support.db user_tg_map.db users.db verified_users.db vpn.db referrals.db referral_bonus.db"
-CFG_FILES="bot.conf support_bot.conf autopost.conf channels.txt support.txt"
+CFG_FILES="bot.conf support_bot.conf autopost.conf admins.txt channels.txt support.txt ad.txt"
+CFG_FILES="$CFG_FILES welcome.txt start.txt help.txt test_ready.txt test_issued.txt"
+CFG_FILES="$CFG_FILES help_instruction.txt help_faq.txt help_darktunnel.txt help_httpcustom.txt"
+CFG_FILES="$CFG_FILES help_video.txt help_whitedns.txt vip_buy.txt post.txt ref_post.txt"
+CFG_FILES="$CFG_FILES faq_keywords.txt payload.txt proxies.txt rate.txt ssh_banner.txt"
+CFG_FILES="$CFG_FILES whitedns_resolvers.txt whitedns_resolvers_de.txt whitedns_resolvers_fi.txt"
+CFG_FILES="$CFG_FILES whitedns_resolvers_se.txt whitedns_servers.txt"
+CFG_FILES="$CFG_FILES whitedns_settings_3g.txt whitedns_settings_adsl.txt whitedns_settings_wifi.txt"
 COUNT=0
 ERROR=0
 
