@@ -69,15 +69,19 @@ build_session_stats() {
 
     local filter
     filter=$(get_ssh_ports_filter)
+    local ws_port
+    ws_port=$(get_ws_port)
+    [[ "$ws_port" =~ ^[0-9]+$ ]] || ws_port=""
 
     local data
     data=$(ss -H -tnp state established "$filter" 2>/dev/null)
 
     while IFS= read -r line; do
         [ -z "$line" ] && continue
-        local head peer
+        local head peer sport
         head="${line%%users:(*}"
         peer=$(echo "$head" | awk '{print $NF}')
+        sport=$(echo "$head" | awk '{print $4}' | awk -F: '{print $NF}')
         [[ "$peer" == *:* ]] || continue
 
         local pids p owner u
@@ -90,15 +94,14 @@ build_session_stats() {
                 break
             fi
         done
-        [ -z "$u" ] && continue
-
-        if [[ "$peer" == 127.0.0.1:* || "$peer" == \[::1\]:* ]]; then
-            SESS_WS_BY_USER["$u"]=$(( ${SESS_WS_BY_USER["$u"]:-0} + 1 ))
+        if [ -n "$ws_port" ] && [ "$sport" = "$ws_port" ]; then
+            SESS_WS_BY_USER["${u:-ws}"]=$(( ${SESS_WS_BY_USER["${u:-ws}"]:-0} + 1 ))
             ((SESS_WS_TOTAL++))
-        else
-            SESS_SSH_BY_USER["$u"]=$(( ${SESS_SSH_BY_USER["$u"]:-0} + 1 ))
-            ((SESS_SSH_TOTAL++))
+            continue
         fi
+        [ -z "$u" ] && continue
+        SESS_SSH_BY_USER["$u"]=$(( ${SESS_SSH_BY_USER["$u"]:-0} + 1 ))
+        ((SESS_SSH_TOTAL++))
     done <<< "$data"
 
     SESS_BUILT=1
