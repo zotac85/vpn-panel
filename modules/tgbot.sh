@@ -177,6 +177,13 @@ sg_set_config() {
         echo "${field}=\"${value}\"" >> "$SG_CONF"
     fi
     chmod 600 "$SG_CONF"
+    # Автосинхронизация в bot.conf для уведомлений (LOG)
+    if [ "$field" = "BOT_TOKEN" ] && [ -n "$value" ]; then
+        tg_set_config "LOG_BOT_TOKEN" "$value"
+    fi
+    if [ "$field" = "ADMIN_ID" ] && [ -n "$value" ]; then
+        tg_set_config "LOG_CHAT_ID" "$value"
+    fi
 }
 sg_edit_field() {
     local field="$1"
@@ -305,9 +312,10 @@ menu_tgbot_support() {
         echo -e " 2) 👤 Изменить ADMIN_ID"
         echo -e " 3) 🚀 Установка / переустановка сервиса"
         echo -e " 4) 🛑 Отключить (disable)"
+        echo -e " 5) 🔔 Уведомления (LOG_BOT_TOKEN / LOG_CHAT_ID)"
         echo -e " 0) ↩️  Назад"
         echo ""
-        read -p "Выберите [0-4]: " choice
+        read -p "Выберите [0-5]: " choice
         case $choice in
             1) sg_edit_field "BOT_TOKEN" "Токен бота поддержки (от @BotFather)" ;;
             2) sg_edit_field "ADMIN_ID" "Telegram ID админа (от @userinfobot)" ;;
@@ -318,6 +326,7 @@ menu_tgbot_support() {
                 echo -e "${YELLOW}Бот поддержки отключён${NC}"
                 sleep 1
                 ;;
+            5) menu_log_settings ;;
             0) break ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
         esac

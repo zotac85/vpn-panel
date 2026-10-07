@@ -30,7 +30,7 @@ def load_config():
     cfg = {
         'BOT_TOKEN': '',
         'ADMIN_ID': '',
-        'MAIN_BOT': 'ArsenVipKeysBot',
+        'MAIN_BOT': '',
         'SUPPORT_BOT': 'ArsenSupportBot',
         'AUTO_CLOSE_HOURS': '1',
     }
