@@ -53,20 +53,17 @@ def generate(hwid, host=DEF_HOST, port=DEF_PORT, user=DEF_USER, pw=DEF_PASS,
     inner  = msgpack.unpackb(D(KEY256, b64d(outer['encryptedLockedConfig'])), raw=False, strict_map_key=False)
     locked = msgpack.unpackb(D(KEY192, inner['EncryptedLockedConfig']), raw=False, strict_map_key=False)
 
-    # LockedAppConfig: HWID + обязательный непустой ConnectedMessage
+    # LockedAppConfig: HWID + пустые Message/ConnectedMessage
     lac = inner['LockedAppConfig']
-    lac['ConnectedMessage'] = '\u041f\u043e\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u043e !'.encode()
-    lac['Message'] = b'<b>ArsenVipKeys</b><br>t.me/ArsenVipKeys'
+    lac['ConnectedMessage'] = b''
+    lac['Message'] = b''
     lac['HardwareIdList']   = [build_hwid(hwid)]
     lac['IsSshLocked']      = True
 
     # ===== ПРАВИЛА DarkTunnel (НЕ УДАЛЯТЬ!) =====
-    # 1) ConnectedMessage обязательно непустое
     # 2) SSH host/port/user/pw — обязательно непустые
     # 3) Proxy proxyhost/proxyport/payload — обязательно непустые
     # 4) HardwareIdList обязательно заполнен
-    if not lac.get('ConnectedMessage'):
-        raise ValueError('DarkTunnel: ConnectedMessage НЕ МОЖЕТ быть пустым!')
     for _fn, _fv in (('host',host),('port',port),('user',user),('pw',pw)):
         if not _fv:
             raise ValueError(f'DarkTunnel: SSH-поле {_fn!r} не может быть пустым')
