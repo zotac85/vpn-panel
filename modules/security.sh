@@ -326,11 +326,20 @@ ufw_manage() {
                 ufw default deny incoming
                 ufw default allow outgoing
                 ufw allow 22/tcp comment 'SSH'
-                ufw allow 1:65535/udp comment 'UDP Range'
-                ufw allow 7300/tcp comment 'UDPGW'
-                ufw allow 36712/udp comment 'UDP Custom'
-                local ws_port=$(get_ws_port 2>/dev/null)
-                [[ "$ws_port" =~ ^[0-9]+$ ]] && ufw allow "$ws_port/tcp" comment 'WebSocket'
+                # WebSocket — если установлен ws-proxy
+                if [ -f /usr/local/bin/ws-proxy.py ]; then
+                    local ws_port=$(get_ws_port 2>/dev/null)
+                    [[ "$ws_port" =~ ^[0-9]+$ ]] && ufw allow "$ws_port/tcp" comment 'WebSocket'
+                fi
+                # UDPGW — если сервис запущен
+                if systemctl is-active --quiet udpgw 2>/dev/null; then
+                    ufw allow 7300/tcp comment 'UDPGW'
+                fi
+                # UDP Custom — если сервис запущен
+                if systemctl is-active --quiet udp-custom 2>/dev/null; then
+                    ufw allow 1:65535/udp comment 'UDP Range'
+                    ufw allow 36712/udp comment 'UDP Custom'
+                fi
                 echo "y" | ufw enable
                 echo -e "${GREEN}✅ UFW включён с базовой конфигурацией${NC}"
                 sleep 2
