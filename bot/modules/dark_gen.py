@@ -109,8 +109,10 @@ def generate(hwid, host=DEF_HOST, port=DEF_PORT, user=DEF_USER, pw=DEF_PASS,
     inner['EncryptedLockedConfig'] = E(KEY192, msgpack.packb(locked, use_bin_type=True))
     enc = E(KEY256, msgpack.packb(inner, use_bin_type=True))
     o2 = dict(outer)
-    o2['encryptedLockedConfig'] = b64u(enc)
+    # ВАЖНО: поле encryptedLockedConfig сохраняет padding '='
+    o2['encryptedLockedConfig'] = base64.urlsafe_b64encode(enc).decode()
     o2['name'] = name
+    # А вот внешняя ссылка — без padding
     return 'darktunnel://' + b64u(json.dumps(o2, ensure_ascii=False, separators=(',',':')).encode())
 
 def main():
