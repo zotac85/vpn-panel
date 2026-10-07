@@ -81,7 +81,7 @@ build_session_stats() {
         local head peer sport
         head="${line%%users:(*}"
         peer=$(echo "$head" | awk '{print $NF}')
-        sport=$(echo "$head" | awk '{print $4}' | awk -F: '{print $NF}')
+        sport=$(echo "$head" | awk '{print $3}' | awk -F: '{print $NF}')
         [[ "$peer" == *:* ]] || continue
 
         local pids p owner u
@@ -99,8 +99,10 @@ build_session_stats() {
             ((SESS_WS_TOTAL++))
             continue
         fi
-        [ -z "$u" ] && continue
-        SESS_SSH_BY_USER["$u"]=$(( ${SESS_SSH_BY_USER["$u"]:-0} + 1 ))
+        case "$peer" in
+            127.0.0.1:*|\[::1\]:*) continue ;;
+        esac
+        SESS_SSH_BY_USER["${u:-root}"]=$(( ${SESS_SSH_BY_USER["${u:-root}"]:-0} + 1 ))
         ((SESS_SSH_TOTAL++))
     done <<< "$data"
 
