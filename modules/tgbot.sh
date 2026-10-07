@@ -27,6 +27,17 @@ tg_get_config() {
     grep "^${key}=" "$TG_CONF" 2>/dev/null | cut -d'=' -f2- | sed 's/^"//; s/"$//'
 }
 
+
+# Получить username бота через Telegram API getMe
+tg_get_bot_username() {
+    local token="$1"
+    [ -z "$token" ] && return
+    local resp
+    resp=$(curl -sf --max-time 10 "https://api.telegram.org/bot${token}/getMe" 2>/dev/null)
+    [ -z "$resp" ] && return
+    echo "$resp" | grep -oP '"username"\s*:\s*"\K[^"]+' | head -1
+}
+
 tg_set_config() {
     local key="$1"
     local value="$2"
@@ -34,6 +45,17 @@ tg_set_config() {
         sed -i "s|^${key}=.*|${key}=\"${value}\"|" "$TG_CONF"
     else
         echo "${key}=\"${value}\"" >> "$TG_CONF"
+    fi
+    # Автоподстановка username основного бота в support_bot.conf
+    if [ "$key" = "BOT_TOKEN" ] && [ -n "$value" ]; then
+        local uname=$(tg_get_bot_username "$value")
+        if [ -n "$uname" ] && [ -f "$SG_CONF" ]; then
+            if grep -q "^MAIN_BOT=" "$SG_CONF" 2>/dev/null; then
+                sed -i "s|^MAIN_BOT=.*|MAIN_BOT=\"${uname}\"|" "$SG_CONF"
+            else
+                echo "MAIN_BOT=\"${uname}\"" >> "$SG_CONF"
+            fi
+        fi
     fi
 }
 
@@ -180,6 +202,12 @@ sg_set_config() {
     # Автосинхронизация в bot.conf для уведомлений (LOG)
     if [ "$field" = "BOT_TOKEN" ] && [ -n "$value" ]; then
         tg_set_config "LOG_BOT_TOKEN" "$value"
+        # Автоподстановка username support-бота
+        local uname=$(tg_get_bot_username "$value")
+        if [ -n "$uname" ]; then
+            sed -i "s|^SUPPORT_BOT=.*|SUPPORT_BOT=\"${uname}\"|" "$SG_CONF" 2>/dev/null || true
+            echo "@${uname}" > /etc/UDPCustom/support.txt
+        fi
     fi
     if [ "$field" = "ADMIN_ID" ] && [ -n "$value" ]; then
         tg_set_config "LOG_CHAT_ID" "$value"
