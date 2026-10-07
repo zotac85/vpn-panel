@@ -331,21 +331,17 @@ menu_tgbot_main() {
         [ -n "$token" ] && echo -e " Токен    : ${GREEN}✅  настроен${NC}" || echo -e " Токен    : ${RED}❌  не задан${NC}"
         [ -n "$admin" ] && echo -e " Admin ID : ${CYAN}$admin${NC}" || echo -e " Admin ID : ${RED}❌  не задан${NC}"
         systemctl is-active --quiet "$TG_SERVICE" && echo -e " Статус   : ${GREEN}🟢 Запущен${NC}" || echo -e " Статус   : ${RED}🔴 Остановлен${NC}"
-        local tariffs=$(tg_get_config "VIP_TARIFFS")
-        echo -e " 💎 Тарифы: ${CYAN}${tariffs:-не задано}${NC}"
         echo ""
         echo -e " 1) 🔑 Изменить BOT_TOKEN"
         echo -e " 2) 👤 Изменить ADMIN_ID"
         echo -e " 3) 🚀 Полная установка / настройка"
-        echo -e " 4) 💎 Тарифы VIP"
         echo -e " 0) ↩️  Назад"
         echo ""
-        read -p "Выберите [0-4]: " choice
+        read -p "Выберите [0-3]: " choice
         case $choice in
             1) tg_edit_field "BOT_TOKEN" "Токен бота (от @BotFather)" ;;
             2) tg_edit_field "ADMIN_ID" "Telegram ID админа (от @userinfobot)" ;;
             3) tg_install ;;
-            4) menu_vip_tariffs ;;
             0) break ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
         esac
@@ -563,14 +559,15 @@ menu_tgbot() {
         echo -e " 7) 💬 Бот поддержки"
         echo -e " 8) 🔄 Вкл/выкл проверку подписки"
         echo -e " 9) ⏰ Кулдаун / срок / лимиты"
-        echo -e " 11) 🧠 Gemini — ИИ-проверка чеков"
+        echo -e " 11) 💎 Тарифы VIP"
+        echo -e " 12) 🧠 Gemini — ИИ-проверка чеков"
         echo ""
         echo -e "${CYAN}─── 📋 Просмотр ───${NC}"
         echo -e " 10) 📊 Статистика"
         echo ""
         echo -e " 0) ↩️  Назад"
         echo ""
-        read -p "Выберите [0-11]: " tg_choice
+        read -p "Выберите [0-12]: " tg_choice
         case $tg_choice in
             1) systemctl restart "$TG_SERVICE" 2>/dev/null; sleep 1; systemctl is-active --quiet "$TG_SERVICE" && echo -e "${GREEN}✅  Бот запущен${NC}" || echo -e "${RED}❌  Ошибка${NC}"; sleep 1 ;;
             2) systemctl restart "$TG_SERVICE" 2>/dev/null; echo -e "${GREEN}Бот перезапущен${NC}"; sleep 1 ;;
@@ -600,7 +597,8 @@ menu_tgbot() {
                 systemctl restart "$TG_SERVICE" 2>/dev/null
                 ;;
             10) tg_stats ;;
-            11) menu_ai_settings ;;
+            11) menu_vip_tariffs ;;
+            12) menu_ai_settings ;;
             0) break ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
         esac
