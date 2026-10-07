@@ -267,6 +267,60 @@ tg_stats() {
 # ──────────────────────────────────────────────────────────────
 # ПОДМЕНЮ: ОСНОВНОЙ БОТ
 # ──────────────────────────────────────────────────────────────
+menu_vip_tariffs() {
+    while true; do
+        header
+        echo -e "${YELLOW}💎 ТАРИФЫ VIP${NC}"
+        echo ""
+        local cur=$(tg_get_config "VIP_TARIFFS")
+        echo -e " Текущие: ${CYAN}${cur:-не задано}${NC}"
+        echo ""
+        echo -e "${CYAN}Формат:${NC} дни|цена|ГБ|устройства,дни|цена|ГБ|устройства,..."
+        echo -e " ${YELLOW}Пример:${NC} 15|3|100|1,30|5|300|2,90|14|900|3"
+        echo ""
+        echo -e " 1) ✏️  Изменить тарифы"
+        echo -e " 2) 📥 Подставить шаблон с GitHub"
+        echo -e " 0) ↩️  Назад"
+        echo ""
+        read -p "Выберите [0-2]: " vc
+        case $vc in
+            1)
+                echo ""
+                read -p "Новое значение VIP_TARIFFS (Enter — отмена): " nv
+                [ -z "$nv" ] && continue
+                if ! echo "$nv" | grep -qE '^[0-9]+\|[0-9.]+\|[0-9]+\|[0-9]+(,[0-9]+\|[0-9.]+\|[0-9]+\|[0-9]+)*$'; then
+                    echo -e "${RED}❌ Формат неверный. Пример: 15|3|100|1,30|5|300|2,90|14|900|3${NC}"
+                    sleep 3; continue
+                fi
+                tg_set_config "VIP_TARIFFS" "$nv"
+                systemctl restart "$TG_SERVICE" 2>/dev/null
+                echo -e "${GREEN}✅ Сохранено, бот перезапущен${NC}"
+                sleep 2
+                ;;
+            2)
+                echo -e "${CYAN}Скачиваем шаблон...${NC}"
+                local tmpl=$(curl -sf --max-time 15 "https://raw.githubusercontent.com/zotac85/vpn-panel/main/configs/bot.conf.template" | grep -E "^VIP_TARIFFS=" | head -1)
+                if [ -z "$tmpl" ]; then
+                    echo -e "${RED}❌ Не удалось получить шаблон${NC}"
+                    sleep 2; continue
+                fi
+                local val=$(echo "$tmpl" | sed 's/^VIP_TARIFFS=//; s/^"//; s/"$//')
+                echo -e " Из GitHub: ${GREEN}$val${NC}"
+                read -p "Применить? (y/n): " cnf
+                if [ "$cnf" = "y" ] || [ "$cnf" = "Y" ]; then
+                    tg_set_config "VIP_TARIFFS" "$val"
+                    systemctl restart "$TG_SERVICE" 2>/dev/null
+                    echo -e "${GREEN}✅ Применено${NC}"
+                else
+                    echo -e "${YELLOW}Отменено${NC}"
+                fi
+                sleep 2
+                ;;
+            0) break ;;
+            *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
+        esac
+    done
+}
 menu_tgbot_main() {
     while true; do
         header
@@ -277,17 +331,21 @@ menu_tgbot_main() {
         [ -n "$token" ] && echo -e " Токен    : ${GREEN}✅  настроен${NC}" || echo -e " Токен    : ${RED}❌  не задан${NC}"
         [ -n "$admin" ] && echo -e " Admin ID : ${CYAN}$admin${NC}" || echo -e " Admin ID : ${RED}❌  не задан${NC}"
         systemctl is-active --quiet "$TG_SERVICE" && echo -e " Статус   : ${GREEN}🟢 Запущен${NC}" || echo -e " Статус   : ${RED}🔴 Остановлен${NC}"
+        local tariffs=$(tg_get_config "VIP_TARIFFS")
+        echo -e " 💎 Тарифы: ${CYAN}${tariffs:-не задано}${NC}"
         echo ""
         echo -e " 1) 🔑 Изменить BOT_TOKEN"
         echo -e " 2) 👤 Изменить ADMIN_ID"
         echo -e " 3) 🚀 Полная установка / настройка"
+        echo -e " 4) 💎 Тарифы VIP"
         echo -e " 0) ↩️  Назад"
         echo ""
-        read -p "Выберите [0-3]: " choice
+        read -p "Выберите [0-4]: " choice
         case $choice in
             1) tg_edit_field "BOT_TOKEN" "Токен бота (от @BotFather)" ;;
             2) tg_edit_field "ADMIN_ID" "Telegram ID админа (от @userinfobot)" ;;
             3) tg_install ;;
+            4) menu_vip_tariffs ;;
             0) break ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
         esac
