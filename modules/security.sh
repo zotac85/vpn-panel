@@ -774,6 +774,86 @@ icmp_block_disable() {
     read -p "Нажмите Enter..."
 }
 
+
+# ──────────────────────────────────────────────────────────────
+# БЭКАП / ВОССТАНОВЛЕНИЕ
+# ──────────────────────────────────────────────────────────────
+backup_create_now() {
+    header
+    echo -e "${YELLOW}💾 Создание бэкапа...${NC}"
+    echo ""
+    if [ ! -x /usr/local/bin/vpn-backup.sh ]; then
+        echo -e "${RED}❌ vpn-backup.sh не найден${NC}"
+        sleep 2; return
+    fi
+    /usr/local/bin/vpn-backup.sh
+    echo ""
+    echo -e "${GREEN}✅ Готово. Архив в /root/backups/${NC}"
+    echo -e "   и отправлен в Telegram support-бота"
+    echo ""
+    read -p "Enter для продолжения..." _
+}
+
+backup_list() {
+    header
+    echo -e "${YELLOW}📂 Локальные бэкапы в /root/backups/${NC}"
+    echo ""
+    if [ ! -d /root/backups ] || [ -z "$(ls -A /root/backups 2>/dev/null)" ]; then
+        echo -e "${RED}Пусто${NC}"
+        sleep 2; return
+    fi
+    ls -lh /root/backups/backup_*.tar.gz 2>/dev/null | awk '{print "  ", $9, "  ", $5, "  ", $6, " ", $7, " ", $8}' | tail -30
+    echo ""
+    echo -e "${CYAN}Всего:${NC} $(ls /root/backups/backup_*.tar.gz 2>/dev/null | wc -l)"
+    echo ""
+    read -p "Enter для продолжения..." _
+}
+
+backup_restore_menu() {
+    header
+    echo -e "${YELLOW}📥 Восстановление из бэкапа${NC}"
+    echo ""
+    if [ ! -d /root/backups ]; then
+        echo -e "${RED}Папка /root/backups не найдена${NC}"
+        sleep 2; return
+    fi
+    echo -e "${CYAN}Доступные архивы (последние 10):${NC}"
+    echo ""
+    local files=($(ls -t /root/backups/backup_*.tar.gz 2>/dev/null | head -10))
+    if [ ${#files[@]} -eq 0 ]; then
+        echo -e "${RED}Нет архивов${NC}"
+        sleep 2; return
+    fi
+    local i=1
+    for f in "${files[@]}"; do
+        local sz=$(du -h "$f" | cut -f1)
+        local dt=$(date -r "$f" '+%Y-%m-%d %H:%M')
+        echo "  $i) $(basename $f)  ($sz, $dt)"
+        i=$((i+1))
+    done
+    echo ""
+    echo "  0) Назад"
+    echo ""
+    read -p "Выберите номер [0-${#files[@]}]: " n
+    [[ "$n" == "0" || -z "$n" ]] && return
+    if ! [[ "$n" =~ ^[0-9]+$ ]] || [ "$n" -lt 1 ] || [ "$n" -gt ${#files[@]} ]; then
+        echo -e "${RED}Неверный выбор${NC}"; sleep 2; return
+    fi
+    local chosen="${files[$((n-1))]}"
+    echo ""
+    echo -e "${YELLOW}Выбран:${NC} $chosen"
+    echo ""
+    if [ -x /usr/local/bin/vpn-restore.sh ]; then
+        /usr/local/bin/vpn-restore.sh "$chosen"
+    else
+        echo -e "${RED}❌ vpn-restore.sh не установлен${NC}"
+        echo -e "Обнови панель: пункт 8 главного меню"
+        sleep 3
+    fi
+    echo ""
+    read -p "Enter для продолжения..." _
+}
+
 menu_icmp_block() {
     while true; do
         header
@@ -890,9 +970,14 @@ fi
         echo -e " 16) 🛑 Выключение сервера"
         echo -e " 17) 🛡  Блокировка ICMP (анти-DPI)"
         echo ""
+        echo -e "${CYAN}─── 💾 Бэкап / Восстановление ───${NC}"
+        echo -e " 18) 💾 Создать бэкап сейчас"
+        echo -e " 19) 📂 Список бэкапов"
+        echo -e " 20) 📥 Восстановить из файла"
+        echo ""
         echo -e " 0) ↩️  Назад в главное меню"
         echo ""
-        read -p "Выберите раздел [0-17]: " sec_choice
+        read -p "Выберите раздел [0-20]: " sec_choice
 
         case $sec_choice in
             1) system_update ;;
@@ -912,6 +997,9 @@ fi
             15) server_reboot ;;
             16) server_shutdown ;;
             17) menu_icmp_block ;;
+            18) backup_create_now ;;
+            19) backup_list ;;
+            20) backup_restore_menu ;;
             0) break ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
         esac
