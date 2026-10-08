@@ -1209,7 +1209,6 @@ def _do_vip_purchase(cfg, cb, tg_id, idx):
         "━━━━━━━━━━━━━━━━━━━━",
         "",
         f"💎 Логин: <code>{username}</code>",
-        f"🔑 Пароль: <code>{password}</code>",
         "",
         f"⏰ Срок: <b>{t['days']} дней</b>",
         f"📊 Трафик: <b>{t['gb']} ГБ</b>",
@@ -3865,7 +3864,6 @@ def handle_mykey(cfg, chat_id, user_id):
         f"🔑 <b>Твой последний ключ</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n\n"
         f"📱 Логин: <code>{last_username}</code>\n"
-        f"🔑 Пароль: <code>{password}</code>\n"
         f"🌐 Сервер: {domain}\n"
         f"🔌 Порт: {ws_port}\n"
     )
