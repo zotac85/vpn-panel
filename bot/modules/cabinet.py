@@ -807,7 +807,7 @@ def show_key_detail(cfg, chat_id, user_id, key_name, msg_id=None):
         _send(token, chat_id, text, keyboard)
 
 
-def _build_dark_url_for_key(cfg, key_name):
+def _build_dark_url_for_key(cfg, key_name, domain=None, ws_port=None, location_name=None):
     """Возвращает darktunnel:// или None."""
     key = db.get_test_key(key_name) or db.get_vip_key(key_name)
     if not key:
@@ -815,14 +815,16 @@ def _build_dark_url_for_key(cfg, key_name):
     password = key['password']
     if not password:
         return None, None
-    domain = get_domain()
-    ws_port = get_ws_port()
+    if domain is None:
+        domain = get_domain()
+    if ws_port is None:
+        ws_port = get_ws_port()
     proxy = get_random_proxy()
     try:
         _hwid = key['hwid']
     except (KeyError, IndexError, TypeError):
         _hwid = None
-    _loc = cfg.get("SERVER_LOCATION", "VPN")
+    _loc = location_name if location_name else cfg.get("SERVER_LOCATION", "VPN")
     if _hwid:
         try:
             from bot_modules import dark_gen
@@ -847,7 +849,7 @@ def _build_dark_url_for_key(cfg, key_name):
     return None, None
 
 
-def send_dark_file(cfg, chat_id, user_id, key_name):
+def send_dark_files_all_nodes(cfg, chat_id, user_id, key_name):
     """Сохраняет darktunnel:// в .dark и отправляет как документ."""
     import os as _os, tempfile
     token = cfg['BOT_TOKEN']
@@ -891,84 +893,130 @@ def send_dark_file(cfg, chat_id, user_id, key_name):
             except: pass
 
 
-def show_darktunnel_url(cfg, chat_id, user_id, key_name, msg_id=None):
-    """Отправляет darktunnel:// конфиг НОВЫМ сообщением"""
+def send_dark_files_all_nodes(cfg, chat_id, user_id, key_name):
+    """Отправляет .dark для каждой активной ноды (мастер + online-ноды).
+    Возвращает список названий локаций, куда отправка прошла успешно."""
+    import os as _os, tempfile, subprocess
     token = cfg['BOT_TOKEN']
+    key = db.get_test_key(key_name) or db.get_vip_key(key_name)
+    if not key:
+        _send(token, chat_id, "\u274C  Ключ не найден")
+        return []
+    if key['expires_at'] > 0 and key['expires_at'] < int(time.time()):
+        _send(token, chat_id, "\u274C  Ключ истёк")
+        return []
 
+    nodes = []
+    try:
+        import sqlite3
+        con = sqlite3.connect("/etc/UDPCustom/vpn.db")
+        rows = con.execute(
+            "SELECT name, host, ws_port, is_master, status FROM nodes "
+            "WHERE is_active=1 AND (is_master=1 OR status='online') "
+            "ORDER BY is_master DESC, id"
+        ).fetchall()
+        con.close()
+        for nname, nhost, nws, is_master, nstatus in rows:
+            if is_master:
+                nodes.append((nname, get_domain(), get_ws_port()))
+            else:
+                nodes.append((nname, nhost, int(nws)))
+    except Exception as e:
+        cab_log.error(f"send_dark_files_all_nodes nodes: {e}")
+        nodes.append((cfg.get("SERVER_LOCATION", "VPN"), get_domain(), get_ws_port()))
+
+    if not nodes:
+        _send(token, chat_id, "\u274C  Нет доступных нод")
+        return []
+
+    sent = []
+    for loc_name, dom, port in nodes:
+        try:
+            dt_url, _cfg_name = _build_dark_url_for_key(
+                cfg, key_name, domain=dom, ws_port=port, location_name=loc_name
+            )
+            if not dt_url:
+                continue
+            safe_name = key_name.replace('/', '_')
+            # Короткий код из домена (de/lit/frans)
+            try:
+                flag = (dom or 'node').split('.')[0]
+            except Exception:
+                flag = 'node'
+            flag = ''.join(ch for ch in flag if ch.isalnum() or ch in '_-') or 'node'
+            fname = f"{safe_name}_{flag}.dark"
+            fd, tmp_path = tempfile.mkstemp(suffix='.dark')
+            with _os.fdopen(fd, 'w', encoding='utf-8') as f:
+                f.write(dt_url)
+            caption = "\U0001F4E5 <b>" + loc_name + "</b>\n\nСкачай и открой через DarkTunnel"
+            cmd = [
+                'curl', '-s', '-X', 'POST',
+                f'https://api.telegram.org/bot{token}/sendDocument',
+                '-F', f'chat_id={chat_id}',
+                '-F', f'document=@{tmp_path};filename={fname}',
+                '-F', f'caption={caption}',
+                '-F', 'parse_mode=HTML',
+            ]
+            subprocess.run(cmd, capture_output=True, timeout=30)
+            sent.append(loc_name)
+            cab_log.info(f"dark file sent: {fname} ({loc_name})")
+            try: _os.remove(tmp_path)
+            except: pass
+        except Exception as e:
+            cab_log.error(f"send_dark_files_all_nodes {loc_name}: {e}")
+
+    return sent
+
+
+def show_darktunnel_url(cfg, chat_id, user_id, key_name, msg_id=None):
+    """Показывает меню: текст + отправляет .dark файлы со всех нод."""
+    token = cfg['BOT_TOKEN']
     key = db.get_test_key(key_name) or db.get_vip_key(key_name)
     if not key or int(key['tg_id']) != int(user_id):
-        _send(token, chat_id, "❌ Ключ не найден")
+        _send(token, chat_id, "\u274C  Ключ не найден")
         return
     if key['expires_at'] > 0 and key['expires_at'] < int(time.time()):
-        _send(token, chat_id, "❌ Ключ истёк")
-        return
-    password = key['password']
-    if not password:
-        _send(token, chat_id, "❌ Пароль не найден")
+        _send(token, chat_id, "\u274C  Ключ истёк")
         return
 
-    domain = get_domain()
-    ws_port = get_ws_port()
-    proxy = get_random_proxy()
-    # HWID ключа (если есть)
+    # Список активных нод (мастер + online)
+    locs = []
     try:
-        _hwid = key['hwid']
-    except (KeyError, IndexError, TypeError):
-        _hwid = None
-    _loc = cfg.get("SERVER_LOCATION", "VPN")
-    if _hwid:
-        # Зашифрованный конфиг с привязкой к устройству
-        try:
-            from bot_modules import dark_gen
-            _proxy_str = proxy or '162.159.228.0'
-            _proxyhost = _proxy_str.split(':')[0] if ':' in _proxy_str else _proxy_str
-            if key_name.startswith('vip_'):
-                _cfg_name = f"💎 VIP {_loc} {key_name[4:]}"
-            elif key_name.startswith('test'):
-                _cfg_name = f"🎁 TEST {_loc} {key_name[4:]}"
-            else:
-                _cfg_name = f"⭐ {key_name}"
-            dt_url = dark_gen.generate(
-                hwid=_hwid,
-                host=domain,
-                port=str(ws_port),
-                user=key_name,
-                pw=password,
-                proxyhost=_proxyhost,
-                proxyport=str(ws_port),
-                name=_cfg_name,
-            )
-            cab_log.info(f"dark_gen encrypted config for {key_name} (hwid={_hwid[:8]}...)")
-        except Exception as e:
-            cab_log.error(f"dark_gen generate error: {e}")
-            dt_url = None
-    else:
-        # Открытый конфиг (старый способ)
-        dt_url = make_darktunnel_url(key_name, password, domain, ws_port, proxy, _loc)
-    if not dt_url:
-        _send(token, chat_id, "❌   Не удалось создать конфиг")
-        return
+        import sqlite3 as _sq
+        _con = _sq.connect("/etc/UDPCustom/vpn.db")
+        _rows = _con.execute(
+            "SELECT name FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id"
+        ).fetchall()
+        _con.close()
+        locs = [r[0] for r in _rows]
+    except Exception as e:
+        cab_log.error(f"show_darktunnel_url nodes: {e}")
 
     NL = chr(10)
-    text = NL.join([
-        "📲 <b>КОНФИГ DarkTunnel</b>",
-        "━━━━━━━━━━━━━━━━━━━━",
+    lines = [
+        "\U0001F4F2 <b>КОНФИГ DarkTunnel</b>",
+        "\u2501"*20,
         "",
-        "Нажми кнопку ниже, чтобы получить <b>.dark</b> файл:",
+        "<b>\U0001F4E5 Твои конфиги:</b>",
+    ]
+    for loc in locs:
+        lines.append(f"  \u2022 {loc}")
+    lines += [
         "",
-        "<i>Открой DarkTunnel → ➕ → Импорт из буфера</i>",
-    ])
+        "<i>Открой DarkTunnel \u2192 \u2795 \u2192 Import \u2192 File</i>",
+    ]
+    text = NL.join(lines)
     keyboard = {'inline_keyboard': [
-        [{'text': '\U0001F4E5 Скачать .dark файл ещё раз', 'callback_data': f'cab_darkfile:{key_name}'}],
+        [{'text': '\U0001F4E5 Отправить .dark заново', 'callback_data': f'cab_darkfile:{key_name}'}],
         [{'text': '\U0001F5D1 Удалить сообщение', 'callback_data': f'cab_delmsg:{key_name}'}]
     ]}
     _send(token, chat_id, text, keyboard)
-    # Сразу шлём .dark файл (только если конфиг зашифрован)
+
+    # Отправляем .dark файлы со всех нод
     try:
-        if dt_url and 'encryptedLockedConfig' in dt_url:
-            send_dark_file(cfg, chat_id, user_id, key_name)
+        send_dark_files_all_nodes(cfg, chat_id, user_id, key_name)
     except Exception as _e:
-        cab_log.error(f"auto send_dark_file: {_e}")
+        cab_log.error(f"auto send_dark_files: {_e}")
 
 
 def show_balance(cfg, chat_id, user_id, msg_id=None):
@@ -2008,7 +2056,7 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         return True
     if cb_data.startswith('cab_darkfile:'):
         key_name = cb_data.split(':', 1)[1]
-        send_dark_file(cfg, chat_id, user_id, key_name)
+        send_dark_files_all_nodes(cfg, chat_id, user_id, key_name)
         return True
     if cb_data.startswith('cab_dt:'):
         key_name = cb_data.split(':', 1)[1]

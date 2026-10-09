@@ -887,7 +887,7 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None, hwid=None):
     # Авто-отправка .dark файла (если конфиг зашифрован)
     try:
         if dt_url and dt_url.startswith('darktunnel://'):
-            from bot_modules.cabinet import send_dark_file as _sdf
+            from bot_modules.cabinet import send_dark_files_all_nodes as _sdf
             _sdf(cfg, chat_id, user_id, username)
     except Exception as _e:
         log.error(f"handle_test send_dark_file: {_e}")
@@ -2550,16 +2550,17 @@ def handle_channel_test(cfg, user_id, first_name, hwid=None):
         f"⏰  Срок: <b>{hours} ч</b>  |  📊 <b>{traffic} ГБ</b>  |  💻 <b>{devices} устр.</b>\n"
     )
     if dt_url:
-        text += (
-            "\n━━━━━━━━━━━━━━━━━━━━\n"
-            "🔗 <b>Твой конфиг:</b>\n\n"
-            f"<code>{dt_url}</code>\n\n"
-            "📲 <b>Как подключиться:</b>\n"
-            "1. Тапни ссылку выше — скопируется\n"
-            "2. Открой DarkTunnel → ⋮ → Import → Clipboard\n"
-            "3. Нажми CONNECT 🚀\n\n"
-            "⚠️ Конфиг привязан к твоему устройству (HWID)"
-        )
+        text += "\n━━━━━━━━━━━━━━━━━━━━\n"
+        text += "📲 <b>Твои конфиги:</b>\n"
+        try:
+            import sqlite3 as _sq
+            _con = _sq.connect("/etc/UDPCustom/vpn.db")
+            _rows = _con.execute("SELECT name FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
+            _con.close()
+            for _nname_t in _rows:
+                text += f"  • {_nname_t[0]}\n"
+        except Exception as _e:
+            log.error(f"nodes list text: {_e}")
     if _is_adm_local:
         channels = get_channels()
         ch_name = channels[0].lstrip('@') if channels else 'ArsenVipKeys'
@@ -2591,7 +2592,7 @@ def handle_channel_test(cfg, user_id, first_name, hwid=None):
     # Авто-отправка .dark файла (если конфиг зашифрован)
     try:
         if dt_url and dt_url.startswith('darktunnel://'):
-            from bot_modules.cabinet import send_dark_file as _sdf
+            from bot_modules.cabinet import send_dark_files_all_nodes as _sdf
             _sdf(cfg, user_id, user_id, username)
     except Exception as _e:
         log.error(f"channel_test send_dark_file: {_e}")
