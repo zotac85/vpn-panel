@@ -12,6 +12,7 @@ sys.path.insert(0, '/usr/local/bin')
 from bot_modules.admin import get_admins, is_admin, handle_addadmin, handle_deladmin, handle_admins
 from bot_modules.autopost import handle_autopost, start_autopost_thread, load_autopost_config
 from bot_modules.cabinet import show_cabinet, handle_cabinet_callback
+from bot_modules import nodes_client as nc
 
 CONFIG_FILE = "/etc/UDPCustom/bot.conf"
 ISSUED_DB = "/etc/UDPCustom/bot_issued.db"
@@ -293,6 +294,13 @@ echo "OK"
                 log.info(f"Test key saved to DB: {username} (tg_id={tg_id})")
             except Exception as e:
                 log.error(f"DB save failed: {e}")
+            # Синхронизация на ноды
+            try:
+                sync_res = nc.sync_user_to_all_nodes(username, password, action="add")
+                for node_name, (ok, msg) in sync_res.items():
+                    log.info(f"sync test {username} -> {node_name}: {'OK' if ok else 'FAIL'} {msg}")
+            except Exception as e:
+                log.error(f"Node sync failed for test {username}: {e}")
             return username, password
         log.error(f"Ошибка создания: {r.stderr}")
         return None, None
@@ -397,6 +405,13 @@ echo "OK"
         except Exception as e:
             log.error(f"VIP DB save error: {e}")
         log.info(f"VIP создан: {username} (tg_id={tg_id}, {days}д, ${price})")
+        # Синхронизация на ноды
+        try:
+            sync_res = nc.sync_user_to_all_nodes(username, password, action="add")
+            for node_name, (ok, msg) in sync_res.items():
+                log.info(f"sync vip {username} -> {node_name}: {'OK' if ok else 'FAIL'} {msg}")
+        except Exception as e:
+            log.error(f"Node sync failed for vip {username}: {e}")
         return username, password
     except Exception as e:
         log.error(f"VIP exception: {e}")
@@ -1045,6 +1060,13 @@ def _do_key_delete(cfg, cb, tg_id, key_name):
     except Exception as e:
         log.error(f"userdel {key_name}: {e}")
 
+    # Синхронизация удаления на ноды
+    try:
+        sync_res = nc.sync_user_to_all_nodes(key_name, "", action="del")
+        for node_name, (ok, msg) in sync_res.items():
+            log.info(f"sync del {key_name} -> {node_name}: {'OK' if ok else 'FAIL'} {msg}")
+    except Exception as e:
+        log.error(f"Node sync del failed for {key_name}: {e}")
     # Чистим файлы
     for p in [f"/etc/UDPCustom/limits/{key_name}",
               f"/etc/UDPCustom/expire_ts/{key_name}",
