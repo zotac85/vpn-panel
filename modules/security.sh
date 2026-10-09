@@ -891,11 +891,6 @@ menu_sec() {
         [ "$upgradable" -gt 0 ] && US="${YELLOW}$upgradable обновлений${NC}" || US="${GREEN}Актуальна${NC}"
         echo -e " Обновление системы : $US"
 
-        if grep -q "net.ipv6.conf.all.disable_ipv6 = 1" /etc/sysctl.conf 2>/dev/null; then
-            echo -e " IPv6               : ${RED}🔴 Отключён${NC}"
-        else
-            echo -e " IPv6               : ${GREEN}🟢 Включён${NC}"
-        fi
 
         if ufw status 2>/dev/null | grep -q "Status: active"; then
             local rules=$(ufw status numbered 2>/dev/null | grep -c '^\[')
@@ -916,6 +911,16 @@ menu_sec() {
         else
             echo -e " TCP BBR            : ${RED}🔴 Выключен (Cubic)${NC}"
         fi
+        if command -v brutalctl &>/dev/null; then
+            local brules=$(brutalctl list 2>/dev/null | grep -c "/")
+            if [ "${brules:-0}" -gt 0 ]; then
+                echo -e " TCP Brutal         : ${GREEN}🟢 Установлен ($brules правил)${NC}"
+            else
+                echo -e " TCP Brutal         : ${YELLOW}🟡 Установлен (нет правил)${NC}"
+            fi
+        else
+            echo -e " TCP Brutal         : ${RED}🔴 Не установлен${NC}"
+        fi
 
         if grep -q "net.core.rmem_max" /etc/sysctl.conf 2>/dev/null; then
             echo -e " Буферы ядра        : ${GREEN}🟢 Оптимизированы${NC}"
@@ -923,11 +928,6 @@ menu_sec() {
             echo -e " Буферы ядра        : ${RED}🔴 Стандартные${NC}"
         fi
 
-        if grep -q "net.core.rmem_max" /etc/sysctl.conf 2>/dev/null; then
-    echo -e " Буферы ядра        : ${GREEN}🟢 Оптимизированы${NC}"
-else
-    echo -e " Буферы ядра        : ${RED}🔴 Стандартные${NC}"
-fi
 
 # ── SWAP (новая строка) ──
 local swap_used=$(free -m | awk '/Swap:/ {print $3}')
