@@ -214,6 +214,74 @@ PYCODE
     read -p "Нажмите Enter..."
 }
 
+
+_nodes_optimize() {
+    clear
+    echo -e "${YELLOW}── Оптимизация ноды ──${NC}"
+    echo ""
+    while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
+        [ -z "$_id" ] && continue
+        [ "$_im" = "1" ] && continue
+        echo "  $_id) $_name ($_ip)"
+    done < <(_nodes_py list)
+    echo ""
+    read -p "Введите ID ноды: " nid
+    [ -z "$nid" ] && return
+    row=$(_nodes_py get "$nid")
+    [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
+    IFS='|' read -r name host ip sport wsport suser <<< "$row"
+
+    # IP мастера для whitelist fail2ban
+    MASTER_IP=$(hostname -I | awk '{print $1}')
+
+    echo ""
+    echo -e "${CYAN}Оптимизирую ноду $name ($ip)...${NC}"
+    echo -e "${YELLOW}Master IP (whitelist): $MASTER_IP${NC}"
+    echo ""
+
+    # Копируем скрипт на ноду
+    scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" \
+        /usr/local/bin/vpn-optimize.sh root@"$ip":/usr/local/bin/vpn-optimize.sh >/dev/null 2>&1
+
+    # Запускаем оптимизацию
+    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" \
+        "chmod +x /usr/local/bin/vpn-optimize.sh && bash /usr/local/bin/vpn-optimize.sh '$MASTER_IP'"
+
+    echo ""
+    read -p "Нажмите Enter..."
+}
+
+
+_nodes_reboot() {
+    clear
+    echo -e "${YELLOW}── Перезагрузка ноды ──${NC}"
+    echo ""
+    while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
+        [ -z "$_id" ] && continue
+        [ "$_im" = "1" ] && continue
+        echo "  $_id) $_name ($_ip)"
+    done < <(_nodes_py list)
+    echo ""
+    read -p "Введите ID ноды: " nid
+    [ -z "$nid" ] && return
+    row=$(_nodes_py get "$nid")
+    [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
+    IFS='|' read -r name host ip sport wsport suser <<< "$row"
+
+    echo ""
+    read -p "Перезагрузить $name ($ip)? (y/n): " c
+    [[ "$c" != "y" && "$c" != "Y" ]] && return
+
+    echo ""
+    echo -e "${CYAN}Отправляю reboot на $name...${NC}"
+    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" \
+        "nohup reboot >/dev/null 2>&1 &" 2>/dev/null
+    echo -e "${GREEN}✅ Команда reboot отправлена${NC}"
+    echo "   Нода будет недоступна ~30-60 секунд"
+    echo ""
+    read -p "Нажмите Enter..."
+}
+
 menu_nodes() {
     while true; do
         clear
@@ -243,9 +311,11 @@ menu_nodes() {
         echo -e " 5) ⚙️  Установить WS на ноду"
         echo -e " 6) 🎨 Установить баннер на ноду"
         echo -e " 7) 🔄 Синхронизировать всех юзеров на ноды"
+        echo -e " 8) ⚡ Оптимизировать ноду"
+        echo -e " 9) 🔄 Перезагрузить ноду"
         echo -e " 0) ↩️  Назад"
         echo ""
-        read -p "Выберите действие [0-7]: " n_choice
+        read -p "Выберите действие [0-9]: " n_choice
         case "$n_choice" in
             1) _nodes_add ;;
             2) _nodes_check_all ;;
@@ -254,6 +324,8 @@ menu_nodes() {
             5) _nodes_install_ws ;;
             6) _nodes_install_banner ;;
             7) _nodes_sync_all_users ;;
+            8) _nodes_optimize ;;
+            9) _nodes_reboot ;;
             0) return ;;
         esac
     done
