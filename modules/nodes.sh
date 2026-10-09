@@ -152,9 +152,9 @@ import sqlite3, time
 db = sqlite3.connect('/etc/UDPCustom/vpn.db')
 now = int(time.time())
 for tbl in ['test_keys', 'vip_keys']:
-    for login, pwd in db.execute(f"SELECT login, password FROM {tbl} WHERE expires_at > ?", (now,)).fetchall():
+    for login, pwd, dev in db.execute(f"SELECT login, password, devices FROM {tbl} WHERE expires_at > ?", (now,)).fetchall():
         if login and pwd:
-            print(f"{login}|{pwd}")
+            print(f"{login}|{pwd}|{dev or 1}")
 PYCODE
 
     TOTAL=$(wc -l < "$TMP_FILE")
@@ -194,9 +194,9 @@ PYCODE
         echo -e "${CYAN}=== $_name ($_ip) ===${NC}"
         OK=0
         FAIL=0
-        while IFS='|' read -r login pwd; do
+        while IFS='|' read -r login pwd dev; do
             [ -z "$login" ] && continue
-            RES=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -p "$_sp" root@"$_ip" "node-user.sh add '$login' '$pwd'" < /dev/null 2>/dev/null)
+            RES=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -p "$_sp" root@"$_ip" "node-user.sh add '$login' '$pwd' && node-user.sh setlimit '$login' '$dev'" < /dev/null 2>/dev/null)
             if echo "$RES" | grep -q "OK"; then
                 OK=$((OK+1))
             else
