@@ -311,6 +311,13 @@ _nodes_check_all() {
 _nodes_key() {
     clear
     echo -e "${YELLOW}── Закинуть SSH-ключ мастера на ноду ──${NC}"
+    echo ""
+    while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
+        [ -z "$_id" ] && continue
+        [ "$_im" = "1" ] && continue
+        echo "  $_id) $_name ($_ip)"
+    done < <(_nodes_py list)
+    echo ""
     read -p "Введите ID ноды: " nid
     [ -z "$nid" ] && return
     row=$(_nodes_py get "$nid")
