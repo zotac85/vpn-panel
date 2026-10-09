@@ -64,11 +64,18 @@ def _run_on_node(node_id, *args, timeout=15):
         return (-1, "", str(e))
 
 
-def node_add_user(node_id, username, password):
+def node_add_user(node_id, username, password, device_limit=None):
     rc, out, err = _run_on_node(node_id, "add", username, password)
-    if rc == 0 and "OK" in out:
-        return (True, out)
-    return (False, err or out or "unknown error")
+    if rc != 0 or "OK" not in out:
+        return (False, err or out or "unknown error")
+    # Устанавливаем лимит устройств
+    if device_limit is not None:
+        try:
+            dl = int(device_limit)
+            _run_on_node(node_id, "setlimit", username, str(dl))
+        except Exception as e:
+            logger.error(f"setlimit {username}={device_limit}: {e}")
+    return (True, out)
 
 
 def node_del_user(node_id, username):
@@ -124,9 +131,10 @@ def node_check(node_id):
     return (False, 0)
 
 
-def sync_user_to_all_nodes(username, password, action="add"):
+def sync_user_to_all_nodes(username, password, action="add", device_limit=None):
     """Синхронизирует юзера на все активные ноды (кроме мастера).
     action: 'add' | 'del' | 'passwd'
+    device_limit: количество устройств (только для action='add')
     Возвращает dict {node_name: (success, msg)}.
     """
     results = {}
@@ -134,7 +142,7 @@ def sync_user_to_all_nodes(username, password, action="add"):
         if is_master:
             continue
         if action == "add":
-            ok, msg = node_add_user(node_id, username, password)
+            ok, msg = node_add_user(node_id, username, password, device_limit=device_limit)
         elif action == "del":
             ok, msg = node_del_user(node_id, username)
         elif action == "passwd":

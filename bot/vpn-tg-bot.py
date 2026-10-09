@@ -296,7 +296,7 @@ echo "OK"
                 log.error(f"DB save failed: {e}")
             # Синхронизация на ноды
             try:
-                sync_res = nc.sync_user_to_all_nodes(username, password, action="add")
+                sync_res = nc.sync_user_to_all_nodes(username, password, action="add", device_limit=devices)
                 for node_name, (ok, msg) in sync_res.items():
                     log.info(f"sync test {username} -> {node_name}: {'OK' if ok else 'FAIL'} {msg}")
             except Exception as e:
@@ -407,7 +407,7 @@ echo "OK"
         log.info(f"VIP создан: {username} (tg_id={tg_id}, {days}д, ${price})")
         # Синхронизация на ноды
         try:
-            sync_res = nc.sync_user_to_all_nodes(username, password, action="add")
+            sync_res = nc.sync_user_to_all_nodes(username, password, action="add", device_limit=devices)
             for node_name, (ok, msg) in sync_res.items():
                 log.info(f"sync vip {username} -> {node_name}: {'OK' if ok else 'FAIL'} {msg}")
         except Exception as e:
