@@ -639,6 +639,12 @@ def do_key_reset_hwid(cfg, chat_id, user_id, key_name, new_hwid, msg_id=None):
         sync_res = nc.sync_user_to_all_nodes(key_name, new_password, action="add", device_limit=_dev_lim)
         for node_name, (ok, msg) in sync_res.items():
             cab_log.info(f"sync passwd {key_name} -> {node_name}: {'OK' if ok else 'FAIL'} {msg}")
+        # Разбаниваем всех на нодах (клиент мог попасть в бан после старого пароля)
+        try:
+            nc.unban_all_nodes()
+            cab_log.info(f"unban_all_nodes done for reset {key_name}")
+        except Exception as _e:
+            cab_log.error(f"unban_all_nodes failed: {_e}")
     except Exception as e:
         cab_log.error(f"Node sync passwd failed for {key_name}: {e}")
     try:

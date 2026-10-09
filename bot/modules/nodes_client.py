@@ -167,3 +167,21 @@ def collect_traffic_from_all_nodes():
             except Exception:
                 pass
     return total
+
+
+def unban_all_nodes():
+    """Разбанивает все IP на всех активных нодах через fail2ban."""
+    results = {}
+    for node_id, name, host, ip, ssh_port, ws_port, is_master in get_all_active_nodes():
+        if is_master:
+            continue
+        try:
+            rc, out, err = _run_on_node(node_id, "true", timeout=5)
+            # используем ssh напрямую, node-user.sh unban нет — отдельная команда
+            import subprocess
+            cmd = ["ssh"] + SSH_OPTS + ["-p", str(ssh_port), f"root@{ip}", "fail2ban-client unban --all 2>/dev/null || true"]
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            results[name] = (True, "unban ok")
+        except Exception as e:
+            results[name] = (False, str(e))
+    return results
