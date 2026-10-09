@@ -620,8 +620,7 @@ while read -r u; do
 done < "$DB_USERS"
 CHK_EOF
 chmod +x /usr/local/bin/vpn-traffic-check.sh
-echo "*/5 * * * * root /usr/local/bin/vpn-traffic-check.sh" > /etc/cron.d/vpn-traffic-check
-chmod 644 /etc/cron.d/vpn-traffic-check
+# vpn-traffic-check теперь на Python (см. блок ниже)
 
 # ── АВТООЧИСТКА ИСТЁКШИХ ──
 cat << 'CLEANUP_EOF' > /usr/local/bin/vpn-auto-cleanup.sh
@@ -676,6 +675,18 @@ if [ -f /usr/local/bin/vpn-backup.sh ]; then
     chmod 644 /etc/cron.d/vpn-backup
     echo -e "\033[0;32m✅   Автобэкап: ежедневно в 4:00 → /root/backups/\033[0m"
 fi
+# vpn-traffic-check.py — единый трафик + блокировка по лимиту
+curl -sf -o /usr/local/bin/vpn-traffic-check.py "$REPO_URL/scripts/vpn-traffic-check.py"
+if [ $? -eq 0 ]; then
+    chmod +x /usr/local/bin/vpn-traffic-check.py
+    python3 -m py_compile /usr/local/bin/vpn-traffic-check.py 2>/dev/null
+    echo "*/5 * * * * root /usr/bin/python3 /usr/local/bin/vpn-traffic-check.py" > /etc/cron.d/vpn-traffic-check
+    chmod 644 /etc/cron.d/vpn-traffic-check
+    echo -e "\033[0;32m✅   vpn-traffic-check установлен\033[0m"
+else
+    echo -e "\033[0;33m⚠️  Не удалось скачать vpn-traffic-check.py\033[0m"
+fi
+
 # vpn-nodes-check.py — проверка статуса нод каждые 5 мин
 curl -sf -o /usr/local/bin/vpn-nodes-check.py "$REPO_URL/scripts/vpn-nodes-check.py"
 if [ $? -eq 0 ]; then
@@ -700,8 +711,7 @@ curl -sf -o /usr/local/bin/vpn-traffic-sync.py "$REPO_URL/bot/vpn-traffic-sync.p
 if [ $? -eq 0 ]; then
     chmod +x /usr/local/bin/vpn-traffic-sync.py
     python3 -m py_compile /usr/local/bin/vpn-traffic-sync.py 2>/dev/null
-    echo "*/5 * * * * root sleep 30 && /usr/local/bin/vpn-traffic-sync.py" > /etc/cron.d/vpn-traffic-sync
-    chmod 644 /etc/cron.d/vpn-traffic-sync
+    # vpn-traffic-sync заменён единым vpn-traffic-check.py
     echo -e "\033[0;32m✅  vpn-traffic-sync установлен\033[0m"
 else
     echo -e "\033[0;33m⚠️  Не удалось скачать vpn-traffic-sync.py\033[0m"
