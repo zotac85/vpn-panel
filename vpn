@@ -19,6 +19,7 @@ source "$PANEL_DIR/modules/maintenance.sh"
 source "$PANEL_DIR/modules/torrent_block.sh"
 source "$PANEL_DIR/modules/tgbot.sh"
 source "$PANEL_DIR/modules/domain_proxy.sh"
+source "$PANEL_DIR/modules/nodes.sh"
 
 while true; do
     header
@@ -34,9 +35,10 @@ while true; do
     echo -e " 6) 🚫 Блокировка торрентов"
     echo -e " 7) 🤖 Telegram-бот"
     echo -e " 8) 🔄 Обновить скрипт ВПН"
+    echo -e " 9) 🌍 Управление нодами"
     echo -e " 0) 🚪 Выход"
     echo -e "${CYAN}────────────────────────────────────────────${NC}"
-    read -p "Выберите раздел [0-8]: " main_choice
+    read -p "Выберите раздел [0-9]: " main_choice
 
     case $main_choice in
         1) menu_users ;;
@@ -51,6 +53,7 @@ while true; do
            bash <(curl -Ls https://raw.githubusercontent.com/zotac85/vpn-panel/main/install.sh)
            read -p "Нажмите Enter для продолжения..."
            ;;
+        9) menu_nodes ;;
         0) clear; exit 0 ;;
         *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
     esac
