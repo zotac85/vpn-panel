@@ -8,7 +8,7 @@ log() { echo "[$(date '+%F %T')] $*" >> "$LOG" 2>/dev/null; }
 
 [ "$(id -u)" -eq 0 ] || { echo "ERROR: запускать от root"; exit 1; }
 
-is_our_user() { [[ "$1" == vip_* || "$1" == test_* ]]; }
+is_our_user() { [[ "$1" == vip* || "$1" == test* ]]; }
 
 get_uid() { id -u "$1" 2>/dev/null; }
 
