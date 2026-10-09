@@ -67,9 +67,9 @@ do_fail2ban() {
     apt install -y -qq fail2ban >/dev/null 2>&1
     cat > /etc/fail2ban/jail.local << F2BEOF
 [DEFAULT]
-bantime = 1h
+bantime = 10m
 findtime = 10m
-maxretry = 5
+maxretry = 10
 ignoreip = 127.0.0.1/8 ::1 ${MASTER_IP}
 
 [sshd]
