@@ -1,3 +1,4 @@
+source /usr/local/share/vpn-panel/modules/brutal.sh
 #!/bin/bash
 
 # ──────────────────────────────────────────────────────────────
@@ -963,24 +964,26 @@ fi
         echo -e " 11) 🚀 Включить / Выключить TCP BBR"
         echo -e " 12) ⚡ Оптимизировать буферы ядра"
         echo -e " 13) 💾 Создать / пересоздать swap"
+        echo -e " 14) 🔥 Установить / Настроить TCP Brutal"
         echo ""
         echo -e "${CYAN}─── 🔄 Управление ───${NC}"
-        echo -e " 14) 📊 Мониторинг (htop)"
-        echo -e " 15) 🔄 Перезагрузка сервера"
-        echo -e " 16) 🛑 Выключение сервера"
-        echo -e " 17) 🛡  Блокировка ICMP (анти-DPI)"
+        echo -e " 15) 📊 Мониторинг (htop)"
+        echo -e " 16) 🔄 Перезагрузка сервера"
+        echo -e " 17) 🛑 Выключение сервера"
+        echo -e " 18) 🛡  Блокировка ICMP (анти-DPI)"
         echo ""
         echo -e "${CYAN}─── 💾 Бэкап / Восстановление ───${NC}"
-        echo -e " 18) 💾 Создать бэкап сейчас"
-        echo -e " 19) 📂 Список бэкапов"
-        echo -e " 20) 📥 Восстановить из файла"
+        echo -e " 19) 💾 Создать бэкап сейчас"
+        echo -e " 20) 📂 Список бэкапов"
+        echo -e " 21) 📥 Восстановить из файла"
         echo ""
         echo -e " 0) ↩️  Назад в главное меню"
         echo ""
-        read -p "Выберите раздел [0-20]: " sec_choice
+        read -p "Выберите раздел [0-21]: " sec_choice
 
         case $sec_choice in
             1) system_update ;;
+            14) manage_tcp_brutal ;;
             2) change_timezone ;;
             3) change_dns ;;
             4) cleanup_system ;;
