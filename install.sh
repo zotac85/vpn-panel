@@ -676,6 +676,18 @@ if [ -f /usr/local/bin/vpn-backup.sh ]; then
     chmod 644 /etc/cron.d/vpn-backup
     echo -e "\033[0;32m✅   Автобэкап: ежедневно в 4:00 → /root/backups/\033[0m"
 fi
+# vpn-nodes-check.py — проверка статуса нод каждые 5 мин
+curl -sf -o /usr/local/bin/vpn-nodes-check.py "$REPO_URL/scripts/vpn-nodes-check.py"
+if [ $? -eq 0 ]; then
+    chmod +x /usr/local/bin/vpn-nodes-check.py
+    python3 -m py_compile /usr/local/bin/vpn-nodes-check.py 2>/dev/null
+    echo "*/5 * * * * root /usr/local/bin/vpn-nodes-check.py >> /var/log/vpn-nodes-check.log 2>&1" > /etc/cron.d/vpn-nodes-check
+    chmod 644 /etc/cron.d/vpn-nodes-check
+    echo -e "\033[0;32m✅   vpn-nodes-check установлен\033[0m"
+else
+    echo -e "\033[0;33m⚠️  Не удалось скачать vpn-nodes-check.py\033[0m"
+fi
+
 systemctl restart cron 2>/dev/null || systemctl restart crond 2>/dev/null
 
 # ──────────────────────────────────────────────────────────────
