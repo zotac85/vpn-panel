@@ -4,7 +4,7 @@
 
 **Панель управления SSH-туннелями + Telegram-бот для продажи ключей**
 
-![Version](https://img.shields.io/badge/version-2.0.0-blue?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-3.0.0-blue?style=for-the-badge)
 ![Platform](https://img.shields.io/badge/platform-Ubuntu%20%7C%20Debian-orange?style=for-the-badge)
 ![Python](https://img.shields.io/badge/python-3.10+-yellow?style=for-the-badge)
 
@@ -31,6 +31,23 @@
 - 📊 Статистика, рассылка, автопостинг, мульти-админ
 
 **Бот поддержки** — FAQ-автоответы + тикеты.
+
+---
+
+## 🆕 Что нового в v3.0.0
+
+**🌍 Мульти-нода** — мастер + неограниченное число нод:
+- Управление нодами из панели мастера (добавить / проверить / reboot / оптимизировать)
+- Синхронизация юзеров, паролей, HWID, лимитов устройств
+- Выдача `.dark` файлов со **всех онлайн-локаций** — клиент сам выбирает
+- Единый сбор трафика со всех нод + общий лимит
+- Блокировка при превышении лимита сразу на всех серверах
+
+**⚡ Оптимизация одной кнопкой:**
+- apt upgrade, IPv6 off, UFW + Fail2ban, TCP BBR, TCP Brutal (20 Mbps), буферы ядра, Swap 1 GB
+
+**🔧 Новые скрипты:**
+`install-node.sh`, `node-user.sh`, `nodes_client.py`, `vpn-traffic-check.py`, `vpn-nodes-check.py`, `vpn-limit-check.sh`, `vpn-optimize.sh`
 
 ---
 
