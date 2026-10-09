@@ -31,6 +31,12 @@ if [ ! -f /etc/UDPCustom/test_issued.txt ] || ! grep -q "{username}" /etc/UDPCus
     curl -sf -o /etc/UDPCustom/test_issued.txt "$REPO_URL/configs/test_issued.txt"
 fi
 
+# my_keys_empty.txt — экран "нет ключей"
+if [ ! -f /etc/UDPCustom/my_keys_empty.txt ] || ! grep -q "sponsors_block" /etc/UDPCustom/my_keys_empty.txt 2>/dev/null; then
+    [ -f /etc/UDPCustom/my_keys_empty.txt ] && cp /etc/UDPCustom/my_keys_empty.txt /etc/UDPCustom/my_keys_empty.txt.bak
+    curl -sf -o /etc/UDPCustom/my_keys_empty.txt "$REPO_URL/configs/my_keys_empty.txt"
+fi
+
 # help.txt — главный экран /help
 if [ ! -f /etc/UDPCustom/help.txt ] || ! grep -q "{primary}" /etc/UDPCustom/help.txt 2>/dev/null; then
     [ -f /etc/UDPCustom/help.txt ] && cp /etc/UDPCustom/help.txt /etc/UDPCustom/help.txt.bak
