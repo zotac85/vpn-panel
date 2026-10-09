@@ -954,11 +954,9 @@ def show_darktunnel_url(cfg, chat_id, user_id, key_name, msg_id=None):
         "📲 <b>КОНФИГ DarkTunnel</b>",
         "━━━━━━━━━━━━━━━━━━━━",
         "",
-        "<b>Тапни по коду ниже — он скопируется:</b>",
+        "Нажми кнопку ниже, чтобы получить <b>.dark</b> файл:",
         "",
-        f"<code>{dt_url}</code>",
-        "",
-        "<i>Затем открой DarkTunnel → ➕ → Импорт из буфера</i>"
+        "<i>Открой DarkTunnel → ➕ → Импорт из буфера</i>",
     ])
     keyboard = {'inline_keyboard': [
         [{'text': '\U0001F4E5 Скачать .dark файл ещё раз', 'callback_data': f'cab_darkfile:{key_name}'}],
