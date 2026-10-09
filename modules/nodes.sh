@@ -56,6 +56,44 @@ _nodes_sync_key() {
         "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && echo KEY_ADDED"
 }
 
+
+_nodes_install_ws() {
+    clear
+    echo -e "${YELLOW}── Установка WS на ноду ──${NC}"
+    echo ""
+    while IFS='|' read -r id name host ip sport wsport is_master is_active status; do
+        [ -z "$id" ] && continue
+        [ "$is_master" = "1" ] && continue
+        echo "  $id) $name ($ip)"
+    done < <(_nodes_py list)
+    echo ""
+    read -p "Введите ID ноды: " nid
+    [ -z "$nid" ] && return
+    row=$(_nodes_py get "$nid")
+    [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
+    IFS='|' read -r name host ip sport wsport suser <<< "$row"
+    echo ""
+    echo -e "${CYAN}Устанавливаю WS на $name ($ip)...${NC}"
+    echo -e "${YELLOW}Будут использованы порты: WS=$wsport, SSH=$sport${NC}"
+    echo ""
+    # Копируем свежий скрипт с мастера (обходим кэш GitHub)
+    LOCAL_SCRIPT="/usr/local/share/vpn-panel/install-node.sh"
+    if [ ! -f "$LOCAL_SCRIPT" ]; then
+        LOCAL_SCRIPT="/root/vpn-panel-sync/install-node.sh"
+    fi
+    if [ ! -f "$LOCAL_SCRIPT" ]; then
+        echo -e "${RED}Не найден install-node.sh ни в панели, ни в репо${NC}"
+        read -p "Нажмите Enter..."
+        return
+    fi
+    scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" \
+        "$LOCAL_SCRIPT" root@"$ip":/tmp/inst.sh >/dev/null 2>&1
+    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" \
+        "printf '%s\n%s\n' '$wsport' '$sport' | bash /tmp/inst.sh"
+    echo ""
+    read -p "Нажмите Enter..."
+}
+
 menu_nodes() {
     while true; do
         clear
@@ -82,14 +120,16 @@ menu_nodes() {
         echo -e " 2) 🔍 Проверить все ноды (SSH)"
         echo -e " 3) 🗑️  Удалить ноду"
         echo -e " 4) 🔑 Закинуть SSH-ключ на ноду"
+        echo -e " 5) ⚙️  Установить WS на ноду"
         echo -e " 0) ↩️  Назад"
         echo ""
-        read -p "Выберите действие [0-4]: " n_choice
+        read -p "Выберите действие [0-5]: " n_choice
         case "$n_choice" in
             1) _nodes_add ;;
             2) _nodes_check_all ;;
             3) _nodes_del ;;
             4) _nodes_key ;;
+            5) _nodes_install_ws ;;
             0) return ;;
         esac
     done

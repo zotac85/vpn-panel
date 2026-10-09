@@ -179,6 +179,11 @@ if [ -d "$PANEL_DIR" ] || [ -f "/usr/local/bin/vpn" ]; then
                 chmod +x "$PANEL_DIR/core.sh"
                 echo "   ✓ core.sh"
             fi
+            if [ -f "$REPO_DIR/install-node.sh" ]; then
+                cp "$REPO_DIR/install-node.sh" "$PANEL_DIR/install-node.sh"
+                chmod +x "$PANEL_DIR/install-node.sh"
+                echo "   ✓ install-node.sh"
+            fi
             for f in "$REPO_DIR/modules/"*.sh; do
                 if [ -f "$f" ]; then
                     base=$(basename "$f")
@@ -314,6 +319,7 @@ echo -e "\n📥 Скачивание актуальных файлов с GitHub
 FILES_CORE=(
     "core.sh:$PANEL_DIR/core.sh"
     "vpn:/usr/local/bin/vpn"
+    "install-node.sh:$PANEL_DIR/install-node.sh"
 )
 
 FILES_MODULES=(
