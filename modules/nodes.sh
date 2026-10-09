@@ -203,6 +203,7 @@ PYCODE
                 FAIL=$((FAIL+1))
                 echo -e "  ${RED}✗ $login: $RES${NC}"
             fi
+            sleep 0.3
         done < "$TMP_FILE"
         echo -e "  ${GREEN}✓ Синхронизировано: $OK${NC}   ${RED}✗ Ошибок: $FAIL${NC}"
         echo ""
