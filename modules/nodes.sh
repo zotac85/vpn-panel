@@ -94,6 +94,52 @@ _nodes_install_ws() {
     read -p "Нажмите Enter..."
 }
 
+
+_nodes_install_banner() {
+    clear
+    echo -e "${YELLOW}── Установка баннера на ноду ──${NC}"
+    echo ""
+    while IFS='|' read -r id name host ip sport wsport is_master is_active status; do
+        [ -z "$id" ] && continue
+        [ "$is_master" = "1" ] && continue
+        echo "  $id) $name ($ip)"
+    done < <(_nodes_py list)
+    echo ""
+    read -p "Введите ID ноды: " nid
+    [ -z "$nid" ] && return
+    row=$(_nodes_py get "$nid")
+    [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
+    IFS='|' read -r name host ip sport wsport suser <<< "$row"
+
+    # Генерируем баннер из шаблона мастера, подменяя локацию
+    BANNER_SRC="/etc/UDPCustom/ssh_banner.txt"
+    [ ! -f "$BANNER_SRC" ] && { echo -e "${RED}Нет /etc/UDPCustom/ssh_banner.txt на мастере${NC}"; read -p "Enter..."; return; }
+
+    # Заменяем "Локация: <старое>" на "Локация: <name>"
+    TMP="/tmp/banner_${nid}.txt"
+    sed -E "s|(📍 Локация: ).*|\1${name}</font></b></h6>|" "$BANNER_SRC" > "$TMP"
+
+    echo ""
+    echo -e "${CYAN}Копирую баннер на $name ($ip)...${NC}"
+
+    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "mkdir -p /etc/UDPCustom"
+    scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" "$TMP" root@"$ip":/etc/UDPCustom/ssh_banner.txt >/dev/null 2>&1
+    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "
+        chmod 644 /etc/UDPCustom/ssh_banner.txt
+        if ! grep -qE '^[[:space:]]*Banner' /etc/ssh/sshd_config; then
+            echo 'Banner /etc/UDPCustom/ssh_banner.txt' >> /etc/ssh/sshd_config
+        else
+            sed -i 's|^[[:space:]]*Banner.*|Banner /etc/UDPCustom/ssh_banner.txt|' /etc/ssh/sshd_config
+        fi
+        systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+        echo 'BANNER SET on '\$(hostname)
+    " >/dev/null 2>&1
+    rm -f "$TMP"
+    echo -e "${GREEN}✅ Баннер установлен на $name${NC}"
+    echo ""
+    read -p "Нажмите Enter..."
+}
+
 menu_nodes() {
     while true; do
         clear
@@ -121,15 +167,17 @@ menu_nodes() {
         echo -e " 3) 🗑️  Удалить ноду"
         echo -e " 4) 🔑 Закинуть SSH-ключ на ноду"
         echo -e " 5) ⚙️  Установить WS на ноду"
+        echo -e " 6) 🎨 Установить баннер на ноду"
         echo -e " 0) ↩️  Назад"
         echo ""
-        read -p "Выберите действие [0-5]: " n_choice
+        read -p "Выберите действие [0-6]: " n_choice
         case "$n_choice" in
             1) _nodes_add ;;
             2) _nodes_check_all ;;
             3) _nodes_del ;;
             4) _nodes_key ;;
             5) _nodes_install_ws ;;
+            6) _nodes_install_banner ;;
             0) return ;;
         esac
     done
