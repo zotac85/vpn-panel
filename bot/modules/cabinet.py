@@ -441,32 +441,52 @@ def show_my_keys(cfg, chat_id, user_id, kind='all', msg_id=None):
         except: pass
         primary = channels[0] if channels else "ArsenVipKeys"
         sponsors = channels[1:] if len(channels) > 1 else []
-        lines.append("━━━━━━━━━━━━━━━━━━━━")
-        lines.append("🎁 <b>КАК ПОЛУЧИТЬ БЕСПЛАТНЫЙ ТЕСТ</b>")
-        lines.append("━━━━━━━━━━━━━━━━━━━━")
-        lines.append("")
-        lines.append(f"1️⃣ Зайди в канал @{primary}")
-        lines.append("2️⃣ Поставь 👍 лайки на 3 последних поста")
-        lines.append("")
+        # Читаем шаблон из файла (редактируемый через /admin)
+        _hours   = cfg.get('TEST_HOURS', '8')
+        _gb      = cfg.get('TEST_TRAFFIC_GB', '50')
+        _dev     = cfg.get('TEST_DEVICES', '1')
+        _support = _get_support()
         if sponsors:
-            lines.append("3️⃣ Подпишись на спонсоров (обязательно!):")
-            lines.append("")
+            _sp_lines = "3️⃣ Подпишись на спонсоров (обязательно!):"
+            _sp_lines += chr(10) + chr(10)
             for s in sponsors:
-                lines.append(f"   📢 @{s}")
-            lines.append("   ⚠️ Без подписки ключ не дадут")
-            lines.append("")
-            lines.append(f"4️⃣ Найди в @{primary} пост с кнопкой")
-            lines.append("   «🎁 Получить тест» и нажми её")
-            lines.append("")
-            lines.append("5️⃣ Ключ прилетит сюда, в бот")
+                _sp_lines += f"   📢 @{s}" + chr(10)
+            _sp_lines += "   ⚠️ Без подписки ключ не дадут"
+            _sp_lines += chr(10) + chr(10)
+            _step = "4️⃣"
         else:
-            lines.append(f"3️⃣ Найди в @{primary} пост с кнопкой")
-            lines.append("   «🎁 Получить тест» и нажми её")
+            _sp_lines = ""
+            _step = "3️⃣"
+        try:
+            with open("/etc/UDPCustom/my_keys_empty.txt", encoding="utf-8") as _f:
+                _tpl = _f.read()
+            _tpl = _tpl.replace("{primary}", primary)
+            _tpl = _tpl.replace("{sponsors_block}", _sp_lines)
+            _tpl = _tpl.replace("{step}", _step)
+            _tpl = _tpl.replace("{hours}", str(_hours))
+            _tpl = _tpl.replace("{gb}", str(_gb))
+            _tpl = _tpl.replace("{devices}", str(_dev))
+            _tpl = _tpl.replace("{support}", _support or "")
+            lines.append(_tpl)
+        except Exception as _e:
+            # Fallback — старая логика
+            lines.append("━━━━━━━━━━━━━━━━━━━━")
+            lines.append("🎁 <b>КАК ПОЛУЧИТЬ БЕСПЛАТНЫЙ ТЕСТ</b>")
+            lines.append("━━━━━━━━━━━━━━━━━━━━")
             lines.append("")
-            lines.append("4️⃣ Ключ прилетит сюда, в бот")
-        lines.append("━━━━━━━━━━━━━━━━━━━━")
-        lines.append("🎁 Тест:  8 часов · 50 ГБ · 1 устр.")
-        lines.append(f"💎 VIP:   {_get_support()}")
+            lines.append(f"1️⃣ Зайди в канал @{primary}")
+            lines.append("2️⃣ Поставь 👍 лайки на 3 последних поста")
+            lines.append("")
+            if sponsors:
+                lines.append("3️⃣ Подпишись на спонсоров:")
+                for s in sponsors:
+                    lines.append(f"   📢 @{s}")
+                lines.append("")
+            lines.append(f"Найди в @{primary} пост с кнопкой «🎁 Получить тест»")
+            lines.append("")
+            lines.append("━━━━━━━━━━━━━━━━━━━━")
+            lines.append(f"🎁 Тест:  {_hours} часов · {_gb} ГБ · {_dev} устр.")
+            lines.append(f"💎 VIP:   {_support}")
     else:
         for kk, k in items:
             if k['expires_at'] == 0:
@@ -611,7 +631,7 @@ def do_key_reset_hwid(cfg, chat_id, user_id, key_name, new_hwid, msg_id=None):
         cab_log.error(f"chpasswd error: {e}")
     # Синхронизация нового пароля на ноды
     try:
-        sync_res = nc.sync_user_to_all_nodes(key_name, new_password, action="passwd")
+        sync_res = nc.sync_user_to_all_nodes(key_name, new_password, action="add")
         for node_name, (ok, msg) in sync_res.items():
             cab_log.info(f"sync passwd {key_name} -> {node_name}: {'OK' if ok else 'FAIL'} {msg}")
     except Exception as e:
@@ -845,6 +865,20 @@ def _build_dark_url_for_key(cfg, key_name, domain=None, ws_port=None, location_n
             return dt_url, _cfg_name
         except Exception as e:
             cab_log.error(f"_build_dark_url: {e}")
+            return None, None
+    else:
+        # Открытый конфиг (без HWID)
+        try:
+            if key_name.startswith('vip_'):
+                _cfg_name = f"\U0001F48E VIP {_loc} {key_name[4:]}"
+            elif key_name.startswith('test'):
+                _cfg_name = f"\U0001F381 TEST {_loc} {key_name[4:]}"
+            else:
+                _cfg_name = f"\u2B50  {key_name}"
+            dt_url = make_darktunnel_url(key_name, password, domain, ws_port, proxy, _loc)
+            return dt_url, _cfg_name
+        except Exception as e:
+            cab_log.error(f"_build_dark_url_for_key open: {e}")
             return None, None
     return None, None
 

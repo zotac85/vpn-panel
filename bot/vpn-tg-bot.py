@@ -1850,6 +1850,7 @@ EDIT_FILES = {
     'ref_post': {'file': 'ref_post.txt', 'name': '📤 Реферальный пост', 'ph': '{bot_name}, {primary}, {sponsors_list}, {hours}, {gb}, {devices}, {location}, {support}'},
     'rate': {'file': 'rate.txt', 'name': '💰 Курс USDT', 'ph': '(число)'},
     'ssh_banner': {'file': 'ssh_banner.txt', 'name': '🖥️ SSH-баннер', 'ph': '(HTML: h5, h6, font)'},
+    'my_keys_empty': {'file': 'my_keys_empty.txt', 'name': '🔑 Мои ключи (пустой)', 'ph': '{primary}, {sponsors_block}, {step}, {hours}, {gb}, {devices}, {support}'},
 }
 
 
