@@ -295,6 +295,7 @@ FILES_MODULES=(
     "udp.sh"
     "ws.sh"
     "security.sh"
+    "brutal.sh"
     "traffic.sh"
     "devicelimit.sh"
     "maintenance.sh"
