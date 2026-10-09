@@ -140,6 +140,79 @@ _nodes_install_banner() {
     read -p "Нажмите Enter..."
 }
 
+
+_nodes_sync_all_users() {
+    clear
+    echo -e "${YELLOW}── Синхронизация всех юзеров на ноды ──${NC}"
+    echo ""
+
+    TMP_FILE="/tmp/_sync_users.$$"
+    python3 - > "$TMP_FILE" << 'PYCODE'
+import sqlite3, time
+db = sqlite3.connect('/etc/UDPCustom/vpn.db')
+now = int(time.time())
+for tbl in ['test_keys', 'vip_keys']:
+    for login, pwd in db.execute(f"SELECT login, password FROM {tbl} WHERE expires_at > ?", (now,)).fetchall():
+        if login and pwd:
+            print(f"{login}|{pwd}")
+PYCODE
+
+    TOTAL=$(wc -l < "$TMP_FILE")
+    if [ "$TOTAL" -eq 0 ]; then
+        echo -e "${YELLOW}Нет активных юзеров в БД${NC}"
+        rm -f "$TMP_FILE"
+        read -p "Нажмите Enter..."
+        return
+    fi
+
+    echo -e "${CYAN}Активных юзеров в БД: $TOTAL${NC}"
+    echo ""
+
+    mapfile -t NODE_LINES < <(_nodes_py list | awk -F'|' '$7=="0"')
+    if [ "${#NODE_LINES[@]}" -eq 0 ]; then
+        echo -e "${YELLOW}Нет нод (кроме мастера)${NC}"
+        rm -f "$TMP_FILE"
+        read -p "Нажмите Enter..."
+        return
+    fi
+
+    echo -e "${CYAN}Ноды для синхронизации:${NC}"
+    for line in "${NODE_LINES[@]}"; do
+        IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st <<< "$line"
+        echo "  • $_name ($_ip)"
+    done
+    echo ""
+    read -p "Начать синхронизацию? (y/n): " confirm
+    if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+        rm -f "$TMP_FILE"
+        return
+    fi
+
+    echo ""
+    for line in "${NODE_LINES[@]}"; do
+        IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st <<< "$line"
+        echo -e "${CYAN}=== $_name ($_ip) ===${NC}"
+        OK=0
+        FAIL=0
+        while IFS='|' read -r login pwd; do
+            [ -z "$login" ] && continue
+            RES=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -p "$_sp" root@"$_ip" "node-user.sh add '$login' '$pwd'" < /dev/null 2>/dev/null)
+            if echo "$RES" | grep -q "OK"; then
+                OK=$((OK+1))
+            else
+                FAIL=$((FAIL+1))
+                echo -e "  ${RED}✗ $login: $RES${NC}"
+            fi
+        done < "$TMP_FILE"
+        echo -e "  ${GREEN}✓ Синхронизировано: $OK${NC}   ${RED}✗ Ошибок: $FAIL${NC}"
+        echo ""
+    done
+
+    rm -f "$TMP_FILE"
+    echo -e "${GREEN}✅ Синхронизация завершена${NC}"
+    read -p "Нажмите Enter..."
+}
+
 menu_nodes() {
     while true; do
         clear
@@ -168,9 +241,10 @@ menu_nodes() {
         echo -e " 4) 🔑 Закинуть SSH-ключ на ноду"
         echo -e " 5) ⚙️  Установить WS на ноду"
         echo -e " 6) 🎨 Установить баннер на ноду"
+        echo -e " 7) 🔄 Синхронизировать всех юзеров на ноды"
         echo -e " 0) ↩️  Назад"
         echo ""
-        read -p "Выберите действие [0-6]: " n_choice
+        read -p "Выберите действие [0-7]: " n_choice
         case "$n_choice" in
             1) _nodes_add ;;
             2) _nodes_check_all ;;
@@ -178,6 +252,7 @@ menu_nodes() {
             4) _nodes_key ;;
             5) _nodes_install_ws ;;
             6) _nodes_install_banner ;;
+            7) _nodes_sync_all_users ;;
             0) return ;;
         esac
     done
