@@ -94,6 +94,23 @@ cmd_passwd() {
     log "PASSWD $user"
 }
 
+cmd_lock() {
+    local user="$1"
+    id -u "$user" &>/dev/null || { echo "ERROR: юзер не найден"; exit 1; }
+    usermod -L "$user" 2>/dev/null
+    usermod -s /usr/sbin/nologin "$user" 2>/dev/null
+    pkill -KILL -u "$user" 2>/dev/null || true
+    echo "OK: заблокирован"
+}
+
+cmd_unlock() {
+    local user="$1"
+    id -u "$user" &>/dev/null || { echo "ERROR: юзер не найден"; exit 1; }
+    usermod -U "$user" 2>/dev/null
+    usermod -s /bin/false "$user" 2>/dev/null
+    echo "OK: разблокирован"
+}
+
 cmd_list() {
     grep -E '^(vip_|test_)' /etc/passwd | cut -d: -f1
 }
@@ -142,10 +159,12 @@ case "$1" in
     list)               cmd_list ;;
     traffic)            shift; cmd_traffic "$@" ;;
     traffic-all)        cmd_traffic_all ;;
+    lock)               shift; cmd_lock "$@" ;;
+    unlock)             shift; cmd_unlock "$@" ;;
     reset-traffic)      shift; cmd_reset_traffic "$@" ;;
     reset-traffic-all)  cmd_reset_traffic_all ;;
     *)
-        echo "Usage: $0 {add|del|passwd|list|traffic|traffic-all|reset-traffic|reset-traffic-all} ..."
+        echo "Usage: $0 {add|del|passwd|lock|unlock|list|traffic|traffic-all|reset-traffic|reset-traffic-all} ..."
         exit 1
         ;;
 esac
