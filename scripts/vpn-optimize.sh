@@ -18,8 +18,11 @@ step_fail() { echo "   ✗ $1"; }
 do_apt() {
     echo "→ apt update && apt upgrade..."
     export DEBIAN_FRONTEND=noninteractive
-    apt update -qq 2>&1 | tail -3
-    apt upgrade -y -qq 2>&1 | tail -10
+    apt-get update -qq 2>&1 | grep -v "^WARNING" | tail -2
+    echo "   (может занять 3-5 минут...)"
+    export DEBIAN_FRONTEND=noninteractive
+    export NEEDRESTART_MODE=a
+    apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade 2>&1 | tail -30
     if [ $? -eq 0 ]; then step_ok "Пакеты обновлены"; else step_fail "apt upgrade"; fi
 }
 
@@ -104,7 +107,10 @@ do_bbr() {
 do_brutal() {
     echo "→ Установка TCP Brutal..."
     if command -v brutalctl >/dev/null 2>&1; then
-        step_ok "TCP Brutal уже установлен"
+        brutalctl add 0.0.0.0/0 20 >/dev/null 2>&1
+        echo "@reboot sleep 30 && brutalctl add 0.0.0.0/0 20" > /etc/cron.d/vpn-brutal
+        chmod 644 /etc/cron.d/vpn-brutal
+        step_ok "TCP Brutal уже установлен (правило 20 Mbps)"
         return
     fi
     KMAJ=$(uname -r | cut -d. -f1)
