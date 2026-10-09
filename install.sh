@@ -101,8 +101,8 @@ if [ -d "$PANEL_DIR" ] || [ -f "/usr/local/bin/vpn" ]; then
             echo -e "\n🤖 Обновление Telegram-бота..."
             REPO_DIR="/root/vpn-panel-sync"
             if [ ! -d "$REPO_DIR" ]; then
-                echo -e "\033[0;31m❌ Репо не найдено: $REPO_DIR\033[0m"
-                exit 1
+                echo -e "[1;33m⚠️   Репо не найдено, клонирую с GitHub...[0m"
+                git clone https://github.com/zotac85/vpn-panel.git "$REPO_DIR" || { echo "❌  Не удалось клонировать"; exit 1; }
             fi
             cd "$REPO_DIR" || exit 1
             echo "→ git pull..."
@@ -194,8 +194,8 @@ if [ -d "$PANEL_DIR" ] || [ -f "/usr/local/bin/vpn" ]; then
             echo -e "\n📝  Обновление универсальных текстов..."
             REPO_DIR="/root/vpn-panel-sync"
             if [ ! -d "$REPO_DIR" ]; then
-                echo -e "\033[0;31m❌  Репо не найдено: $REPO_DIR\033[0m"
-                exit 1
+                echo -e "[1;33m⚠️   Репо не найдено, клонирую с GitHub...[0m"
+                git clone https://github.com/zotac85/vpn-panel.git "$REPO_DIR" || { echo "❌  Не удалось клонировать"; exit 1; }
             fi
             cd "$REPO_DIR" || exit 1
             echo "→ git pull..."
