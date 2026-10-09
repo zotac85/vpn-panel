@@ -55,12 +55,12 @@ cmd_add() {
     [ -n "$pass" ] || { echo "ERROR: пустой пароль"; exit 1; }
     if id -u "$user" &>/dev/null; then
         echo "$user:$pass" | chpasswd
+        usermod -s /bin/false "$user" 2>/dev/null || true
         echo "OK: пароль обновлён"
     else
-        useradd -M -s /usr/sbin/nologin "$user" 2>/dev/null || \
-            useradd -M -s /sbin/nologin "$user" 2>/dev/null || \
-            useradd -M "$user"
+        useradd -M -s /bin/false "$user"
         echo "$user:$pass" | chpasswd
+        usermod -s /bin/false "$user" 2>/dev/null || true
         echo "OK: создан"
     fi
     local uid
