@@ -8,6 +8,7 @@ import base64
 import logging
 import urllib.request
 from bot_modules import db
+from bot_modules import nodes_client as nc
 
 # ─── Пути ───
 SMART_DIR = "/etc/UDPCustom/smart_chat"
@@ -608,6 +609,13 @@ def do_key_reset_hwid(cfg, chat_id, user_id, key_name, new_hwid, msg_id=None):
                 text=True, capture_output=True, timeout=10)
     except Exception as e:
         cab_log.error(f"chpasswd error: {e}")
+    # Синхронизация нового пароля на ноды
+    try:
+        sync_res = nc.sync_user_to_all_nodes(key_name, new_password, action="passwd")
+        for node_name, (ok, msg) in sync_res.items():
+            cab_log.info(f"sync passwd {key_name} -> {node_name}: {'OK' if ok else 'FAIL'} {msg}")
+    except Exception as e:
+        cab_log.error(f"Node sync passwd failed for {key_name}: {e}")
     try:
         with open(f"{PASSWORDS_DIR}/{key_name}", 'w') as f:
             f.write(new_password)
