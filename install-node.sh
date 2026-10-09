@@ -99,6 +99,20 @@ curl -sf -o /usr/local/bin/node-user.sh "$REPO_URL/scripts/node-user.sh"
 chmod +x /usr/local/bin/node-user.sh
 [ -x /usr/local/bin/node-user.sh ] || { echo -e "${RED}Не удалось скачать node-user.sh${NC}"; exit 1; }
 
+# 4.5. vpn-limit-check.sh — контроль лимита устройств (cron)
+echo ""
+echo -e "${YELLOW}[4.5/6] Устанавливаю vpn-limit-check.sh${NC}"
+curl -sf -o /usr/local/bin/vpn-limit-check.sh "$REPO_URL/scripts/vpn-limit-check.sh"
+if [ $? -eq 0 ]; then
+    chmod +x /usr/local/bin/vpn-limit-check.sh
+    bash -n /usr/local/bin/vpn-limit-check.sh || { echo -e "${RED}Ошибка синтаксиса vpn-limit-check.sh${NC}"; exit 1; }
+    echo "* * * * * root /usr/local/bin/vpn-limit-check.sh" > /etc/cron.d/vpn-device-limit
+    chmod 644 /etc/cron.d/vpn-device-limit
+    echo -e "${GREEN}✅   vpn-limit-check установлен${NC}"
+else
+    echo -e "${RED}Не удалось скачать vpn-limit-check.sh${NC}"
+fi
+
 # 5. UFW
 echo ""
 echo -e "${YELLOW}[5/6] Настраиваю firewall${NC}"
