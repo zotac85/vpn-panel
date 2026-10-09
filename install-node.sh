@@ -8,7 +8,7 @@ GREEN="\033[0;32m"; RED="\033[0;31m"; YELLOW="\033[1;33m"; CYAN="\033[0;36m"; NC
 
 [ "$(id -u)" -eq 0 ] || { echo -e "${RED}Запускать от root${NC}"; exit 1; }
 
-clear
+[ -t 1 ] && clear 2>/dev/null || true
 echo -e "${CYAN}=================================================${NC}"
 echo -e "${CYAN}      УСТАНОВКА НОДЫ (SSH + WS Proxy)${NC}"
 echo -e "${CYAN}=================================================${NC}"
