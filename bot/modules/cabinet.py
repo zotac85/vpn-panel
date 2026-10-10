@@ -624,11 +624,67 @@ def do_key_reset_hwid(cfg, chat_id, user_id, key_name, new_hwid, msg_id=None):
         return
     alphabet = _str.ascii_letters + _str.digits
     new_password = ''.join(_sec.choice(alphabet) for _ in range(12))
+    # Полный блок как при создании: гарантируем shell, файлы, лимиты
+    _devices = int(key['devices']) if key and key.get('devices') else 1
+    _traffic_limit = int(key['traffic_limit']) if key and key.get('traffic_limit') else 0
+    _exp_ts = int(key['expires_at']) if key and key.get('expires_at') else 0
+    _days_left = max(1, (_exp_ts - int(time.time())) // 86400) if _exp_ts else 30
+    _exp_date = time.strftime('%Y-%m-%d', time.localtime(_exp_ts + 172800)) if _exp_ts else ''
+
+    bash_script = f"""
+set -e
+username="{key_name}"
+password="{new_password}"
+devices={_devices}
+traffic_bytes={_traffic_limit}
+exp_ts={_exp_ts}
+exp_date="{_exp_date}"
+
+# Гарантируем юзера и правильный shell
+if ! id -u "$username" >/dev/null 2>&1; then
+    useradd -M -s /bin/false "$username"
+fi
+echo "$username:$password" | chpasswd
+usermod -s /bin/false "$username" 2>/dev/null || true
+
+# users.db
+grep -q "^${{username}}$" /etc/UDPCustom/users.db 2>/dev/null || echo "$username" >> /etc/UDPCustom/users.db
+sort -u -o /etc/UDPCustom/users.db /etc/UDPCustom/users.db
+
+# Лимиты
+mkdir -p /etc/UDPCustom/limits /etc/UDPCustom/traffic /etc/UDPCustom/traffic_limits /etc/UDPCustom/expire_ts /etc/UDPCustom/passwords
+echo "$devices" > "/etc/UDPCustom/limits/$username"
+sed -i "/^${{username}}[[:space:]]\+hard[[:space:]]\+maxlogins/d" /etc/security/limits.conf
+echo "$username hard maxlogins $devices" >> /etc/security/limits.conf
+
+# Лимит трафика (счётчик НЕ трогаем — только предел)
+if [ "$traffic_bytes" -gt 0 ]; then
+    echo "$traffic_bytes" > "/etc/UDPCustom/traffic_limits/$username"
+fi
+[ -f "/etc/UDPCustom/traffic/$username" ] || echo "0" > "/etc/UDPCustom/traffic/$username"
+
+# iptables
+uid=$(id -u "$username")
+if iptables -L VPN_TRAFFIC -n >/dev/null 2>&1; then
+    iptables -C VPN_TRAFFIC -m owner --uid-owner "$uid" -j RETURN 2>/dev/null || \
+        iptables -A VPN_TRAFFIC -m owner --uid-owner "$uid" -j RETURN 2>/dev/null || true
+fi
+
+# Срок действия
+if [ -n "$exp_date" ]; then
+    chage -E "$exp_date" "$username" 2>/dev/null || true
+fi
+echo "$exp_ts" > "/etc/UDPCustom/expire_ts/$username"
+echo "$password" > "/etc/UDPCustom/passwords/$username"
+chmod 600 "/etc/UDPCustom/passwords/$username"
+echo "OK"
+"""
     try:
-        _sp.run(['chpasswd'], input=f"{key_name}:{new_password}",
-                text=True, capture_output=True, timeout=10)
+        _r = _sp.run(['bash', '-c', bash_script], capture_output=True, text=True, timeout=30)
+        if 'OK' not in _r.stdout:
+            cab_log.error(f"reset bash error: {_r.stderr}")
     except Exception as e:
-        cab_log.error(f"chpasswd error: {e}")
+        cab_log.error(f"reset bash exception: {e}")
     # Синхронизация нового пароля на ноды
     try:
         _dev_lim = None
@@ -989,7 +1045,8 @@ def send_dark_files_all_nodes(cfg, chat_id, user_id, key_name):
             except Exception:
                 flag = 'node'
             flag = ''.join(ch for ch in flag if ch.isalnum() or ch in '_-') or 'node'
-            fname = f"{safe_name}_{flag}.dark"
+            import time as _t
+            fname = f"{safe_name}_{flag}_{int(_t.time())}.dark"
             fd, tmp_path = tempfile.mkstemp(suffix='.dark')
             with _os.fdopen(fd, 'w', encoding='utf-8') as f:
                 f.write(dt_url)
