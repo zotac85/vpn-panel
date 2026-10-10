@@ -53,6 +53,8 @@ do_ufw() {
     ufw allow 22/tcp comment 'SSH' >/dev/null 2>&1
     ufw allow "$WS_PORT/tcp" comment 'WebSocket' >/dev/null 2>&1
     ufw allow 7300/tcp comment 'UDPGW' >/dev/null 2>&1
+    ufw allow 53/tcp comment 'DNS TCP' >/dev/null 2>&1
+    ufw allow 53/udp comment 'DNS UDP' >/dev/null 2>&1
     ufw --force enable >/dev/null 2>&1
     if ufw status | grep -q "Status: active"; then
         step_ok "UFW активен (22, $WS_PORT, 7300)"
