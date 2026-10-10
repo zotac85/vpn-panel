@@ -130,6 +130,27 @@ do_brutal() {
     fi
 }
 
+
+# ─── 7.5. PerSourcePenalties off (фикс WS-прокси) ───
+do_persource_penalties() {
+    echo "→ Отключение PerSourcePenalties..."
+    cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak_$(date +%F_%H%M)
+    if grep -q "^PerSourcePenalties" /etc/ssh/sshd_config; then
+        sed -i 's/^PerSourcePenalties.*/PerSourcePenalties no/' /etc/ssh/sshd_config
+    else
+        echo "PerSourcePenalties no" >> /etc/ssh/sshd_config
+    fi
+    if sshd -t 2>/dev/null; then
+        systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+        sleep 1
+        step_ok "PerSourcePenalties отключён (WS-прокси не банится)"
+    else
+        step_fail "Ошибка синтаксиса sshd_config"
+        cp $(ls -t /etc/ssh/sshd_config.bak_* | head -1) /etc/ssh/sshd_config
+        systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+    fi
+}
+
 # ─── 7. Буферы ядра ───
 do_buffers() {
     echo "→ Оптимизация буферов ядра..."
@@ -212,6 +233,7 @@ main() {
     do_fail2ban
     do_bbr
     do_brutal
+    do_persource_penalties
     do_buffers
     do_swap
 

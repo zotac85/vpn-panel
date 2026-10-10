@@ -113,6 +113,25 @@ else
     echo -e "${RED}Не удалось скачать vpn-limit-check.sh${NC}"
 fi
 
+# 4.6. PerSourcePenalties off (критично для WS-прокси!)
+echo ""
+echo -e "${YELLOW}[4.6/6] Отключаю PerSourcePenalties...${NC}"
+cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak_$(date +%F_%H%M)
+if grep -q "^PerSourcePenalties" /etc/ssh/sshd_config; then
+    sed -i 's/^PerSourcePenalties.*/PerSourcePenalties no/' /etc/ssh/sshd_config
+else
+    echo "PerSourcePenalties no" >> /etc/ssh/sshd_config
+fi
+if sshd -t 2>/dev/null; then
+    systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+    sleep 1
+    echo -e "${GREEN}✅   PerSourcePenalties отключён${NC}"
+else
+    echo -e "${RED}⚠️  Ошибка синтаксиса sshd_config, откат${NC}"
+    cp $(ls -t /etc/ssh/sshd_config.bak_* | head -1) /etc/ssh/sshd_config
+    systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+fi
+
 # 5. UFW
 echo ""
 echo -e "${YELLOW}[5/6] Настраиваю firewall${NC}"
