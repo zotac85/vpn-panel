@@ -133,21 +133,28 @@ do_brutal() {
 
 # ─── 7.5. PerSourcePenalties off (фикс WS-прокси) ───
 do_persource_penalties() {
-    echo "→ Отключение PerSourcePenalties..."
-    cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak_$(date +%F_%H%M)
-    if grep -q "^PerSourcePenalties" /etc/ssh/sshd_config; then
-        sed -i 's/^PerSourcePenalties.*/PerSourcePenalties no/' /etc/ssh/sshd_config
+    echo "→ Проверка PerSourcePenalties..."
+    SSH_VER=$(ssh -V 2>&1 | grep -oP 'OpenSSH_\K[0-9]+\.[0-9]+' | head -1)
+    SSH_MAJOR=$(echo "$SSH_VER" | cut -d. -f1)
+    SSH_MINOR=$(echo "$SSH_VER" | cut -d. -f2)
+    if [ -n "$SSH_MAJOR" ] && { [ "$SSH_MAJOR" -gt 9 ] || { [ "$SSH_MAJOR" -eq 9 ] && [ "$SSH_MINOR" -ge 8 ]; }; }; then
+        cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak_$(date +%F_%H%M)
+        if grep -q "^PerSourcePenalties" /etc/ssh/sshd_config; then
+            sed -i 's/^PerSourcePenalties.*/PerSourcePenalties no/' /etc/ssh/sshd_config
+        else
+            echo "PerSourcePenalties no" >> /etc/ssh/sshd_config
+        fi
+        if sshd -t 2>/dev/null; then
+            systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+            sleep 1
+            step_ok "PerSourcePenalties отключён (OpenSSH $SSH_VER)"
+        else
+            step_fail "Ошибка синтаксиса, откат"
+            cp $(ls -t /etc/ssh/sshd_config.bak_* | head -1) /etc/ssh/sshd_config
+            systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+        fi
     else
-        echo "PerSourcePenalties no" >> /etc/ssh/sshd_config
-    fi
-    if sshd -t 2>/dev/null; then
-        systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
-        sleep 1
-        step_ok "PerSourcePenalties отключён (WS-прокси не банится)"
-    else
-        step_fail "Ошибка синтаксиса sshd_config"
-        cp $(ls -t /etc/ssh/sshd_config.bak_* | head -1) /etc/ssh/sshd_config
-        systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+        step_ok "Пропущено (OpenSSH $SSH_VER < 9.8)"
     fi
 }
 

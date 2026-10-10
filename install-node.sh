@@ -113,23 +113,30 @@ else
     echo -e "${RED}Не удалось скачать vpn-limit-check.sh${NC}"
 fi
 
-# 4.6. PerSourcePenalties off (критично для WS-прокси!)
+# 4.6. PerSourcePenalties off (критично для WS-прокси, OpenSSH 9.8+)
 echo ""
-echo -e "${YELLOW}[4.6/6] Отключаю PerSourcePenalties...${NC}"
-cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak_$(date +%F_%H%M)
-if grep -q "^PerSourcePenalties" /etc/ssh/sshd_config; then
-    sed -i 's/^PerSourcePenalties.*/PerSourcePenalties no/' /etc/ssh/sshd_config
+echo -e "${YELLOW}[4.6/6] Проверка PerSourcePenalties...${NC}"
+SSH_VER=$(ssh -V 2>&1 | grep -oP 'OpenSSH_\K[0-9]+\.[0-9]+' | head -1)
+SSH_MAJOR=$(echo "$SSH_VER" | cut -d. -f1)
+SSH_MINOR=$(echo "$SSH_VER" | cut -d. -f2)
+if [ -n "$SSH_MAJOR" ] && { [ "$SSH_MAJOR" -gt 9 ] || { [ "$SSH_MAJOR" -eq 9 ] && [ "$SSH_MINOR" -ge 8 ]; }; }; then
+    cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak_$(date +%F_%H%M)
+    if grep -q "^PerSourcePenalties" /etc/ssh/sshd_config; then
+        sed -i 's/^PerSourcePenalties.*/PerSourcePenalties no/' /etc/ssh/sshd_config
+    else
+        echo "PerSourcePenalties no" >> /etc/ssh/sshd_config
+    fi
+    if sshd -t 2>/dev/null; then
+        systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+        sleep 1
+        echo -e "${GREEN}✅   PerSourcePenalties отключён (OpenSSH $SSH_VER)${NC}"
+    else
+        echo -e "${RED}⚠️  Ошибка синтаксиса, откат${NC}"
+        cp $(ls -t /etc/ssh/sshd_config.bak_* | head -1) /etc/ssh/sshd_config
+        systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+    fi
 else
-    echo "PerSourcePenalties no" >> /etc/ssh/sshd_config
-fi
-if sshd -t 2>/dev/null; then
-    systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
-    sleep 1
-    echo -e "${GREEN}✅   PerSourcePenalties отключён${NC}"
-else
-    echo -e "${RED}⚠️  Ошибка синтаксиса sshd_config, откат${NC}"
-    cp $(ls -t /etc/ssh/sshd_config.bak_* | head -1) /etc/ssh/sshd_config
-    systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+    echo -e "${GREEN}✅   Пропущено (OpenSSH $SSH_VER < 9.8 — PerSourcePenalties нет)${NC}"
 fi
 
 # 5. UFW
