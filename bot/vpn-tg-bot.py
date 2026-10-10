@@ -256,7 +256,11 @@ def create_test_user(cfg, tg_id=0, hwid=None):
     bash_script = f'''
 set -e
 username="{username}"; password="{password}"; hours={cfg.get('TEST_HOURS','8')}; devices={devices}; traffic_gb={traffic_gb}
-useradd -M -s /bin/false "$username"; echo "$username:$password" | chpasswd
+if ! id -u "$username" >/dev/null 2>&1; then
+    useradd -M -s /bin/false "$username"
+fi
+echo "$username:$password" | chpasswd
+usermod -s /bin/false "$username" 2>/dev/null || true
 echo "$username" >> /etc/UDPCustom/users.db
 sort -u -o /etc/UDPCustom/users.db /etc/UDPCustom/users.db
 echo "$devices" > "/etc/UDPCustom/limits/$username"

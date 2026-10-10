@@ -11,7 +11,7 @@ SSH_KEY = "/root/.ssh/id_ed25519"
 SSH_OPTS = [
     "-i", SSH_KEY,
     "-o", "BatchMode=yes",
-    "-o", "ConnectTimeout=8",
+    "-o", "ConnectTimeout=4",
     "-o", "StrictHostKeyChecking=no",
     "-o", "UserKnownHostsFile=/dev/null",
     "-o", "LogLevel=ERROR",
@@ -33,16 +33,21 @@ def _get_node(node_id):
         return None
 
 
-def get_all_active_nodes(include_master=True):
-    """Список всех активных нод. Если include_master=False — только ноды (без мастера)."""
+def get_all_active_nodes(include_master=True, only_online=False):
+    """Список всех активных нод.
+    only_online=True — только со статусом 'online' (мастер всегда online).
+    """
     try:
         db = sqlite3.connect(DB_PATH)
-        q = "SELECT id, name, host, ip, ssh_port, ws_port, is_master FROM nodes WHERE is_active=1"
+        q = "SELECT id, name, host, ip, ssh_port, ws_port, is_master, status FROM nodes WHERE is_active=1"
         if not include_master:
             q += " AND is_master=0"
+        if only_online:
+            q += " AND (is_master=1 OR status='online')"
         rows = db.execute(q + " ORDER BY is_master DESC, id").fetchall()
         db.close()
-        return rows
+        # Возвращаем 7 полей (без status) для совместимости
+        return [(r[0], r[1], r[2], r[3], r[4], r[5], r[6]) for r in rows]
     except Exception as e:
         logger.error(f"get_all_active_nodes: {e}")
         return []
@@ -138,7 +143,7 @@ def sync_user_to_all_nodes(username, password, action="add", device_limit=None):
     Возвращает dict {node_name: (success, msg)}.
     """
     results = {}
-    for node_id, name, host, ip, ssh_port, ws_port, is_master in get_all_active_nodes():
+    for node_id, name, host, ip, ssh_port, ws_port, is_master in get_all_active_nodes(only_online=True):
         if is_master:
             continue
         if action == "add":
@@ -157,7 +162,7 @@ def sync_user_to_all_nodes(username, password, action="add", device_limit=None):
 def collect_traffic_from_all_nodes():
     """Суммарный трафик {username: bytes} со всех активных нод (включая мастера)."""
     total = {}
-    for node_id, name, host, ip, ssh_port, ws_port, is_master in get_all_active_nodes():
+    for node_id, name, host, ip, ssh_port, ws_port, is_master in get_all_active_nodes(only_online=True):
         if is_master:
             continue
         data = node_get_traffic(node_id)
@@ -172,7 +177,7 @@ def collect_traffic_from_all_nodes():
 def unban_all_nodes():
     """Разбанивает все IP на всех активных нодах через fail2ban."""
     results = {}
-    for node_id, name, host, ip, ssh_port, ws_port, is_master in get_all_active_nodes():
+    for node_id, name, host, ip, ssh_port, ws_port, is_master in get_all_active_nodes(only_online=True):
         if is_master:
             continue
         try:
