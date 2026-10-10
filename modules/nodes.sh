@@ -302,15 +302,26 @@ _nodes_install_whitedns() {
     [ -z "$wd_domain" ] && return
 
     echo ""
-    echo -e "${CYAN}Устанавливаю WhiteDNS на $name ($ip)...${NC}"
-    echo -e "${YELLOW}Домен: $wd_domain${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════${NC}"
+    echo -e "${CYAN}  УСТАНОВКА WHITEDNS на $name${NC}"
+    echo -e "${CYAN}  Домен: $wd_domain${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════${NC}"
     echo ""
-
-    scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" \
-        /usr/local/share/vpn-panel/install-whitedns-node.sh root@"$ip":/tmp/install-whitedns-node.sh >/dev/null 2>&1
+    echo -e "${YELLOW}Открываю порт 53...${NC}"
     ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" \
-        "chmod +x /tmp/install-whitedns-node.sh && bash /tmp/install-whitedns-node.sh '$wd_domain'"
+        "ufw allow 53/tcp comment 'DNS TCP' >/dev/null 2>&1; ufw allow 53/udp comment 'DNS UDP' >/dev/null 2>&1; echo 'порт 53 открыт'"
+    echo ""
+    echo -e "${CYAN}Запускаю официальный установщик...${NC}"
+    echo -e "${YELLOW}(сейчас увидишь интерактивный вывод, домен подставится сам)${NC}"
+    echo ""
+    sleep 2
 
+    # Запуск с TTY (-t), домен передаётся через stdin
+    ssh -t -o StrictHostKeyChecking=no -p "$sport" root@"$ip" \
+        "export TERM=xterm-256color; echo '$wd_domain' | bash <(curl -Ls https://raw.githubusercontent.com/masterking32/MasterDnsVPN/main/server_linux_install.sh)"
+
+    echo ""
+    echo -e "${GREEN}✅ Установка завершена${NC}"
     echo ""
     read -p "Нажмите Enter..."
 }
