@@ -352,6 +352,13 @@ _nodes_add() {
 _nodes_del() {
     clear
     echo -e "${YELLOW}── Удаление ноды ──${NC}"
+    echo ""
+    while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
+        [ -z "$_id" ] && continue
+        [ "$_im" = "1" ] && continue
+        echo "  $_id) $_name ($_ip) [$_st]"
+    done < <(_nodes_py list)
+    echo ""
     read -p "Введите ID ноды для удаления: " nid
     [ -z "$nid" ] && return
     _nodes_py del "$nid"
