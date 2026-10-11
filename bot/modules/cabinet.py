@@ -688,11 +688,16 @@ echo "OK"
     # Синхронизация нового пароля на ноды
     try:
         _dev_lim = None
+        _exp_ts = None
         try:
             _dev_lim = int(key['devices']) if key and key['devices'] else None
         except Exception:
             _dev_lim = None
-        sync_res = nc.sync_user_to_all_nodes(key_name, new_password, action="add", device_limit=_dev_lim)
+        try:
+            _exp_ts = int(key['expires_at']) if key and key['expires_at'] else None
+        except Exception:
+            _exp_ts = None
+        sync_res = nc.sync_user_to_all_nodes(key_name, new_password, action="add", device_limit=_dev_lim, exp_ts=_exp_ts)
         for node_name, (ok, msg) in sync_res.items():
             cab_log.info(f"sync passwd {key_name} -> {node_name}: {'OK' if ok else 'FAIL'} {msg}")
         # Разбаниваем всех на нодах (клиент мог попасть в бан после старого пароля)
