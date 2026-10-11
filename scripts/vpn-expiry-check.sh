@@ -23,15 +23,14 @@ for ts_file in "$TS_DIR"/*; do
 
     if [ "$NOW" -gt "$exp" ]; then
         # Срок истёк — блокируем
-        if [ "$shell" != "/usr/sbin/nologin" ]; then
-            usermod -L "$user" 2>/dev/null
-            usermod -s /usr/sbin/nologin "$user" 2>/dev/null
+        if [ "$shell" != "/usr/local/bin/vpn-nologin.sh" ]; then
+            usermod -s /usr/local/bin/vpn-nologin.sh "$user" 2>/dev/null
             pkill -KILL -u "$user" 2>/dev/null
             echo "$(date '+%F %T') EXPIRED: $user (exp=$exp)" >> "$LOG"
         fi
     else
         # Срок активен — разблокируем
-        if [ "$shell" = "/usr/sbin/nologin" ]; then
+        if [ "$shell" = "/usr/local/bin/vpn-nologin.sh" ] || [ "$shell" = "/usr/sbin/nologin" ]; then
             usermod -U "$user" 2>/dev/null
             usermod -s /bin/false "$user" 2>/dev/null
             echo "$(date '+%F %T') RESTORED: $user" >> "$LOG"

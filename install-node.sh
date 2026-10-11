@@ -139,23 +139,22 @@ else
     echo -e "${GREEN}✅   Пропущено (OpenSSH $SSH_VER < 9.8 — PerSourcePenalties нет)${NC}"
 fi
 
-# 4.7. check-expiration-pam (срок действия ключей)
+# 4.7. vpn-expiry-check.sh (срок действия ключей, cron каждую минуту)
 echo ""
-echo -e "${YELLOW}[4.7/6] Устанавливаю check-expiration-pam${NC}"
+echo -e "${YELLOW}[4.7/6] Устанавливаю vpn-expiry-check.sh${NC}"
 mkdir -p /etc/UDPCustom/expire_ts
-curl -sf -o /usr/local/bin/check-expiration-pam "$REPO_URL/scripts/check-expiration-pam"
-chmod +x /usr/local/bin/check-expiration-pam
-[ -x /usr/local/bin/check-expiration-pam ] || { echo -e "${RED}Не удалось скачать check-expiration-pam${NC}"; exit 1; }
-
-# Подключаем к PAM если ещё не подключён
-if ! grep -q "check-expiration-pam" /etc/pam.d/sshd; then
-    cp /etc/pam.d/sshd /etc/pam.d/sshd.bak_$(date +%F_%H%M)
-    # Вставляем после pam_nologin.so
-    sed -i '/pam_nologin.so/a account    required     pam_exec.so stdout /usr/local/bin/check-expiration-pam' /etc/pam.d/sshd
-    echo -e "${GREEN}✅   PAM-хук добавлен${NC}"
-else
-    echo -e "${GREEN}✅   PAM-хук уже есть${NC}"
-fi
+curl -sf -o /usr/local/bin/vpn-expiry-check.sh "$REPO_URL/scripts/vpn-expiry-check.sh"
+curl -sf -o /usr/local/bin/vpn-nologin.sh "$REPO_URL/scripts/vpn-nologin.sh"
+chmod +x /usr/local/bin/vpn-expiry-check.sh /usr/local/bin/vpn-nologin.sh
+[ -x /usr/local/bin/vpn-expiry-check.sh ] || { echo -e "${RED}Не удалось скачать vpn-expiry-check.sh${NC}"; exit 1; }
+[ -x /usr/local/bin/vpn-nologin.sh ] || { echo -e "${RED}Не удалось скачать vpn-nologin.sh${NC}"; exit 1; }
+# Добавляем vpn-nologin.sh в /etc/shells (иначе sshd не даст использовать его)
+grep -q "vpn-nologin.sh" /etc/shells || echo "/usr/local/bin/vpn-nologin.sh" >> /etc/shells
+echo "* * * * * root /usr/local/bin/vpn-expiry-check.sh" > /etc/cron.d/vpn-expiry-check
+chmod 644 /etc/cron.d/vpn-expiry-check
+# Убираем PAM-хук (если был добавлен ранее — он вешает SSH)
+sed -i '/check-expiration-pam/d' /etc/pam.d/sshd 2>/dev/null
+echo -e "${GREEN}✅   vpn-expiry-check установлен + PAM-хук убран${NC}"
 
 # 5. UFW
 echo ""
