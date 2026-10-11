@@ -75,45 +75,26 @@ get_traffic_limit() {
 
 # ── ТИХАЯ ВЕРСИЯ (для автовключения из install.sh или панели) ──
 install_traffic_monitor_quiet() {
-    init_traffic_chain
-    while read -r u; do
-        [ -z "$u" ] && continue
-        id "$u" &>/dev/null && add_traffic_rule "$u"
-    done < "$DB_USERS"
-
-    cat << 'CHK_EOF' > "$TRAFFIC_CHECK_SCRIPT"
-#!/bin/bash
-TRAFFIC_DIR="/etc/UDPCustom/traffic"
-TRAFFIC_LIMITS_DIR="/etc/UDPCustom/traffic_limits"
-TRAFFIC_CHAIN="VPN_TRAFFIC"
-DB_USERS="/etc/UDPCustom/users.db"
-
-mkdir -p "$TRAFFIC_DIR"
-iptables -L "$TRAFFIC_CHAIN" -n &>/dev/null || exit 0
-
-while read -r u; do
-    [ -z "$u" ] && continue
-    uid=$(id -u "$u" 2>/dev/null) || continue
-    cur=$(iptables -L "$TRAFFIC_CHAIN" -v -x -n 2>/dev/null | awk -v pat="UID match $uid\$" '$0 ~ pat {print $2}' | head -1)
-    [ -z "$cur" ] && cur=0
-    total_file="$TRAFFIC_DIR/$u"
-    [ -f "$total_file" ] || echo 0 > "$total_file"
-    prev_total=$(cat "$total_file")
-    new_total=$((prev_total + cur))
-    echo "$new_total" > "$total_file"
-    iptables -D "$TRAFFIC_CHAIN" -m owner --uid-owner "$uid" -j RETURN 2>/dev/null
-    iptables -A "$TRAFFIC_CHAIN" -m owner --uid-owner "$uid" -j RETURN
-    limit_file="$TRAFFIC_LIMITS_DIR/$u"
-    if [ -f "$limit_file" ]; then
-        limit_bytes=$(cat "$limit_file")
-        if [[ "$limit_bytes" =~ ^[0-9]+$ ]] && [ "$limit_bytes" -gt 0 ] && [ "$new_total" -ge "$limit_bytes" ]; then
-            usermod -L "$u" 2>/dev/null
-        fi
+    mkdir -p "$TRAFFIC_DIR" "$TRAFFIC_LIMITS_DIR"
+    # Создаём iptables-цепочку если её нет
+    if ! traffic_chain_exists; then
+        init_traffic_chain
     fi
-done < "$DB_USERS"
-CHK_EOF
-    chmod +x "$TRAFFIC_CHECK_SCRIPT"
-    echo "*/5 * * * * root $TRAFFIC_CHECK_SCRIPT" > "$TRAFFIC_CRON"
+    # Добавляем правила для всех юзеров
+    if [ -f "$DB_USERS" ]; then
+        while read -r u; do
+            [ -z "$u" ] && continue
+            id "$u" &>/dev/null && add_traffic_rule "$u"
+        done < "$DB_USERS"
+    fi
+    # Готовый python-скрипт (не пересоздаём, только проверяем)
+    if [ ! -f /usr/local/bin/vpn-traffic-check.py ]; then
+        echo -e "${RED}Не найден /usr/local/bin/vpn-traffic-check.py${NC}"
+        return 1
+    fi
+    chmod +x /usr/local/bin/vpn-traffic-check.py
+    # Cron на python-скрипт
+    echo "*/5 * * * * root /usr/bin/python3 /usr/local/bin/vpn-traffic-check.py" > "$TRAFFIC_CRON"
     chmod 644 "$TRAFFIC_CRON"
     systemctl restart cron 2>/dev/null || systemctl restart crond 2>/dev/null
 }
