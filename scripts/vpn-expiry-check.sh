@@ -27,17 +27,22 @@ for ts_file in "$TS_DIR"/*; do
     fi
     shell=$(getent passwd "$user" | cut -d: -f7)
 
+    # Проверяем статус пароля (P = active, L = locked)
+    pwd_status=$(passwd -S "$user" 2>/dev/null | awk '{print $2}')
+
     if [ "$NOW" -gt "$exp" ]; then
         # Истёк — должен быть заблокирован
         SHOULD_BLOCK[$user]=1
-        if [ "$shell" != "/usr/local/bin/vpn-nologin.sh" ]; then
+        if [ "$shell" != "/usr/local/bin/vpn-nologin.sh" ] || [ "$pwd_status" != "L" ]; then
+            usermod -L "$user" 2>/dev/null
             usermod -s /usr/local/bin/vpn-nologin.sh "$user" 2>/dev/null
             pkill -KILL -u "$user" 2>/dev/null
-            echo "$(date '+%F %T') EXPIRED: $user" >> "$LOG"
+            echo "$(date '+%F %T') EXPIRED: $user (shell=$shell pwd=$pwd_status)" >> "$LOG"
         fi
     else
         # Активен — должен быть разблокирован
-        if [ "$shell" = "/usr/local/bin/vpn-nologin.sh" ] || [ "$shell" = "/usr/sbin/nologin" ]; then
+        if [ "$shell" = "/usr/local/bin/vpn-nologin.sh" ] || [ "$shell" = "/usr/sbin/nologin" ] || [ "$pwd_status" = "L" ]; then
+            usermod -U "$user" 2>/dev/null
             usermod -s /bin/false "$user" 2>/dev/null
             echo "$(date '+%F %T') RESTORED: $user" >> "$LOG"
         fi
