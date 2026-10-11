@@ -50,15 +50,21 @@ for ts_file in "$TS_DIR"/*; do
 done
 
 # Обновляем sshd_config.d/blocked-users.conf
-# Генерируем баннер с поддержкой из support.txt
-SUPPORT="@ArsenSupportBot"
+# Генерируем баннер с поддержкой и каналом (кликабельные ссылки)
+SUPPORT="ArsenSupportBot"
 if [ -f /etc/UDPCustom/support.txt ]; then
-    _s=$(head -1 /etc/UDPCustom/support.txt 2>/dev/null | tr -d '[:space:]' | head -c 100)
+    _s=$(head -1 /etc/UDPCustom/support.txt 2>/dev/null | tr -d '[:space:]@' | head -c 100)
     [ -n "$_s" ] && SUPPORT="$_s"
+fi
+CHANNEL="ArsenVipKeys"
+if [ -f /etc/UDPCustom/channels.txt ]; then
+    _ch=$(grep -v '^#' /etc/UDPCustom/channels.txt 2>/dev/null | head -1 | tr -d '[:space:]@' | head -c 100)
+    [ -n "$_ch" ] && CHANNEL="$_ch"
 fi
 cat > "$BANNER_FILE" << BANEOF
 <h5><b><font color='#FF0000'>❌  СРОК ДЕЙСТВИЯ КЛЮЧА ИСТЁК</font></b></h5>
-<h5><b><font color='#FFFF00'>Обратись в поддержку: $SUPPORT</font></b></h5>
+<h5><b><font color='#FFFF00'>💬 Поддержка: <a href='https://t.me/$SUPPORT'>@$SUPPORT</a></font></b></h5>
+<h5><b><font color='#00FF00'>📢 Канал: <a href='https://t.me/$CHANNEL'>@$CHANNEL</a></font></b></h5>
 BANEOF
 chmod 644 "$BANNER_FILE"
 
