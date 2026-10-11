@@ -103,8 +103,24 @@ cmd_lock() {
     local user="$1"
     id -u "$user" &>/dev/null || { echo "ERROR: юзер не найден"; exit 1; }
     usermod -L "$user" 2>/dev/null
-    usermod -s /usr/sbin/nologin "$user" 2>/dev/null
+    usermod -s /usr/local/bin/vpn-nologin.sh "$user" 2>/dev/null
     pkill -KILL -u "$user" 2>/dev/null || true
+    # Добавляем Match User в overlimit-users.conf
+    local conf="/etc/ssh/sshd_config.d/overlimit-users.conf"
+    mkdir -p /etc/ssh/sshd_config.d
+    if ! grep -q "^Match User $user$" "$conf" 2>/dev/null; then
+        {
+            echo ""
+            echo "Match User $user"
+            echo "    ForceCommand /usr/local/bin/vpn-nologin.sh"
+            echo "    AllowTcpForwarding no"
+            echo "    PermitOpen none"
+            echo "    Banner /etc/UDPCustom/overlimit_banner.txt"
+        } >> "$conf"
+        if sshd -t 2>/dev/null; then
+            systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+        fi
+    fi
     echo "OK: заблокирован"
 }
 
@@ -113,11 +129,29 @@ cmd_unlock() {
     id -u "$user" &>/dev/null || { echo "ERROR: юзер не найден"; exit 1; }
     usermod -U "$user" 2>/dev/null
     usermod -s /bin/false "$user" 2>/dev/null
+    # Убираем Match User из overlimit-users.conf
+    local conf="/etc/ssh/sshd_config.d/overlimit-users.conf"
+    if [ -f "$conf" ]; then
+        # Удаляем блок: Match User <user> и следующие 4 строки
+        python3 - "$user" << 'PYEOF2'
+import sys, re
+user = sys.argv[1]
+with open('/etc/ssh/sshd_config.d/overlimit-users.conf') as f:
+    content = f.read()
+pattern = re.compile(r'\nMatch User ' + re.escape(user) + r'\n(?:    [^\n]*\n)+')
+new = pattern.sub('\n', content)
+with open('/etc/ssh/sshd_config.d/overlimit-users.conf', 'w') as f:
+    f.write(new)
+PYEOF2
+        if sshd -t 2>/dev/null; then
+            systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+        fi
+    fi
     echo "OK: разблокирован"
 }
 
 cmd_list() {
-    grep -E '^(vip_|test_)' /etc/passwd | cut -d: -f1
+    grep -E '^(vip_|test)' /etc/passwd | cut -d: -f1
 }
 
 cmd_traffic() {
