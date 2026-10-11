@@ -590,77 +590,11 @@ if [ -s /etc/UDPCustom/users.db ]; then
     done < /etc/UDPCustom/users.db
 fi
 
-cat << 'CHK_EOF' > /usr/local/bin/vpn-traffic-check.sh
-#!/bin/bash
-TRAFFIC_DIR="/etc/UDPCustom/traffic"
-TRAFFIC_LIMITS_DIR="/etc/UDPCustom/traffic_limits"
-TRAFFIC_CHAIN="VPN_TRAFFIC"
-DB_USERS="/etc/UDPCustom/users.db"
-mkdir -p "$TRAFFIC_DIR"
-iptables -L "$TRAFFIC_CHAIN" -n &>/dev/null || exit 0
-while read -r u; do
-    [ -z "$u" ] && continue
-    uid=$(id -u "$u" 2>/dev/null) || continue
-    cur=$(iptables -L "$TRAFFIC_CHAIN" -v -x -n 2>/dev/null | awk -v pat="UID match $uid\$" '$0 ~ pat {print $2}' | head -1)
-    [ -z "$cur" ] && cur=0
-    total_file="$TRAFFIC_DIR/$u"
-    [ -f "$total_file" ] || echo 0 > "$total_file"
-    prev_total=$(cat "$total_file")
-    new_total=$((prev_total + cur))
-    echo "$new_total" > "$total_file"
-    iptables -D "$TRAFFIC_CHAIN" -m owner --uid-owner "$uid" -j RETURN 2>/dev/null
-    iptables -A "$TRAFFIC_CHAIN" -m owner --uid-owner "$uid" -j RETURN
-    limit_file="$TRAFFIC_LIMITS_DIR/$u"
-    if [ -f "$limit_file" ]; then
-        limit_bytes=$(cat "$limit_file")
-        if [[ "$limit_bytes" =~ ^[0-9]+$ ]] && [ "$limit_bytes" -gt 0 ] && [ "$new_total" -ge "$limit_bytes" ]; then
-            usermod -L "$u" 2>/dev/null
-        fi
-    fi
-done < "$DB_USERS"
-CHK_EOF
-chmod +x /usr/local/bin/vpn-traffic-check.sh
-# vpn-traffic-check теперь на Python (см. блок ниже)
 
-# ── АВТООЧИСТКА ИСТЁКШИХ ──
-cat << 'CLEANUP_EOF' > /usr/local/bin/vpn-auto-cleanup.sh
-#!/bin/bash
-DB_USERS="/etc/UDPCustom/users.db"
-LIMITS_DIR="/etc/UDPCustom/limits"
-TRAFFIC_LIMITS_DIR="/etc/UDPCustom/traffic_limits"
-TRAFFIC_DIR="/etc/UDPCustom/traffic"
-LOG_FILE="/var/log/vpn-auto-cleanup.log"
-[ ! -s "$DB_USERS" ] && exit 0
-TODAY=$(date +%s)
-TMP_DB=$(mktemp)
-: > "$TMP_DB"
-while read -r u; do
-    [ -z "$u" ] && continue
-    id "$u" &>/dev/null || continue
-    exp_raw=$(chage -l "$u" 2>/dev/null | grep "Account expires" | cut -d: -f2 | sed 's/^ *//')
-    if [ "$exp_raw" == "never" ] || [ -z "$exp_raw" ]; then
-        echo "$u" >> "$TMP_DB"
-        continue
-    fi
-    exp_epoch=$(date -d "$exp_raw" +%s 2>/dev/null)
-    [ -z "$exp_epoch" ] && { echo "$u" >> "$TMP_DB"; continue; }
-    if [ "$exp_epoch" -ge "$TODAY" ]; then
-        echo "$u" >> "$TMP_DB"
-        continue
-    fi
-    uid=$(id -u "$u" 2>/dev/null)
-    [ -n "$uid" ] && while iptables -D VPN_TRAFFIC -m owner --uid-owner "$uid" -j RETURN 2>/dev/null; do :; done
-    userdel -f "$u" 2>/dev/null
-    rm -f "$LIMITS_DIR/$u" "$TRAFFIC_LIMITS_DIR/$u" "$TRAFFIC_DIR/$u" 2>/dev/null
-    sed -i "/^${u}[[:space:]]\+hard[[:space:]]\+maxlogins/d" /etc/security/limits.conf 2>/dev/null
-    sed -i "/^${u}[[:space:]]\+soft[[:space:]]\+maxlogins/d" /etc/security/limits.conf 2>/dev/null
-    echo "$(date '+%Y-%m-%d %H:%M:%S') Удалён истёкший: $u (истёк $exp_raw)" >> "$LOG_FILE"
-done < "$DB_USERS"
-sort -u "$TMP_DB" | grep -v '^$' > "$DB_USERS" 2>/dev/null
-rm -f "$TMP_DB"
-CLEANUP_EOF
+# ── АВТООЧИСТКА (висячие + истёкшие, каждый час) ──
+curl -sf -o /usr/local/bin/vpn-auto-cleanup.sh "$REPO_URL/scripts/vpn-auto-cleanup.sh"
 chmod +x /usr/local/bin/vpn-auto-cleanup.sh
-echo "0 4 * * * root /usr/local/bin/vpn-auto-cleanup.sh" > /etc/cron.d/vpn-auto-cleanup
+echo "0 * * * * root /usr/local/bin/vpn-auto-cleanup.sh" > /etc/cron.d/vpn-auto-cleanup
 chmod 644 /etc/cron.d/vpn-auto-cleanup
 
 
