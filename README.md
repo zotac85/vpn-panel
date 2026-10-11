@@ -4,7 +4,7 @@
 
 **Панель управления SSH-туннелями + Telegram-бот для продажи ключей**
 
-![Version](https://img.shields.io/badge/version-3.0.0-blue?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-3.1.0-blue?style=for-the-badge)
 ![Platform](https://img.shields.io/badge/platform-Ubuntu%20%7C%20Debian-orange?style=for-the-badge)
 ![Python](https://img.shields.io/badge/python-3.10+-yellow?style=for-the-badge)
 
@@ -34,22 +34,32 @@
 
 ---
 
-## 🆕 Что нового в v3.0.0
+## 🆕 Что нового в v3.1.0
 
-**🌍 Мульти-нода** — мастер + неограниченное число нод:
-- Управление нодами из панели мастера (добавить / проверить / reboot / оптимизировать)
-- Синхронизация юзеров, паролей, HWID, лимитов устройств
-- Выдача `.dark` файлов со **всех онлайн-локаций** — клиент сам выбирает
-- Единый сбор трафика со всех нод + общий лимит
-- Блокировка при превышении лимита сразу на всех серверах
+**🌐 WhiteDNS (MasterDnsVPN):**
+- Единый модуль управления — мастер и все ноды
+- Установка / перезапуск / стоп / редактирование / удаление через панель
+- Порт 53 (TCP+UDP) открывается автоматически
+- Ключ клиента показывается после установки
 
-**⚡ Оптимизация одной кнопкой:**
-- apt upgrade, IPv6 off, UFW + Fail2ban, TCP BBR, TCP Brutal (20 Mbps), буферы ядра, Swap 1 GB
+**🔧 Исправлено в v3.1.0:**
+- auth failed при пересоздании ключа (унификация reset с create)
+- PerSourcePenalties банил WS-прокси → отключён на всех серверах
+- Android кешировал .dark → timestamp в имени файла
+- Ускорена синхронизация (пропуск offline-нод)
 
-**🔧 Новые скрипты:**
-`install-node.sh`, `node-user.sh`, `nodes_client.py`, `vpn-traffic-check.py`, `vpn-nodes-check.py`, `vpn-limit-check.sh`, `vpn-optimize.sh`
+**🧹 Оптимизация:**
+- Журнал journald ограничен 200 МБ (было 3.7 ГБ)
+- Чистка временных файлов и бэкапов
 
----
+**🌍 Мульти-нода (v3.0.0):**
+- Мастер + неограниченное число нод
+- Синхронизация юзеров, HWID, лимитов устройств
+- Выдача .dark файлов со всех онлайн-локаций
+- Единый сбор трафика + блокировка по лимиту
+
+**⚡ Оптимизация одной кнопкой (v3.0.0):**
+- apt upgrade, IPv6 off, UFW + Fail2ban, TCP BBR, TCP Brutal, буферы ядра, Swap 1 GB
 
 ## 🚀 Установка мастера
 
