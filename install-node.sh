@@ -150,6 +150,21 @@ chmod +x /usr/local/bin/vpn-expiry-check.sh /usr/local/bin/vpn-nologin.sh
 [ -x /usr/local/bin/vpn-nologin.sh ] || { echo -e "${RED}Не удалось скачать vpn-nologin.sh${NC}"; exit 1; }
 # Добавляем vpn-nologin.sh в /etc/shells (иначе sshd не даст использовать его)
 grep -q "vpn-nologin.sh" /etc/shells || echo "/usr/local/bin/vpn-nologin.sh" >> /etc/shells
+# Подготовка sshd для блокировки истёкших (запрет SSH-туннеля)
+mkdir -p /etc/ssh/sshd_config.d
+touch /etc/ssh/sshd_config.d/blocked-users.conf
+chmod 644 /etc/ssh/sshd_config.d/blocked-users.conf
+if ! grep -q "Include /etc/ssh/sshd_config.d" /etc/ssh/sshd_config; then
+    cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak_$(date +%F_%H%M)
+    echo "Include /etc/ssh/sshd_config.d/*.conf" >> /etc/ssh/sshd_config
+fi
+if sshd -t 2>/dev/null; then
+    systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+    echo -e "${GREEN}✅   sshd подготовлен (blocked-users.conf)${NC}"
+else
+    echo -e "${RED}⚠️  Ошибка sshd_config, откат${NC}"
+    cp $(ls -t /etc/ssh/sshd_config.bak_* | head -1) /etc/ssh/sshd_config
+fi
 echo "* * * * * root /usr/local/bin/vpn-expiry-check.sh" > /etc/cron.d/vpn-expiry-check
 chmod 644 /etc/cron.d/vpn-expiry-check
 # Убираем PAM-хук (если был добавлен ранее — он вешает SSH)

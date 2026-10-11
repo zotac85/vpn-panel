@@ -591,6 +591,30 @@ if [ -s /etc/UDPCustom/users.db ]; then
 fi
 
 
+# ── БЛОКИРОВКА ИСТЁКШИХ (SSH-туннель + сообщение) ──
+curl -sf -o /usr/local/bin/vpn-nologin.sh "$REPO_URL/scripts/vpn-nologin.sh"
+curl -sf -o /usr/local/bin/vpn-expiry-check.sh "$REPO_URL/scripts/vpn-expiry-check.sh"
+chmod +x /usr/local/bin/vpn-nologin.sh /usr/local/bin/vpn-expiry-check.sh
+# vpn-nologin.sh в /etc/shells
+grep -q "vpn-nologin.sh" /etc/shells || echo "/usr/local/bin/vpn-nologin.sh" >> /etc/shells
+# sshd: Include + blocked-users.conf
+mkdir -p /etc/ssh/sshd_config.d
+touch /etc/ssh/sshd_config.d/blocked-users.conf
+chmod 644 /etc/ssh/sshd_config.d/blocked-users.conf
+if ! grep -q "Include /etc/ssh/sshd_config.d" /etc/ssh/sshd_config; then
+    cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak_$(date +%F_%H%M)
+    echo "Include /etc/ssh/sshd_config.d/*.conf" >> /etc/ssh/sshd_config
+fi
+if sshd -t 2>/dev/null; then
+    systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+    echo -e "\033[0;32m✅   vpn-expiry-check + blocked-users.conf готовы\033[0m"
+else
+    echo -e "\033[0;31m⚠️  Ошибка sshd_config, откат\033[0m"
+    cp $(ls -t /etc/ssh/sshd_config.bak_* | head -1) /etc/ssh/sshd_config
+fi
+echo "* * * * * root /usr/local/bin/vpn-expiry-check.sh" > /etc/cron.d/vpn-expiry-check
+chmod 644 /etc/cron.d/vpn-expiry-check
+
 # ── АВТООЧИСТКА (висячие + истёкшие, каждый час) ──
 curl -sf -o /usr/local/bin/vpn-auto-cleanup.sh "$REPO_URL/scripts/vpn-auto-cleanup.sh"
 chmod +x /usr/local/bin/vpn-auto-cleanup.sh
