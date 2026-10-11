@@ -139,6 +139,24 @@ else
     echo -e "${GREEN}✅   Пропущено (OpenSSH $SSH_VER < 9.8 — PerSourcePenalties нет)${NC}"
 fi
 
+# 4.7. check-expiration-pam (срок действия ключей)
+echo ""
+echo -e "${YELLOW}[4.7/6] Устанавливаю check-expiration-pam${NC}"
+mkdir -p /etc/UDPCustom/expire_ts
+curl -sf -o /usr/local/bin/check-expiration-pam "$REPO_URL/scripts/check-expiration-pam"
+chmod +x /usr/local/bin/check-expiration-pam
+[ -x /usr/local/bin/check-expiration-pam ] || { echo -e "${RED}Не удалось скачать check-expiration-pam${NC}"; exit 1; }
+
+# Подключаем к PAM если ещё не подключён
+if ! grep -q "check-expiration-pam" /etc/pam.d/sshd; then
+    cp /etc/pam.d/sshd /etc/pam.d/sshd.bak_$(date +%F_%H%M)
+    # Вставляем после pam_nologin.so
+    sed -i '/pam_nologin.so/a account    required     pam_exec.so stdout /usr/local/bin/check-expiration-pam' /etc/pam.d/sshd
+    echo -e "${GREEN}✅   PAM-хук добавлен${NC}"
+else
+    echo -e "${GREEN}✅   PAM-хук уже есть${NC}"
+fi
+
 # 5. UFW
 echo ""
 echo -e "${YELLOW}[5/6] Настраиваю firewall${NC}"

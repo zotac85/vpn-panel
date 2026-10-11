@@ -50,7 +50,7 @@ reset_traffic() {
 }
 
 cmd_add() {
-    local user="$1" pass="$2"
+    local user="$1" pass="$2" exp_ts="${3:-}"
     is_our_user "$user" || { echo "ERROR: имя должно начинаться с vip_ или test_"; exit 1; }
     [ -n "$pass" ] || { echo "ERROR: пустой пароль"; exit 1; }
     if id -u "$user" &>/dev/null; then
@@ -66,7 +66,12 @@ cmd_add() {
     local uid
     uid=$(get_uid "$user")
     ensure_iptables "$user" "$uid"
-    log "ADD $user uid=$uid"
+    # Save expiration timestamp if provided
+    if [ -n "$exp_ts" ] && [[ "$exp_ts" =~ ^[0-9]+$ ]]; then
+        mkdir -p /etc/UDPCustom/expire_ts
+        echo "$exp_ts" > "/etc/UDPCustom/expire_ts/$user"
+    fi
+    log "ADD $user uid=$uid exp=$exp_ts"
 }
 
 cmd_del() {

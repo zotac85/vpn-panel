@@ -1,0 +1,16 @@
+#!/bin/bash
+USER="$PAM_USER"
+TS_DIR="/etc/UDPCustom/expire_ts"
+DB_USERS="/etc/UDPCustom/users.db"
+[ "$USER" == "root" ] && exit 0
+[ -z "$USER" ] && exit 0
+grep -q "^${USER}$" "$DB_USERS" 2>/dev/null || exit 0
+[ ! -f "$TS_DIR/$USER" ] && exit 0
+EXP_TS=$(cat "$TS_DIR/$USER" 2>/dev/null)
+[[ "$EXP_TS" =~ ^[0-9]+$ ]] || exit 0
+NOW=$(date +%s)
+if [ "$NOW" -gt "$EXP_TS" ]; then
+    echo "❌  СРОК ДЕЙСТВИЯ ИСТЁК. Обратись в поддержку: @ArsenGuro"
+    exit 1
+fi
+exit 0
