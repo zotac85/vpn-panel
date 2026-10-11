@@ -154,10 +154,10 @@ grep -q "vpn-nologin.sh" /etc/shells || echo "/usr/local/bin/vpn-nologin.sh" >> 
 mkdir -p /etc/ssh/sshd_config.d
 touch /etc/ssh/sshd_config.d/blocked-users.conf
 chmod 644 /etc/ssh/sshd_config.d/blocked-users.conf
-if ! grep -q "Include /etc/ssh/sshd_config.d" /etc/ssh/sshd_config; then
-    cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak_$(date +%F_%H%M)
-    echo "Include /etc/ssh/sshd_config.d/*.conf" >> /etc/ssh/sshd_config
-fi
+# Удаляем все Include и добавляем в конец (чтобы Match User переопределял глобальный Banner)
+cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak_$(date +%F_%H%M)
+sed -i '/^Include \/etc\/ssh\/sshd_config.d/d' /etc/ssh/sshd_config
+echo "Include /etc/ssh/sshd_config.d/*.conf" >> /etc/ssh/sshd_config
 if sshd -t 2>/dev/null; then
     systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
     echo -e "${GREEN}✅   sshd подготовлен (blocked-users.conf)${NC}"
