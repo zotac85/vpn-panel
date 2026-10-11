@@ -283,48 +283,6 @@ _nodes_reboot() {
 }
 
 
-_nodes_install_whitedns() {
-    clear
-    echo -e "${YELLOW}── Установка WhiteDNS на ноду ──${NC}"
-    echo ""
-    while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
-        [ -z "$_id" ] && continue
-        [ "$_im" = "1" ] && continue
-        echo "  $_id) $_name ($_ip)"
-    done < <(_nodes_py list)
-    echo ""
-    read -p "Введите ID ноды: " nid
-    [ -z "$nid" ] && return
-    row=$(_nodes_py get "$nid")
-    [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
-    IFS='|' read -r name host ip sport wsport suser <<< "$row"
-    read -p "Введите домен для WhiteDNS (например ff.26central.asia): " wd_domain
-    [ -z "$wd_domain" ] && return
-
-    echo ""
-    echo -e "${CYAN}═══════════════════════════════════════════${NC}"
-    echo -e "${CYAN}  УСТАНОВКА WHITEDNS на $name${NC}"
-    echo -e "${CYAN}  Домен: $wd_domain${NC}"
-    echo -e "${CYAN}═══════════════════════════════════════════${NC}"
-    echo ""
-    echo -e "${YELLOW}Открываю порт 53...${NC}"
-    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" \
-        "ufw allow 53/tcp comment 'DNS TCP' >/dev/null 2>&1; ufw allow 53/udp comment 'DNS UDP' >/dev/null 2>&1; echo 'порт 53 открыт'"
-    echo ""
-    echo -e "${CYAN}Запускаю официальный установщик...${NC}"
-    echo -e "${YELLOW}(сейчас увидишь интерактивный вывод, домен подставится сам)${NC}"
-    echo ""
-    sleep 2
-
-    # Запуск с TTY (-t), домен передаётся через stdin
-    ssh -t -o StrictHostKeyChecking=no -p "$sport" root@"$ip" \
-        "export TERM=xterm-256color; echo '$wd_domain' | bash <(curl -Ls https://raw.githubusercontent.com/masterking32/MasterDnsVPN/main/server_linux_install.sh)"
-
-    echo ""
-    echo -e "${GREEN}✅ Установка завершена${NC}"
-    echo ""
-    read -p "Нажмите Enter..."
-}
 
 menu_nodes() {
     while true; do
@@ -357,10 +315,9 @@ menu_nodes() {
         echo -e " 7) 🔄 Синхронизировать всех юзеров на ноды"
         echo -e " 8) ⚡ Оптимизировать ноду"
         echo -e " 9) 🔄 Перезагрузить ноду"
-        echo -e " 10) 🌐 Установить WhiteDNS на ноду"
         echo -e " 0) ↩️  Назад"
         echo ""
-        read -p "Выберите действие [0-10]: " n_choice
+        read -p "Выберите действие [0-9]: " n_choice
         case "$n_choice" in
             1) _nodes_add ;;
             2) _nodes_check_all ;;
@@ -371,7 +328,6 @@ menu_nodes() {
             7) _nodes_sync_all_users ;;
             8) _nodes_optimize ;;
             9) _nodes_reboot ;;
-            10) _nodes_install_whitedns ;;
             0) return ;;
         esac
     done
