@@ -3,6 +3,7 @@
 TS_DIR="/etc/UDPCustom/expire_ts"
 LOG="/var/log/vpn-expiry-check.log"
 BLOCKED_CONF="/etc/ssh/sshd_config.d/blocked-users.conf"
+BANNER_FILE="/etc/UDPCustom/expired_banner.txt"
 NOW=$(date +%s)
 
 [ -d "$TS_DIR" ] || exit 0
@@ -44,6 +45,18 @@ for ts_file in "$TS_DIR"/*; do
 done
 
 # Обновляем sshd_config.d/blocked-users.conf
+# Генерируем баннер с поддержкой из support.txt
+SUPPORT="@ArsenSupportBot"
+if [ -f /etc/UDPCustom/support.txt ]; then
+    _s=$(head -1 /etc/UDPCustom/support.txt 2>/dev/null | tr -d '[:space:]' | head -c 100)
+    [ -n "$_s" ] && SUPPORT="$_s"
+fi
+cat > "$BANNER_FILE" << BANEOF
+<h5><b><font color='#FF0000'>❌  СРОК ДЕЙСТВИЯ КЛЮЧА ИСТЁК</font></b></h5>
+<h5><b><font color='#FFFF00'>Обратись в поддержку: $SUPPORT</font></b></h5>
+BANEOF
+chmod 644 "$BANNER_FILE"
+
 NEW_CONF=$(mktemp)
 echo "# Автогенерируется vpn-expiry-check.sh" > "$NEW_CONF"
 echo "# Юзеры с истёкшим сроком — SSH-туннель запрещён" >> "$NEW_CONF"
@@ -53,6 +66,7 @@ for u in "${!SHOULD_BLOCK[@]}"; do
     echo "    ForceCommand /usr/local/bin/vpn-nologin.sh" >> "$NEW_CONF"
     echo "    AllowTcpForwarding no" >> "$NEW_CONF"
     echo "    PermitOpen none" >> "$NEW_CONF"
+    echo "    Banner $BANNER_FILE" >> "$NEW_CONF"
 done
 
 # Применяем если изменилось
