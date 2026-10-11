@@ -149,9 +149,66 @@ def sync_lock_to_nodes(user, action):
         logging.error(f"sync_lock_to_nodes {action} {user}: {e}")
 
 
+
+def ensure_traffic_chain():
+    """Проверяет цепочку VPN_TRAFFIC. Если нет — создаёт + правила. Защита от ufw reset."""
+    users = read_users()
+    uid_map = {}
+    for u in users:
+        r = subprocess.run(['id', '-u', u], capture_output=True, text=True)
+        if r.returncode == 0:
+            try:
+                uid_map[u] = int(r.stdout.strip())
+            except ValueError:
+                pass
+
+    # Проверка: существует ли цепочка
+    check = subprocess.run(['iptables', '-L', TRAFFIC_CHAIN, '-n'],
+                           capture_output=True, text=True)
+    if check.returncode != 0:
+        # Создаём
+        subprocess.run(['iptables', '-N', TRAFFIC_CHAIN], capture_output=True)
+        logging.info(f"Self-heal: создана цепочка {TRAFFIC_CHAIN}")
+        # Вставляем в OUTPUT
+        subprocess.run(['iptables', '-I', 'OUTPUT', '-j', TRAFFIC_CHAIN], capture_output=True)
+
+    # Проверка: есть ли ссылка из OUTPUT
+    link = subprocess.run(['iptables', '-C', 'OUTPUT', '-j', TRAFFIC_CHAIN],
+                          capture_output=True)
+    if link.returncode != 0:
+        subprocess.run(['iptables', '-I', 'OUTPUT', '-j', TRAFFIC_CHAIN], capture_output=True)
+        logging.info(f"Self-heal: добавлено правило OUTPUT -> {TRAFFIC_CHAIN}")
+
+    # Проверка/добавление правил для юзеров
+    cur = subprocess.run(['iptables', '-L', TRAFFIC_CHAIN, '-n'],
+                         capture_output=True, text=True)
+    cur_uids = set()
+    if cur.returncode == 0:
+        for line in cur.stdout.splitlines():
+            if 'owner UID match' in line:
+                try:
+                    cur_uids.add(int(line.split()[-1]))
+                except (ValueError, IndexError):
+                    pass
+
+    added = 0
+    for u, uid in uid_map.items():
+        if uid in cur_uids:
+            continue
+        subprocess.run(['iptables', '-A', TRAFFIC_CHAIN,
+                        '-m', 'owner', '--uid-owner', str(uid),
+                        '-j', 'RETURN'], capture_output=True)
+        added += 1
+    if added:
+        logging.info(f"Self-heal: добавлено {added} правил uid-owner")
+
 def main():
     if not os.path.exists(DB):
         return
+    try:
+        ensure_traffic_chain()
+    except Exception as e:
+        logging.error(f"ensure_traffic_chain: {e}")
 
     master = update_master_files()
     nodes = collect_node_traffic()
