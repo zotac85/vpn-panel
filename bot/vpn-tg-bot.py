@@ -3444,6 +3444,101 @@ def _set_domain(node_id, new_domain):
         return True
 
 
+def _get_domain_name(node_id):
+    """Возвращает читаемое имя сервера по node_id."""
+    if node_id == 0:
+        return '👑 Мастер'
+    try:
+        import sqlite3 as _sq
+        con = _sq.connect('/etc/UDPCustom/vpn.db')
+        r = con.execute("SELECT name FROM nodes WHERE id=?", (node_id,)).fetchone()
+        con.close()
+        return r[0] if r else f'Нода #{node_id}'
+    except Exception:
+        return f'Нода #{node_id}'
+
+
+def _get_domain_host(node_id):
+    """Возвращает текущий домен сервера по node_id."""
+    if node_id == 0:
+        try:
+            return open(DOMAIN_FILE).read().strip() if os.path.exists(DOMAIN_FILE) else '—'
+        except Exception:
+            return '—'
+    try:
+        import sqlite3 as _sq
+        con = _sq.connect('/etc/UDPCustom/vpn.db')
+        r = con.execute("SELECT host FROM nodes WHERE id=?", (node_id,)).fetchone()
+        con.close()
+        return r[0] if r else '—'
+    except Exception:
+        return '—'
+
+
+def _build_domain_notify_text(node_id):
+    """Готовый шаблон уведомления."""
+    name = _get_domain_name(node_id)
+    host = _get_domain_host(node_id)
+    NL = chr(10)
+    return NL.join([
+        '🌐 <b>Обновление доменов</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        f'📍 Локация: <b>{name}</b>',
+        f'🌐 Новый домен: <code>{host}</code>',
+        '',
+        '⚠️ Если конфиг не подключается — пересоздай его:',
+        '<code>/cabinet</code> → 🔄 на ключе',
+        '',
+        f'💬 {get_support()}',
+    ])
+
+
+def show_domain_notify_preview(cfg, chat_id, user_id, node_id, msg_id=None):
+    """Превью уведомления о смене домена."""
+    token = cfg['BOT_TOKEN']
+    if not is_admin(cfg, user_id):
+        return
+    try:
+        from bot_modules import db as _dbb
+    except Exception as e:
+        send_message(token, chat_id, f'❌ db error: {e}')
+        return
+
+    notify_text = _build_domain_notify_text(node_id)
+    bid = _dbb.create_broadcast(notify_text)
+    if not bid:
+        send_message(token, chat_id, '❌ Не удалось создать черновик')
+        return
+
+    total = len(_dbb.get_all_user_ids())
+    NL = chr(10)
+    preview = NL.join([
+        '📨 <b>УВЕДОМЛЕНИЕ О СМЕНЕ ДОМЕНА</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        notify_text,
+        '',
+        '━━━━━━━━━━━━━━━━━━━━',
+        f'👥 Получателей: <b>{total}</b>',
+        f'⏱ Отправка: пауза между сообщениями',
+        '',
+        'Подтверди отправку:'
+    ])
+    kb = {'inline_keyboard': [
+        [{'text': '✅  Отправить', 'callback_data': f'broadcast_send:{bid}'}],
+        [{'text': '✏️ Изменить', 'callback_data': f'domain_notify_edit:{node_id}:{bid}'},
+         {'text': '❌  Отмена', 'callback_data': 'adm_main'}]
+    ]}
+    if msg_id:
+        tg_request(token, 'editMessageText', {
+            'chat_id': chat_id, 'message_id': msg_id,
+            'text': preview, 'parse_mode': 'HTML', 'reply_markup': kb
+        })
+    else:
+        smart_send(token, chat_id, preview, reply_markup=kb, parse_mode='HTML')
+
+
 def show_manage_domains(cfg, chat_id, user_id, msg_id=None):
     """Список доменов: Мастер + все ноды."""
     token = cfg['BOT_TOKEN']
@@ -4528,6 +4623,46 @@ def main():
                             pass
                         show_domain_edit(cfg, cb['message']['chat']['id'], cb_user_id, _nid, cb['message']['message_id'])
                         continue
+                    elif cb_data.startswith('domain_notify:'):
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        try:
+                            _nid = int(cb_data.split(':', 1)[1])
+                        except Exception:
+                            _nid = 0
+                        show_domain_notify_preview(cfg, cb['message']['chat']['id'], cb_user_id, _nid, cb['message']['message_id'])
+                        continue
+                    elif cb_data.startswith('domain_notify_edit:'):
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        try:
+                            _parts = cb_data.split(':', 2)
+                            _nid = int(_parts[1])
+                            _bid = int(_parts[2])
+                        except Exception:
+                            _nid = 0
+                            _bid = 0
+                        # Pending: ввод текста для рассылки
+                        try:
+                            from bot_modules import db as _dbpe
+                            _dbpe.set_pending(cb_user_id, f'domain_notify_edit:{_nid}:{_bid}')
+                        except Exception:
+                            pass
+                        NLx = chr(10)
+                        _instr = NLx.join([
+                            '✏️ <b>РЕДАКТИРОВАНИЕ ТЕКСТА УВЕДОМЛЕНИЯ</b>',
+                            '━━━━━━━━━━━━━━━━━━━━',
+                            '',
+                            'Текущий текст:',
+                            '<pre>' + _build_domain_notify_text(_nid)[:800] + '</pre>',
+                            '',
+                            '━━━━━━━━━━━━━━━━━━━━',
+                            '✏️ Отправь новый текст сообщением:'
+                        ])
+                        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                            'chat_id': cb['message']['chat']['id'],
+                            'text': _instr,
+                            'parse_mode': 'HTML'
+                        })
+                        continue
                     elif cb_data == 'manage_domain':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         handle_domain(cfg, cb['message']['chat']['id'], cb_user_id)
@@ -4888,6 +5023,7 @@ def main():
                                 'для этого сервера.',
                             ])
                             _kb = {'inline_keyboard': [
+                                [{'text': '📨 Уведомить клиентов', 'callback_data': f'domain_notify:{_nid}'}],
                                 [{'text': '🌐 К списку доменов', 'callback_data': 'manage_domains'}],
                                 [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
                             ]}
@@ -4898,6 +5034,44 @@ def main():
                             tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
                                 'chat_id': user_id, 'text': f'❌  Ошибка: {_e}', 'parse_mode': 'HTML'
                             })
+                    continue
+                if pending and pending.startswith('domain_notify_edit:') and text and not text.startswith('/'):
+                    _db.clear_pending(user_id)
+                    try:
+                        _parts = pending.split(':', 2)
+                        _nid = int(_parts[1])
+                        _bid = int(_parts[2])
+                    except Exception:
+                        _nid = 0
+                        _bid = 0
+                    try:
+                        from bot_modules import db as _dbne
+                        _dbne.update_broadcast(_bid, text=text)
+                    except Exception as _e:
+                        log.error(f'domain_notify_edit update: {_e}')
+                    try:
+                        total = len(_dbne.get_all_user_ids())
+                        NLx = chr(10)
+                        preview = NLx.join([
+                            '📨 <b>УВЕДОМЛЕНИЕ О СМЕНЕ ДОМЕНА</b>',
+                            '━━━━━━━━━━━━━━━━━━━━',
+                            '',
+                            text,
+                            '',
+                            '━━━━━━━━━━━━━━━━━━━━',
+                            f'👥 Получателей: <b>{total}</b>',
+                            'Подтверди отправку:'
+                        ])
+                        _kb = {'inline_keyboard': [
+                            [{'text': '✅  Отправить', 'callback_data': f'broadcast_send:{_bid}'}],
+                            [{'text': '✏️ Изменить', 'callback_data': f'domain_notify_edit:{_nid}:{_bid}'},
+                             {'text': '❌  Отмена', 'callback_data': 'adm_main'}]
+                        ]}
+                        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                            'chat_id': user_id, 'text': preview, 'parse_mode': 'HTML', 'reply_markup': _kb
+                        })
+                    except Exception as _e:
+                        log.error(f'domain_notify_edit preview: {_e}')
                     continue
                 if pending and pending.startswith('wd_srv_edit:') and text and not text.startswith('/'):
                     _db.clear_pending(user_id)
