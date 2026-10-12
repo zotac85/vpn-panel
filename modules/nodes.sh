@@ -329,6 +329,36 @@ print('OK')
     read -p "Нажмите Enter..."
 }
 
+
+_nodes_install_udpgw() {
+    clear
+    echo -e "${YELLOW}── Установка UDPGW на ноду ──${NC}"
+    echo ""
+    while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
+        [ -z "$_id" ] && continue
+        [ "$_im" = "1" ] && continue
+        echo "  $_id) $_name ($_ip)"
+    done < <(_nodes_py list)
+    echo ""
+    read -p "Введите ID ноды: " nid
+    [ -z "$nid" ] && return
+    row=$(_nodes_py get "$nid")
+    [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
+    IFS='|' read -r name host ip sport wsport suser <<< "$row"
+
+    echo ""
+    echo -e "${CYAN}Устанавливаю UDPGW на $name ($ip)...${NC}"
+    echo ""
+
+    scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" \
+        /usr/local/share/vpn-panel/install-udpgw-node.sh root@"$ip":/tmp/install-udpgw-node.sh >/dev/null 2>&1
+    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" \
+        "chmod +x /tmp/install-udpgw-node.sh && bash /tmp/install-udpgw-node.sh"
+
+    echo ""
+    read -p "Нажмите Enter..."
+}
+
 menu_nodes() {
     while true; do
         clear
@@ -361,9 +391,10 @@ menu_nodes() {
         echo -e " 8) ⚡ Оптимизировать ноду"
         echo -e " 9) 🔄 Перезагрузить ноду"
         echo -e " 10) 🌐 Изменить домен ноды"
+        echo -e " 11) 📡 Установить UDPGW на ноду"
         echo -e " 0) ↩️  Назад"
         echo ""
-        read -p "Выберите действие [0-10]: " n_choice
+        read -p "Выберите действие [0-11]: " n_choice
         case "$n_choice" in
             1) _nodes_add ;;
             2) _nodes_check_all ;;
@@ -375,6 +406,7 @@ menu_nodes() {
             8) _nodes_optimize ;;
             9) _nodes_reboot ;;
             10) _nodes_change_domain ;;
+            11) _nodes_install_udpgw ;;
             0) return ;;
         esac
     done
