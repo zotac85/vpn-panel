@@ -357,6 +357,7 @@ curl -sf -o /usr/local/bin/bot_modules/autopost.py "$REPO_URL/bot/modules/autopo
 curl -sf -o /usr/local/bin/bot_modules/cabinet.py "$REPO_URL/bot/modules/cabinet.py"
 curl -sf -o /usr/local/bin/bot_modules/db.py "$REPO_URL/bot/modules/db.py"
 curl -sf -o /usr/local/bin/bot_modules/dark_gen.py "$REPO_URL/bot/modules/dark_gen.py"
+curl -sf -o /usr/local/bin/bot_modules/plisio.py "$REPO_URL/bot/modules/plisio.py"
 curl -sf -o /usr/local/bin/bot_modules/gemini_check.py "$REPO_URL/bot/modules/gemini_check.py"
 mkdir -p /usr/local/bin/bot_modules/assets
 curl -sf -o /usr/local/bin/bot_modules/assets/blank.dark "$REPO_URL/bot/modules/assets/blank.dark"
@@ -614,6 +615,18 @@ else
 fi
 echo "* * * * * root /usr/local/bin/vpn-expiry-check.sh" > /etc/cron.d/vpn-expiry-check
 chmod 644 /etc/cron.d/vpn-expiry-check
+
+# ── КРИПТО (Plisio) ──
+curl -sf -o /usr/local/bin/vpn-crypto-check.py "$REPO_URL/scripts/vpn-crypto-check.py"
+chmod +x /usr/local/bin/vpn-crypto-check.py
+echo "*/5 * * * * root /usr/bin/python3 /usr/local/bin/vpn-crypto-check.py" > /etc/cron.d/vpn-crypto-check
+chmod 644 /etc/cron.d/vpn-crypto-check
+# Шаблон plisio.env (не перезаписываем если есть)
+if [ ! -f /etc/UDPCustom/plisio.env ]; then
+    echo "PLISIO_KEY=" > /etc/UDPCustom/plisio.env
+    chmod 600 /etc/UDPCustom/plisio.env
+    echo -e "\033[0;33m⚠️  Заполни /etc/UDPCustom/plisio.env (PLISIO_KEY=xxx)\033[0m"
+fi
 
 # ── АВТООЧИСТКА (висячие + истёкшие, каждый час) ──
 curl -sf -o /usr/local/bin/vpn-auto-cleanup.sh "$REPO_URL/scripts/vpn-auto-cleanup.sh"
