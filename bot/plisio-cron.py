@@ -76,7 +76,7 @@ def check_payments():
         log.info('payment #%s txn=%s status=%s', pid, txn, status)
 
         if status in ('completed', 'mismatch'):
-            _credit_paid(db, cfg, token, admin_id, pid, tg_id, amt, op)
+            _credit_paid(db, cfg, token, admin_id, pid, tg_id, amt, op, row['meta'])
             done += 1
         elif status in ('expired', 'cancelled', 'error'):
             db.execute(
@@ -90,7 +90,19 @@ def check_payments():
     return done
 
 
-def _credit_paid(db, cfg, token, admin_id, pid, tg_id, amt, op):
+def _net_name(code):
+    m = {
+        'USDT_BSC': 'USDT BEP-20',
+        'USDT_TRX': 'USDT TRC-20',
+        'USDT_TON': 'USDT TON',
+        'USDT_ERC': 'USDT ERC-20',
+        'USDT': 'USDT ERC-20',
+        'TON': 'TON',
+    }
+    return m.get((code or '').upper(), code or 'USDT')
+
+
+def _credit_paid(db, cfg, token, admin_id, pid, tg_id, amt, op, row_meta=None):
     real = op.get('amount') or op.get('invoice_total_sum') or amt
     try:
         real_amt = float(real)
@@ -107,14 +119,15 @@ def _credit_paid(db, cfg, token, admin_id, pid, tg_id, amt, op):
     else:
         u_link = 'ID ' + str(tg_id)
 
-    cur = (op.get('psys_cid') or '').upper()
-    if not cur:
-        meta = {}
+    cur = ''
+    if row_meta:
         try:
-            meta = json.loads(op.get('meta') or '{}')
+            _m = json.loads(row_meta) if isinstance(row_meta, str) else row_meta
+            cur = (_m.get('currency') or '').upper()
         except:
             pass
-        cur = (meta.get('currency') or 'USDT').upper()
+    if not cur:
+        cur = (op.get('psys_cid') or 'USDT').upper()
 
     meta_json = json.dumps({
         'txn': op.get('txn_id'),
@@ -137,7 +150,7 @@ def _credit_paid(db, cfg, token, admin_id, pid, tg_id, amt, op):
         '━━━━━━━━━━━━━━━━━━━━',
         '',
         '💵 Зачислено: <b>' + ('%.2f' % real_amt) + ' USD</b>',
-        '💎 Сеть: <b>' + cur + '</b>',
+        '💎 Сеть: <b>' + _net_name(cur) + '</b>',
         '🆔 Заказ: <code>' + str(op.get('txn_id')) + '</code>',
         '',
         'Баланс обновлён в кабинете 👤',
@@ -151,7 +164,7 @@ def _credit_paid(db, cfg, token, admin_id, pid, tg_id, amt, op):
         '👤 Юзер: ' + u_name + ' (' + u_link + ')',
         '🆔 TG ID: <code>' + str(tg_id) + '</code>',
         '💵 Сумма: <b>' + ('%.2f' % real_amt) + ' USD</b>',
-        '💎 Сеть: <b>' + cur + '</b>',
+        '💎 Сеть: <b>' + _net_name(cur) + '</b>',
         '📦 Заказ: <code>' + str(op.get('txn_id')) + '</code>',
     ])
     tg_send(token, admin_id, admin_msg)
