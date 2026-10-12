@@ -3106,7 +3106,7 @@ def _fmt_key_row(key, kind):
     return f"{icon} <code>{key['login']}</code>", f"   ⏰ {t} · 📊 {traffic} · 👤 <code>{tg_id}</code>"
 
 
-def show_users_test(cfg, chat_id, user_id, page=1, msg_id=None):
+def show_users_test(cfg, chat_id, user_id, page=1, msg_id=None, show_all=False):
     """Список тестовых ключей"""
     token = cfg['BOT_TOKEN']
     if not is_admin(cfg, user_id):
@@ -3117,13 +3117,19 @@ def show_users_test(cfg, chat_id, user_id, page=1, msg_id=None):
 
     per_page = 5
     now = int(time.time())
-    total = _db.query_one("SELECT COUNT(*) as n FROM test_keys")['n']
+    if show_all:
+        total = _db.query_one("SELECT COUNT(*) as n FROM test_keys")['n']
+    else:
+        total = _db.query_one("SELECT COUNT(*) as n FROM test_keys WHERE expires_at = 0 OR expires_at > ?", (now,))['n']
     total_pages = max(1, (total + per_page - 1) // per_page)
     if page < 1: page = 1
     if page > total_pages: page = total_pages
     offset = (page - 1) * per_page
 
-    keys = _db.query("SELECT * FROM test_keys ORDER BY created_at DESC LIMIT ? OFFSET ?", (per_page, offset))
+    if show_all:
+        keys = _db.query("SELECT * FROM test_keys ORDER BY created_at DESC LIMIT ? OFFSET ?", (per_page, offset))
+    else:
+        keys = _db.query("SELECT * FROM test_keys WHERE expires_at = 0 OR expires_at > ? ORDER BY created_at DESC LIMIT ? OFFSET ?", (now, per_page, offset))
 
     NL = chr(10)
     lines_txt = [
@@ -3143,14 +3149,18 @@ def show_users_test(cfg, chat_id, user_id, page=1, msg_id=None):
     text = NL.join(lines_txt)
 
     nav = []
+    suffix = ':all' if show_all else ''
     if page > 1:
-        nav.append({'text': '◀', 'callback_data': f'adm_users_test:{page-1}'})
+        nav.append({'text': '◀', 'callback_data': f'adm_users_test:{page-1}{suffix}'})
     nav.append({'text': f'{page}/{total_pages}', 'callback_data': 'noop'})
     if page < total_pages:
-        nav.append({'text': '▶', 'callback_data': f'adm_users_test:{page+1}'})
-
+        nav.append({'text': '▶', 'callback_data': f'adm_users_test:{page+1}{suffix}'})
     kb = {'inline_keyboard': []}
     if nav: kb['inline_keyboard'].append(nav)
+    # Кнопка переключения режима
+    toggle_text = '📋 Только активные' if show_all else '📚 Показать все'
+    toggle_cb = f'adm_users_test:{page}' if show_all else f'adm_users_test:{page}:all'
+    kb['inline_keyboard'].append([{'text': toggle_text, 'callback_data': toggle_cb}])
     kb['inline_keyboard'].append([
         {'text': '🎁 Тестовые', 'callback_data': 'adm_users_test:1'},
         {'text': '💎 VIP', 'callback_data': 'adm_users_vip:1'}
@@ -3158,7 +3168,6 @@ def show_users_test(cfg, chat_id, user_id, page=1, msg_id=None):
     kb['inline_keyboard'].append([
         {'text': '⬅️ К разделам', 'callback_data': 'adm_users_menu'}
     ])
-
     if msg_id:
         tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
     else:
@@ -4993,11 +5002,13 @@ def main():
                         show_users_menu(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
                         continue
                     elif cb_data.startswith('adm_users_test:'):
+                        _parts = cb_data.split(':')
                         try:
-                            pg = int(cb_data.split(':', 1)[1])
+                            pg = int(_parts[1])
                         except: pg = 1
+                        _show_all = (len(_parts) > 2 and _parts[2] == 'all')
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
-                        show_users_test(cfg, cb['message']['chat']['id'], cb_user_id, pg, cb['message']['message_id'])
+                        show_users_test(cfg, cb['message']['chat']['id'], cb_user_id, pg, cb['message']['message_id'], show_all=_show_all)
                         continue
                     elif cb_data.startswith('adm_users_vip:'):
                         try:
