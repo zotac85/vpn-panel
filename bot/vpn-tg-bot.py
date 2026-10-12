@@ -3330,24 +3330,57 @@ def handle_delproxy(cfg, chat_id, user_id, args):
         send_message(token, chat_id, f"❌ Ошибка: {e}")
 
 
-def handle_proxies(cfg, chat_id, user_id):
-    """Список прокси"""
+def handle_proxies(cfg, chat_id, user_id, msg_id=None):
+    """Список прокси + кнопка редактирования"""
     token = cfg['BOT_TOKEN']
     if not is_admin(cfg, user_id):
         send_message(token, chat_id, "🚫 Только для админа."); return
     try:
-        if not os.path.exists(PROXIES_FILE):
-            send_message(token, chat_id, "❌ Файл proxies.txt не найден"); return
-        ips = [l.strip() for l in open(PROXIES_FILE) if l.strip()]
-        if not ips:
-            send_message(token, chat_id, "📋 Список прокси пуст"); return
-        text = f"🔒 <b>Прокси ({len(ips)}):</b>\n\n"
+        ips = [l.strip() for l in open(PROXIES_FILE) if l.strip()] if os.path.exists(PROXIES_FILE) else []
+    except Exception:
+        ips = []
+    NL = chr(10)
+    if ips:
+        lines = ['🔒 <b>ПРОКСИ (' + str(len(ips)) + ')</b>', '━━━━━━━━━━━━━━━━━━━━', '']
         for i, ip in enumerate(ips, 1):
-            text += f"<b>{i}.</b> <code>{ip}</code>\n"
-        text += f"\n<i>Добавить: /addproxy IP\nУдалить: /delproxy N</i>"
-        send_message(token, chat_id, text, parse_mode='HTML')
-    except Exception as e:
-        send_message(token, chat_id, f"❌ Ошибка: {e}")
+            lines.append('<b>' + str(i) + '.</b> <code>' + ip + '</code>')
+    else:
+        lines = ['🔒 <b>ПРОКСИ</b>', '━━━━━━━━━━━━━━━━━━━━', '', '❌ Список пуст']
+    lines += ['', '━━━━━━━━━━━━━━━━━━━━', '<i>Отправка заменяет весь список</i>']
+    text = NL.join(lines)
+    kb = {'inline_keyboard': [
+        [{'text': '✏️ Редактировать список', 'callback_data': 'manage_proxies_edit'}],
+        [{'text': '⬅️ Назад', 'callback_data': 'manage_services'}]
+    ]}
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
+
+
+def show_proxies_edit(cfg, chat_id, user_id, msg_id=None):
+    """Экран редактирования прокси."""
+    token = cfg['BOT_TOKEN']
+    NL = chr(10)
+    text = NL.join([
+        '✏️ <b>РЕДАКТИРОВАНИЕ ПРОКСИ</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        'Отправь новый список прокси.',
+        '',
+        'Формат: один IP на строку:',
+        '<code>1.2.3.4</code>',
+        '<code>5.6.7.8</code>',
+        '',
+        'Или отправь <code>-</code> чтобы очистить.'
+    ])
+    kb = {'inline_keyboard': [
+        [{'text': '⬅️ Назад', 'callback_data': 'manage_proxies'}]
+    ]}
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
 
 
 def handle_setdomain(cfg, chat_id, user_id, args):
@@ -3394,17 +3427,52 @@ def handle_setpayload(cfg, chat_id, user_id, args):
         send_message(token, chat_id, f"❌ Ошибка: {e}")
 
 
-def handle_payload(cfg, chat_id, user_id):
-    """Показать payload"""
+def handle_payload(cfg, chat_id, user_id, msg_id=None):
+    """Показать payload + кнопка редактирования"""
     token = cfg['BOT_TOKEN']
     if not is_admin(cfg, user_id):
         send_message(token, chat_id, "🚫 Только для админа."); return
     try:
-        pl = open(PAYLOAD_FILE).read().strip() if os.path.exists(PAYLOAD_FILE) else "не задан"
-        text = f"📦 <b>Payload ({len(pl)} символов):</b>\n\n<code>{pl}</code>\n\n<i>Изменить: /setpayload ...</i>"
-        send_message(token, chat_id, text, parse_mode='HTML')
-    except Exception as e:
-        send_message(token, chat_id, f"❌ Ошибка: {e}")
+        pl = open(PAYLOAD_FILE).read().strip() if os.path.exists(PAYLOAD_FILE) else ''
+    except Exception:
+        pl = ''
+    NL = chr(10)
+    if pl:
+        _prev = pl[:500] + ('...' if len(pl) > 500 else '')
+        lines = ['📦 <b>PAYLOAD (' + str(len(pl)) + ' символов)</b>', '━━━━━━━━━━━━━━━━━━━━', '', '<pre>' + _prev + '</pre>']
+    else:
+        lines = ['📦 <b>PAYLOAD</b>', '━━━━━━━━━━━━━━━━━━━━', '', '❌ Не задан']
+    lines += ['', '━━━━━━━━━━━━━━━━━━━━', '<i>Отправка полностью заменяет payload</i>']
+    text = NL.join(lines)
+    kb = {'inline_keyboard': [
+        [{'text': '✏️ Редактировать', 'callback_data': 'manage_payload_edit'}],
+        [{'text': '⬅️ Назад', 'callback_data': 'manage_services'}]
+    ]}
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
+
+
+def show_payload_edit(cfg, chat_id, user_id, msg_id=None):
+    """Экран редактирования payload."""
+    token = cfg['BOT_TOKEN']
+    NL = chr(10)
+    text = NL.join([
+        '✏️ <b>РЕДАКТИРОВАНИЕ PAYLOAD</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        'Отправь новый payload сообщением.',
+        '',
+        'Или отправь <code>-</code> чтобы очистить.'
+    ])
+    kb = {'inline_keyboard': [
+        [{'text': '⬅️ Назад', 'callback_data': 'manage_payload'}]
+    ]}
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
 
 
 def _get_all_domains():
@@ -3631,8 +3699,13 @@ def handle_services(cfg, chat_id, user_id, msg_id=None):
         pl_len = len(pl)
     except: pl_len = 0
     
+    text += f"\n<b>🌐 Домены:</b>\n"
+    try:
+        for _nid, _nname, _nhost, _is_m in _get_all_domains():
+            text += f"  {_nname}: <code>{_nhost}</code>\n"
+    except Exception as _e:
+        text += f"  ⚠️ {_e}\n"
     text += f"\n<b>Текущие настройки:</b>\n"
-    text += f"  🌐 Домен: <code>{d}</code>\n"
     text += f"  🔒 Прокси: <b>{proxy_cnt}</b> шт.\n"
     text += f"  📦 Payload: <b>{pl_len}</b> симв.\n"
     
@@ -4668,10 +4741,26 @@ def main():
                         handle_domain(cfg, cb['message']['chat']['id'], cb_user_id)
                     elif cb_data == 'manage_proxies':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
-                        handle_proxies(cfg, cb['message']['chat']['id'], cb_user_id)
+                        handle_proxies(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                    elif cb_data == 'manage_proxies_edit':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        try:
+                            from bot_modules import db as _dbpp
+                            _dbpp.set_pending(cb_user_id, 'manage_proxies_edit')
+                        except Exception:
+                            pass
+                        show_proxies_edit(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
                     elif cb_data == 'manage_payload':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
-                        handle_payload(cfg, cb['message']['chat']['id'], cb_user_id)
+                        handle_payload(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                    elif cb_data == 'manage_payload_edit':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        try:
+                            from bot_modules import db as _dbpl
+                            _dbpl.set_pending(cb_user_id, 'manage_payload_edit')
+                        except Exception:
+                            pass
+                        show_payload_edit(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
                     elif cb_data == 'restart_ws':
                         import subprocess as _sp
                         try:
@@ -5072,6 +5161,65 @@ def main():
                         })
                     except Exception as _e:
                         log.error(f'domain_notify_edit preview: {_e}')
+                    continue
+                if pending == 'manage_proxies_edit' and text and not text.startswith('/'):
+                    _db.clear_pending(user_id)
+                    _txt = text.strip()
+                    if _txt == '-':
+                        try:
+                            open(PROXIES_FILE, 'w').close()
+                        except Exception:
+                            pass
+                    else:
+                        # Извлекаем IP из строк
+                        _lines = []
+                        for _ln in _txt.splitlines():
+                            _ip = _ln.strip().split()[0] if _ln.strip() else ''
+                            if _ip and _ip.count('.') == 3 and _ip.replace('.', '').isdigit():
+                                _lines.append(_ip)
+                        _lines = sorted(set(_lines))
+                        try:
+                            with open(PROXIES_FILE, 'w') as _f:
+                                _f.write(chr(10).join(_lines) + (chr(10) if _lines else ''))
+                        except Exception as _e:
+                            log.error(f'proxies_edit: {_e}')
+                    NLx = chr(10)
+                    _ok = NLx.join([
+                        '✅  <b>ПРОКСИ СОХРАНЕНЫ</b>',
+                        '━━━━━━━━━━━━━━━━━━━━',
+                        f'🔒 Записей: <b>{len([l for l in open(PROXIES_FILE).read().splitlines() if l.strip()]) if os.path.exists(PROXIES_FILE) else 0}</b>',
+                    ])
+                    _kb = {'inline_keyboard': [
+                        [{'text': '🔒 К прокси', 'callback_data': 'manage_proxies'}],
+                        [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
+                    ]}
+                    tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                        'chat_id': user_id, 'text': _ok, 'parse_mode': 'HTML', 'reply_markup': _kb
+                    })
+                    continue
+                if pending == 'manage_payload_edit' and text and not text.startswith('/'):
+                    _db.clear_pending(user_id)
+                    _txt = text.strip()
+                    if _txt == '-':
+                        _txt = ''
+                    try:
+                        with open(PAYLOAD_FILE, 'w') as _f:
+                            _f.write(_txt + chr(10) if _txt else '')
+                    except Exception as _e:
+                        log.error(f'payload_edit: {_e}')
+                    NLx = chr(10)
+                    _ok = NLx.join([
+                        '✅  <b>PAYLOAD СОХРАНЁН</b>',
+                        '━━━━━━━━━━━━━━━━━━━━',
+                        f'📦 Символов: <b>{len(_txt)}</b>',
+                    ])
+                    _kb = {'inline_keyboard': [
+                        [{'text': '📦 К payload', 'callback_data': 'manage_payload'}],
+                        [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
+                    ]}
+                    tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                        'chat_id': user_id, 'text': _ok, 'parse_mode': 'HTML', 'reply_markup': _kb
+                    })
                     continue
                 if pending and pending.startswith('wd_srv_edit:') and text and not text.startswith('/'):
                     _db.clear_pending(user_id)
