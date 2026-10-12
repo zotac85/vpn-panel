@@ -152,9 +152,9 @@ import sqlite3, time
 db = sqlite3.connect('/etc/UDPCustom/vpn.db')
 now = int(time.time())
 for tbl in ['test_keys', 'vip_keys']:
-    for login, pwd, dev in db.execute(f"SELECT login, password, devices FROM {tbl} WHERE expires_at > ?", (now,)).fetchall():
+    for login, pwd, dev, exp in db.execute(f"SELECT login, password, devices, expires_at FROM {tbl} WHERE expires_at > ?", (now,)).fetchall():
         if login and pwd:
-            print(f"{login}|{pwd}|{dev or 1}")
+            print(f"{login}|{pwd}|{dev or 1}|{exp or 0}")
 PYCODE
 
     TOTAL=$(wc -l < "$TMP_FILE")
@@ -194,9 +194,9 @@ PYCODE
         echo -e "${CYAN}=== $_name ($_ip) ===${NC}"
         OK=0
         FAIL=0
-        while IFS='|' read -r login pwd dev; do
+        while IFS='|' read -r login pwd dev exp; do
             [ -z "$login" ] && continue
-            RES=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -p "$_sp" root@"$_ip" "node-user.sh add '$login' '$pwd' && node-user.sh setlimit '$login' '$dev'" < /dev/null 2>/dev/null)
+            RES=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -p "$_sp" root@"$_ip" "node-user.sh add '$login' '$pwd' '$exp' && node-user.sh setlimit '$login' '$dev'" < /dev/null 2>/dev/null)
             if echo "$RES" | grep -q "OK"; then
                 OK=$((OK+1))
             else
@@ -284,6 +284,51 @@ _nodes_reboot() {
 
 
 
+
+_nodes_change_domain() {
+    clear
+    echo -e "${YELLOW}── Изменить домен ноды ──${NC}"
+    echo ""
+    while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
+        [ -z "$_id" ] && continue
+        [ "$_im" = "1" ] && continue
+        echo "  $_id) $_name ($_ip) — домен: $_host"
+    done < <(_nodes_py list)
+    echo ""
+    read -p "Введите ID ноды: " nid
+    [ -z "$nid" ] && return
+    row=$(_nodes_py get "$nid")
+    [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
+    IFS='|' read -r name host ip sport wsport suser <<< "$row"
+    echo ""
+    echo -e "  Текущий домен: ${GREEN}$host${NC}"
+    read -p "  Новый домен (без http://): " new_domain
+    [ -z "$new_domain" ] && return
+
+    # Валидация
+    new_domain=$(echo "$new_domain" | sed 's|https\?://||; s|/.*||; s|:.*||' | tr -d ' ')
+    if [ -z "$new_domain" ] || [[ "$new_domain" != *.* ]]; then
+        echo -e "${RED}Неверный формат. Пример: new.domain.com${NC}"
+        read -p "Enter..."
+        return
+    fi
+
+    # Обновляем в БД мастера
+    python3 -c "
+import sqlite3
+db = sqlite3.connect('/etc/UDPCustom/vpn.db')
+db.execute(\"UPDATE nodes SET host='$new_domain' WHERE id=$nid\")
+db.commit()
+print('OK')
+"
+
+    echo ""
+    echo -e "${GREEN}✅ Домен ноды обновлён: $new_domain${NC}"
+    echo -e "${YELLOW}⚠️  Клиентам нужно пересоздать .dark для этой ноды${NC}"
+    echo ""
+    read -p "Нажмите Enter..."
+}
+
 menu_nodes() {
     while true; do
         clear
@@ -315,9 +360,10 @@ menu_nodes() {
         echo -e " 7) 🔄 Синхронизировать всех юзеров на ноды"
         echo -e " 8) ⚡ Оптимизировать ноду"
         echo -e " 9) 🔄 Перезагрузить ноду"
+        echo -e " 10) 🌐 Изменить домен ноды"
         echo -e " 0) ↩️  Назад"
         echo ""
-        read -p "Выберите действие [0-9]: " n_choice
+        read -p "Выберите действие [0-10]: " n_choice
         case "$n_choice" in
             1) _nodes_add ;;
             2) _nodes_check_all ;;
@@ -328,6 +374,7 @@ menu_nodes() {
             7) _nodes_sync_all_users ;;
             8) _nodes_optimize ;;
             9) _nodes_reboot ;;
+            10) _nodes_change_domain ;;
             0) return ;;
         esac
     done
