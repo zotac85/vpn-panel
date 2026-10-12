@@ -3407,6 +3407,104 @@ def handle_payload(cfg, chat_id, user_id):
         send_message(token, chat_id, f"❌ Ошибка: {e}")
 
 
+def _get_all_domains():
+    """Возвращает список (node_id, name, host, is_master). node_id=0 для мастера."""
+    result = []
+    try:
+        d = open(DOMAIN_FILE).read().strip() if os.path.exists(DOMAIN_FILE) else '—'
+    except Exception:
+        d = '—'
+    result.append((0, '👑 Мастер', d, 1))
+    try:
+        import sqlite3 as _sq
+        con = _sq.connect('/etc/UDPCustom/vpn.db')
+        rows = con.execute(
+            "SELECT id, name, host, is_master FROM nodes WHERE is_active=1 AND is_master=0 ORDER BY id"
+        ).fetchall()
+        con.close()
+        for r in rows:
+            result.append((r[0], r[1], r[2] or '—', 0))
+    except Exception as e:
+        log.error(f"_get_all_domains: {e}")
+    return result
+
+
+def _set_domain(node_id, new_domain):
+    """Устанавливает домен. node_id=0 для мастера."""
+    if node_id == 0:
+        with open(DOMAIN_FILE, 'w') as f:
+            f.write(new_domain + "\n")
+        return True
+    else:
+        import sqlite3 as _sq
+        con = _sq.connect('/etc/UDPCustom/vpn.db')
+        con.execute("UPDATE nodes SET host=? WHERE id=?", (new_domain, node_id))
+        con.commit()
+        con.close()
+        return True
+
+
+def show_manage_domains(cfg, chat_id, user_id, msg_id=None):
+    """Список доменов: Мастер + все ноды."""
+    token = cfg['BOT_TOKEN']
+    if not is_admin(cfg, user_id):
+        return
+    domains = _get_all_domains()
+    NL = chr(10)
+    lines = [
+        '🌐 <b>УПРАВЛЕНИЕ ДОМЕНАМИ</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+    ]
+    kb_rows = []
+    for node_id, name, host, is_master in domains:
+        lines.append(f'  {name}: <code>{host}</code>')
+        cb = f'manage_domain_edit:{node_id}'
+        kb_rows.append([{'text': f'✏️ {name}', 'callback_data': cb}])
+    lines.append('')
+    lines.append('<i>Тапни кнопку чтобы изменить домен</i>')
+    text = NL.join(lines)
+    kb_rows.append([{'text': '⬅️ Назад', 'callback_data': 'manage_services'}])
+    kb = {'inline_keyboard': kb_rows}
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
+
+
+def show_domain_edit(cfg, chat_id, user_id, node_id, msg_id=None):
+    """Экран редактирования одного домена."""
+    token = cfg['BOT_TOKEN']
+    NL = chr(10)
+    domains = _get_all_domains()
+    cur = '—'
+    name = '—'
+    for nid, nname, host, is_m in domains:
+        if nid == node_id:
+            cur = host
+            name = nname
+            break
+    text = NL.join([
+        '✏️ <b>РЕДАКТИРОВАНИЕ ДОМЕНА: ' + name + '</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        'Текущее значение:',
+        f'<code>{cur}</code>',
+        '',
+        '━━━━━━━━━━━━━━━━━━━━',
+        'Отправь новый домен сообщением.',
+        '',
+        'Формат: <code>new.domain.com</code>',
+    ])
+    kb = {'inline_keyboard': [
+        [{'text': '⬅️ Назад', 'callback_data': 'manage_domains'}]
+    ]}
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
+
+
 def handle_services(cfg, chat_id, user_id, msg_id=None):
     """SSH WS управление: статус + кнопки"""
     token = cfg['BOT_TOKEN']
@@ -3444,7 +3542,7 @@ def handle_services(cfg, chat_id, user_id, msg_id=None):
     text += f"  📦 Payload: <b>{pl_len}</b> симв.\n"
     
     keyboard = {'inline_keyboard': [
-        [{'text': '🌐 Домен', 'callback_data': 'manage_domain'},
+        [{'text': '🌐 Домен', 'callback_data': 'manage_domains'},
          {'text': '🔒 Прокси', 'callback_data': 'manage_proxies'},
          {'text': '📦 Payload', 'callback_data': 'manage_payload'}],
         [{'text': '🔄 Перезапустить WS', 'callback_data': 'restart_ws'}],
@@ -4412,6 +4510,24 @@ def main():
                     elif cb_data == 'manage_services':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         handle_services(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                    elif cb_data == 'manage_domains':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        show_manage_domains(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                        continue
+                    elif cb_data.startswith('manage_domain_edit:'):
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        try:
+                            _nid = int(cb_data.split(':', 1)[1])
+                        except Exception:
+                            _nid = 0
+                        # Записываем pending для ввода нового домена
+                        try:
+                            from bot_modules import db as _dbpd
+                            _dbpd.set_pending(cb_user_id, 'manage_domain_edit:' + str(_nid))
+                        except Exception:
+                            pass
+                        show_domain_edit(cfg, cb['message']['chat']['id'], cb_user_id, _nid, cb['message']['message_id'])
+                        continue
                     elif cb_data == 'manage_domain':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         handle_domain(cfg, cb['message']['chat']['id'], cb_user_id)
@@ -4738,6 +4854,51 @@ def main():
                     from bot_modules import db as _db
                     pending = _db.get_pending(user_id)
                 except: pending = None
+                if pending and pending.startswith('manage_domain_edit:') and text and not text.startswith('/'):
+                    _db.clear_pending(user_id)
+                    try:
+                        _nid = int(pending.split(':', 1)[1])
+                    except Exception:
+                        _nid = 0
+                    _new_dom = text.strip().replace('https://', '').replace('http://', '').split('/')[0].split(':')[0]
+                    if not _new_dom or '.' not in _new_dom:
+                        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                            'chat_id': user_id,
+                            'text': '❌  Неверный формат. Пример: <code>new.domain.com</code>',
+                            'parse_mode': 'HTML'
+                        })
+                    else:
+                        try:
+                            _set_domain(_nid, _new_dom)
+                            _domains = _get_all_domains()
+                            _nm = '—'
+                            for nid, nname, h, is_m in _domains:
+                                if nid == _nid:
+                                    _nm = nname
+                                    break
+                            NLx = chr(10)
+                            _ok = NLx.join([
+                                '✅  <b>ДОМЕН ИЗМЕНЁН</b>',
+                                '━━━━━━━━━━━━━━━━━━━━',
+                                '',
+                                f'📍 {_nm}',
+                                f'🌐 <code>{_new_dom}</code>',
+                                '',
+                                '⚠️ Клиентам нужно <b>пересоздать .dark</b>',
+                                'для этого сервера.',
+                            ])
+                            _kb = {'inline_keyboard': [
+                                [{'text': '🌐 К списку доменов', 'callback_data': 'manage_domains'}],
+                                [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
+                            ]}
+                            tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                                'chat_id': user_id, 'text': _ok, 'parse_mode': 'HTML', 'reply_markup': _kb
+                            })
+                        except Exception as _e:
+                            tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                                'chat_id': user_id, 'text': f'❌  Ошибка: {_e}', 'parse_mode': 'HTML'
+                            })
+                    continue
                 if pending and pending.startswith('wd_srv_edit:') and text and not text.startswith('/'):
                     _db.clear_pending(user_id)
                     try:
