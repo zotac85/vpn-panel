@@ -4303,15 +4303,33 @@ def main():
                             _amt = float(_p[1])
                         _dbs.clear_pending(_sp_user)
                         if _amt > 0:
-                            _new_bal = _dbs.add_balance(_sp_user, _amt, method='stars', meta={'stars': _sp_stars, 'payload': _sp_payload})
+                            # Проверяем бонус к пополнению
+                            _bonus = _dbs.get_topup_bonus(_sp_user)
+                            _bonus_add = 0.0
+                            if _bonus:
+                                try:
+                                    _bonus_add = _amt * float(_bonus.get('percent') or 0) / 100.0
+                                except Exception:
+                                    _bonus_add = 0.0
+                            _total_add = _amt + _bonus_add
+                            _new_bal = _dbs.add_balance(_sp_user, _total_add, method='stars', meta={'stars': _sp_stars, 'payload': _sp_payload, 'bonus': _bonus_add})
+                            if _bonus:
+                                try:
+                                    _dbs.mark_bonus_used(_sp_user)
+                                except Exception:
+                                    pass
                             NLsp = chr(10)
-                            _ok = NLsp.join([
-                            '✅ <b>ПЛАТЁЖ ПОЛУЧЕН</b>',
-                            '━━━━━━━━━━━━━━━━━━━━',
-                            '',
-                            f'💵 Зачислено: <b>{_amt:.2f} USDT</b>',
-                            f'💰 Баланс: <b>{_new_bal:.2f} USDT</b>'
-                            ])
+                            _ok_lines = [
+                                '✅  <b>ПЛАТЁЖ ПОЛУЧЕН</b>',
+                                '━━━━━━━━━━━━━━━━━━━━',
+                                '',
+                                f'💵 Зачислено: <b>{_amt:.2f} USDT</b>'
+                            ]
+                            if _bonus_add > 0:
+                                _ok_lines.append(f'🎁 Бонус +50%: <b>+{_bonus_add:.2f} USDT</b>')
+                                _ok_lines.append(f'💰 Итого: <b>{_total_add:.2f} USDT</b>')
+                            _ok_lines.append(f'💼 Баланс: <b>{_new_bal:.2f} USDT</b>')
+                            _ok = NLsp.join(_ok_lines)
                             send_message(cfg['BOT_TOKEN'], _sp_user, _ok)
                             # Уведомляем админа
                             _adm = cfg.get('ADMIN_ID', '')
@@ -5776,20 +5794,38 @@ def main():
                     code = text.strip()
                     ok, reason, value = _db.use_promo(code, user_id)
                     if ok:
-                        # Продление = value дней
-                        msg_text = (f"🎉 <b>ПРОМОКОД АКТИВИРОВАН!</b>\n\n"
-                                    f"Код: <code>{code}</code>\n"
-                                    f"Бонус: <b>+{int(value)} дней</b> к VIP-ключу\n\n"
-                                    f"Проверь свои ключи в /cabinet")
+                        _pinfo = _db.get_promo(code) or {}
+                        _ptype = _pinfo.get('type', '')
+                        if _ptype == 'topup_bonus':
+                            _bonus_txt = f"🎁 Бонус: <b>+{int(value)}%</b> к следующему пополнению"
+                            _extra_txt = "Бонус действует 7 дней с момента активации."
+                        elif _ptype == 'days':
+                            _bonus_txt = f"⏰ Бонус: <b>+{int(value)} дней</b> к VIP-ключу"
+                            _extra_txt = "Проверь свои ключи в /cabinet"
+                        elif _ptype == 'balance':
+                            _bonus_txt = f"💰 Бонус: <b>+{value:.2f} USDT</b> на баланс"
+                            _extra_txt = "Проверь баланс в /cabinet"
+                        else:
+                            _bonus_txt = f"🎁 Бонус активирован: {value}"
+                            _extra_txt = ""
+                        NLpm = chr(10)
+                        msg_text = NLpm.join([
+                            "🎉 <b>ПРОМОКОД АКТИВИРОВАН!</b>",
+                            "",
+                            f"Код: <code>{code}</code>",
+                            _bonus_txt,
+                            "",
+                            _extra_txt
+                        ])
                     else:
                         reasons = {
-                            'not_found': '❌ Промокод не найден',
-                            'expired': '⏰ Промокод истёк',
+                            'not_found': '❌  Промокод не найден',
+                            'expired': '⏰  Промокод истёк',
                             'exhausted': '🚫 Промокод больше не действует',
                             'already_used': '⚠️ Ты уже использовал этот промокод',
-                            'no_vip_key': f'⚠️ У тебя нет активного VIP-ключа.\n\nПромокод даёт дни только к VIP. Купи VIP: {get_support()}'
+                            'no_vip_key': f'⚠️ У тебя нет активного VIP-ключа. Купи VIP: {get_support()}'
                         }
-                        msg_text = reasons.get(reason, '❌ Ошибка активации')
+                        msg_text = reasons.get(reason, '❌  Ошибка активации')
                     send_message(cfg['BOT_TOKEN'], chat_id, msg_text, parse_mode='HTML')
                     continue
 

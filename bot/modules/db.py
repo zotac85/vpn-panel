@@ -395,6 +395,31 @@ def check_promo(code, tg_id):
     return True, "ok", p
 
 
+def set_topup_bonus(tg_id, percent, expires_at, code):
+    """Устанавливает активный бонус к пополнению для юзера."""
+    execute("""INSERT OR REPLACE INTO user_topup_bonus
+        (tg_id, percent, expires_at, code, used, created_at)
+        VALUES (?, ?, ?, ?, 0, ?)""",
+        (int(tg_id), float(percent), int(expires_at), code, int(time.time())))
+
+
+def get_topup_bonus(tg_id):
+    """Возвращает активный бонус или None. Учитывает expires_at и used."""
+    row = query_one("SELECT * FROM user_topup_bonus WHERE tg_id=?", (int(tg_id),))
+    if not row:
+        return None
+    if row.get('used'):
+        return None
+    if row.get('expires_at') and row['expires_at'] < int(time.time()):
+        return None
+    return row
+
+
+def mark_bonus_used(tg_id):
+    """Помечает бонус использованным."""
+    execute("UPDATE user_topup_bonus SET used=1 WHERE tg_id=?", (int(tg_id),))
+
+
 def use_promo(code, tg_id):
     """Применяет промокод: списывает использование + начисляет бонус. Возвращает (ok, msg, value)."""
     code = code.strip()
@@ -419,6 +444,10 @@ def use_promo(code, tg_id):
         cnt_ext = extend_vip_keys(tg_id, int(value))
         if cnt_ext == 0:
             return False, "no_vip_key", None
+    elif p['type'] == 'topup_bonus':
+        # +N% к следующему пополнению, действует 7 дней
+        expires_at = int(time.time()) + 7 * 86400
+        set_topup_bonus(tg_id, value, expires_at, code)
     # 'traffic' пока не реализован
     return True, "ok", value
 
@@ -602,6 +631,14 @@ def init_schema():
         tg_id INTEGER,
         ts INTEGER,
         PRIMARY KEY (code, tg_id)
+    );
+    CREATE TABLE IF NOT EXISTS user_topup_bonus (
+        tg_id INTEGER PRIMARY KEY,
+        percent REAL,
+        expires_at INTEGER,
+        code TEXT,
+        used INTEGER DEFAULT 0,
+        created_at INTEGER
     );
     CREATE TABLE IF NOT EXISTS payments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
