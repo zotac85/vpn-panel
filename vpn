@@ -26,6 +26,7 @@ while true; do
     echo -e " MasterDnsVPN : $(get_service_status masterdnsvpn)"
     echo -e " UDP-Custom   : $(get_service_status udp-custom)"
     echo -e " WS Proxy     : $(get_service_status ws-proxy)"
+    echo -e " UDPGW        : $(get_service_status udpgw)"
     echo -e "${CYAN}────────────────────────────────────────────${NC}"
     echo -e " 1) 👥 Управление пользователями"
     echo -e " 2) 🕸️  WebSocket Proxy (Кастомный)"

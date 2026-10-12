@@ -115,28 +115,27 @@ menu_ws() {
         echo -e "${YELLOW}🕸️  МОДУЛЬ WEBSOCKET PROXY (ОБХОД DPI)${NC}"
         echo -e " WS Proxy : $(get_service_status ws-proxy)"
         echo -e " Порт     : ${GREEN}${cur_port} (TCP)${NC}"
+        echo -e " UDPGW    : $(get_service_status udpgw)"
         echo ""
         echo -e " 1) ⚡  Установить / Запустить WebSocket Proxy"
         echo -e " 2) 🔄 Перезапустить"
         echo -e " 3) ⏸️  Остановить"
         echo -e " 4) ⚙️  Изменить порт WS"
-        echo -e " 5) 🌐 Управление доменом"
-        echo -e " 6) 🔒 Управление прокси"
-        echo -e " 7) 📦 Управление payload"
-        echo -e " 8) 📜 Посмотреть логи работы"
-        echo -e " 9) 🗑️  Удалить с сервера"
+        echo -e " 5) 🔒 Управление прокси"
+        echo -e " 6) 📦 Управление payload"
+        echo -e " 7) 📡 Управление UDPGW (порт 7300)"
+        echo -e " 8) 🗑️  Удалить с сервера"
         echo -e " 0) ↩️  Назад в главное меню"
         echo ""
-        read -p "Выберите действие [0-9]: " ws_choice
+        read -p "Выберите действие [0-8]: " ws_choice
         case $ws_choice in
             1) install_ws ;;
             2) systemctl restart ws-proxy; echo -e "${GREEN}Перезапущено.${NC}"; sleep 1 ;;
             3) systemctl stop ws-proxy; echo -e "${YELLOW}Остановлено.${NC}"; sleep 1 ;;
             4) change_ws_port ;;
-            5) manage_domain ;;
-            6) manage_proxy ;;
-            7) manage_payload ;;
-            8) header; journalctl -u ws-proxy -n 25 --no-pager; echo ""; read -p "Enter..." ;;
+            5) manage_proxy ;;
+            6) manage_payload ;;
+            7) declare -f menu_udpgw &>/dev/null && menu_udpgw || { echo -e "${RED}Модуль udp.sh не загружен${NC}"; read -p "Enter..."; } ;;
             8)
                 local dp=$(get_ws_port)
                 systemctl stop ws-proxy 2>/dev/null
