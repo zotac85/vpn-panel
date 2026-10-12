@@ -1148,22 +1148,34 @@ def show_balance(cfg, chat_id, user_id, msg_id=None):
         for p in payments:
             amt = float(p['amount'])
             sign = "+" if amt >= 0 else ""
-            icon = "🟢" if amt >= 0 else "🔴"
             method = p.get('method') or 'manual'
+            st = (p.get('status') or 'paid').lower()
             labels = {
                 'manual': 'Пополнение от админа',
                 'referral_bonus': 'Реферальный бонус',
                 'promo': 'Промокод',
                 'purchase': 'Покупка',
-                'usdt': 'USDT-платёж'
+                'usdt': 'USDT-платёж',
+                'crypto': 'Крипто-платёж',
+                'stars': 'Telegram Stars'
             }
             label = labels.get(method, method)
+            if st == 'pending':
+                icon = "⏳"
+                suffix = " <i>(ожидание)</i>"
+            elif st in ('failed', 'cancelled', 'expired'):
+                icon = "❌"
+                suffix = " <i>(отменён)</i>"
+            else:
+                icon = "🟢" if amt >= 0 else "🔴"
+                suffix = ""
             from datetime import datetime as _dt
             dt = _dt.fromtimestamp(p['created_at']).strftime('%d.%m.%Y %H:%M')
-            lines.append(f"{icon} <b>{sign}{amt:.2f} USDT</b>")
-            lines.append(f"   {label}")
-            lines.append(f"   <i>{dt}</i>")
+            lines.append(icon + " <b>" + sign + ("%.2f" % amt) + " USDT</b>" + suffix)
+            lines.append("   " + label)
+            lines.append("   <i>" + dt + "</i>")
             lines.append("")
+
     else:
         lines.append("")
         lines.append("<i>Пока операций нет</i>")
@@ -1208,17 +1220,29 @@ def show_balance_history(cfg, chat_id, user_id, page=1, msg_id=None):
             'referral_bonus': 'Реферальный бонус',
             'promo': 'Промокод',
             'purchase': 'Покупка',
-            'usdt': 'USDT-платёж'
+            'usdt': 'USDT-платёж',
+            'crypto': 'Крипто-платёж',
+            'stars': 'Telegram Stars'
         }
         for p in payments:
             amt = float(p['amount'])
             sign = "+" if amt >= 0 else ""
-            icon = "🟢" if amt >= 0 else "🔴"
+            st = (p.get('status') or 'paid').lower()
             label = labels.get(p.get('method'), p.get('method', '—'))
+            if st == 'pending':
+                icon = "⏳"
+                suffix = " <i>(ожидание)</i>"
+            elif st in ('failed', 'cancelled', 'expired'):
+                icon = "❌"
+                suffix = " <i>(отменён)</i>"
+            else:
+                icon = "🟢" if amt >= 0 else "🔴"
+                suffix = ""
             dt = _dt.fromtimestamp(p['created_at']).strftime('%d.%m.%y %H:%M')
-            lines.append(f"{icon} <b>{sign}{amt:.2f} USDT</b> · {label}")
-            lines.append(f"   <i>{dt}</i>")
+            lines.append(icon + " <b>" + sign + ("%.2f" % amt) + " USDT</b> · " + label + suffix)
+            lines.append("   <i>" + dt + "</i>")
             lines.append("")
+
     text = NL.join(lines)
 
     # Навигация
