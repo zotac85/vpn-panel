@@ -2677,8 +2677,9 @@ def handle_stats(cfg, chat_id, user_id, mode='main', msg_id=None):
 
     if mode == 'traffic':
         # Топ-5 по трафику (test + vip)
-        tests = _db.query("SELECT login, tg_id, traffic_used, traffic_limit, expires_at FROM test_keys WHERE traffic_used > 0 ORDER BY traffic_used DESC LIMIT 5")
-        vips  = _db.query("SELECT login, tg_id, traffic_used, traffic_limit, expires_at FROM vip_keys WHERE traffic_used > 0 ORDER BY traffic_used DESC LIMIT 5")
+        _now_ts = int(time.time())
+        tests = _db.query("SELECT login, tg_id, traffic_used, traffic_limit, expires_at FROM test_keys WHERE traffic_used > 0 AND (expires_at = 0 OR expires_at > ?) ORDER BY traffic_used DESC LIMIT 5", (_now_ts,))
+        vips  = _db.query("SELECT login, tg_id, traffic_used, traffic_limit, expires_at FROM vip_keys WHERE traffic_used > 0 AND (expires_at = 0 OR expires_at > ?) ORDER BY traffic_used DESC LIMIT 5", (_now_ts,))
         all_keys = []
         for k in tests: k['kind'] = '🎁'; all_keys.append(k)
         for k in vips:  k['kind'] = '💎'; all_keys.append(k)
@@ -2760,6 +2761,64 @@ def handle_stats(cfg, chat_id, user_id, mode='main', msg_id=None):
             ORDER BY balance DESC LIMIT 5
         """)
 
+        # Ноды и WS-онлайн
+        try:
+            _nodes_rows = _db.query("SELECT name, status FROM nodes WHERE is_active=1 ORDER BY is_master DESC, id")
+        except Exception:
+            _nodes_rows = []
+        import subprocess as _sp_st
+        try:
+            _r_ws = _sp_st.run(['bash', '-c', "ss -Htnp state established '( sport = :2052 )' 2>/dev/null | wc -l"], capture_output=True, text=True, timeout=3)
+            _ws_online = int(_r_ws.stdout.strip() or 0)
+        except Exception:
+            _ws_online = 0
+        _srv_lines = ["🌐 <b>СЕРВЕРЫ И СВЯЗЬ</b>"]
+        # Получаем трафик по нодам
+        try:
+            _nodes_full = _db.query("SELECT name, host, ip, ssh_port, is_master, status FROM nodes WHERE is_active=1 ORDER BY is_master DESC, id")
+        except Exception:
+            _nodes_full = []
+        for _nr in _nodes_full:
+            _ic = '🟢' if _nr.get('status') == 'online' else '🔴'
+            _name = _nr.get('name') or '?'
+            _tbytes = 0
+            if _nr.get('is_master'):
+                # Мастер — сумма файлов /etc/UDPCustom/traffic/
+                try:
+                    _tdir = '/etc/UDPCustom/traffic'
+                    if os.path.isdir(_tdir):
+                        for _f in os.listdir(_tdir):
+                            try:
+                                _tbytes += int(open(os.path.join(_tdir, _f)).read().strip() or 0)
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+            else:
+                # Нода — live SSH, суммируем файлы traffic/*
+                try:
+                    _sp = subprocess.run(
+                        ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=4', '-o', 'StrictHostKeyChecking=no',
+                         '-p', str(_nr.get('ssh_port') or 22), f"root@{_nr.get('ip')}",
+                         "iptables -L VPN_TRAFFIC -v -x -n 2>/dev/null | awk '$1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ {s+=$2} END {print s+0}'"],
+                        capture_output=True, text=True, timeout=8
+                    )
+                    _tbytes = int(_sp.stdout.strip() or 0)
+                except Exception:
+                    _tbytes = 0
+            # Форматируем
+            if _tbytes >= 1073741824:
+                _ts = f"{_tbytes/1073741824:.2f} GB"
+            elif _tbytes >= 1048576:
+                _ts = f"{_tbytes/1048576:.1f} MB"
+            elif _tbytes >= 1024:
+                _ts = f"{_tbytes/1024:.0f} KB"
+            else:
+                _ts = f"{_tbytes} B"
+            _srv_lines.append(f"   {_ic} {_name} · <b>{_ts}</b>")
+        _srv_lines.append(f"   📡 SSH WS онлайн: <b>{_ws_online}</b>")
+        _srv_lines.append("")
+
         lines_txt = [
             "📊 <b>СТАТИСТИКА</b>",
             "━━━━━━━━━━━━━━━━━━━━",
@@ -2773,9 +2832,9 @@ def handle_stats(cfg, chat_id, user_id, mode='main', msg_id=None):
             f"   🎁 Тестовых: <b>{test_total}</b> (🟢 {test_active})",
             f"   💎 VIP: <b>{vip_total}</b> (🟢 {vip_active})",
             "",
+            *_srv_lines,
             "💵 <b>ФИНАНСЫ</b>",
             f"   На балансах: <b>{float(balances_sum):.2f} USDT</b>",
-            f"   📈 Доход 30д: <b>{float(income_30d):.2f} USDT</b>",
             f"   💰 Всего дохода: <b>{float(income_all):.2f} USDT</b>",
             "",
             "👥 <b>РЕФЕРАЛЫ</b>",
