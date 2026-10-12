@@ -2013,19 +2013,44 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
             "🤖 <b>КРИПТО-БОТ</b>",
             "━━━━━━━━━━━━━━━━━━━━",
             "",
-            "🚧 <b>Скоро будет доступно!</b>",
+            "Выбери сеть для оплаты:",
             "",
-            "Автоматическое пополнение через USDT",
-            "(TRC-20 / ERC-20) прямо в бота.",
-            "",
-            f"Пока — пиши {_get_support()}"
+            "🟢 <b>USDT BEP-20</b> (BSC) — мин 1 USDT",
+            "🔴 <b>USDT TRC-20</b> (Tron) — мин 5 USDT",
+            "💎 <b>TON</b> — мин 3.5 TON",
         ])
         kb = {'inline_keyboard': [
-            [{'text': f'💬 {_get_support()}', 'url': f'https://t.me/{_get_support().lstrip(chr(64))}'}],
-            [{'text': '⬅️ Назад', 'callback_data': 'cab_topup'}]
+            [{'text': '🟢 USDT BEP-20', 'callback_data': 'cab_crypto_USDT_BSC'}],
+            [{'text': '🔴 USDT TRC-20', 'callback_data': 'cab_crypto_USDT_TRX'}],
+            [{'text': '💎 TON', 'callback_data': 'cab_crypto_TON'}],
+            [{'text': '⬅️ Назад', 'callback_data': 'cab_topup'}],
         ]}
         _edit(token, chat_id, msg_id, text, kb)
         return True
+    if cb_data.startswith('cab_crypto_'):
+        NL = chr(10)
+        _cur = cb_data.split('_', 2)[2]
+        _names = {'USDT_BSC': 'USDT BEP-20', 'USDT_TRX': 'USDT TRC-20', 'TON': 'TON'}
+        _mins = {'USDT_BSC': 1.0, 'USDT_TRX': 5.0, 'TON': 3.5}
+        _cur_name = _names.get(_cur, _cur)
+        _cur_min = _mins.get(_cur, 1.0)
+        text = NL.join([
+            "🤖 <b>ПОПОЛНЕНИЕ · " + _cur_name + "</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "Введи сумму в USD:",
+            "",
+            "📊 Минимум: <b>" + ("%.2f" % _cur_min) + "</b> USD",
+            "",
+            "Например: <code>5</code>",
+        ])
+        kb = {'inline_keyboard': [
+            [{'text': '⬅️ Отмена', 'callback_data': 'cab_topup_crypto'}],
+        ]}
+        _edit(token, chat_id, msg_id, text, kb)
+        db.set_pending(user_id, 'crypto_amount:' + _cur)
+        return True
+
     if cb_data == 'cab_topup_photo':
         NL = chr(10)
         text = NL.join([

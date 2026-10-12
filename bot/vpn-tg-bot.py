@@ -5716,6 +5716,61 @@ def main():
                     })
                     continue
 
+                if pending and pending.startswith('crypto_amount:') and text and not text.startswith('/'):
+                    _cur = pending.split(':', 1)[1]
+                    _mins = {'USDT_BSC': 1.0, 'USDT_TRX': 5.0, 'TON': 3.5}
+                    _mins_names = {'USDT_BSC': 'USDT BEP-20', 'USDT_TRX': 'USDT TRC-20', 'TON': 'TON'}
+                    _cur_min = _mins.get(_cur, 1.0)
+                    _cur_name = _mins_names.get(_cur, _cur)
+                    try:
+                        _amt = float(text.strip().replace(',', '.'))
+                    except:
+                        send_message(cfg['BOT_TOKEN'], chat_id, '❌ Отправь число. Например: <code>5</code>', parse_mode='HTML')
+                        continue
+                    if _amt < _cur_min:
+                        send_message(cfg['BOT_TOKEN'], chat_id, '❌ Минимум ' + ('%.2f' % _cur_min) + ' USD')
+                        continue
+                    if _amt > 10000:
+                        send_message(cfg['BOT_TOKEN'], chat_id, '❌ Максимум 10000 USD')
+                        continue
+                    _db.clear_pending(user_id)
+                    from bot_modules import plisio as _pl
+                    from bot_modules import db as _dbb
+                    _order = 'crypto_' + str(user_id) + '_' + str(int(time.time()))
+                    _inv = _pl.create_invoice(_amt, _order, _cur, description='VPN topup ' + _order)
+                    if not _inv:
+                        send_message(cfg['BOT_TOKEN'], chat_id, '❌ Ошибка создания счёта. Попробуй позже.')
+                        continue
+                    _txn = _inv.get('txn_id')
+                    _url = _inv.get('invoice_url')
+                    _dbb.add_payment(user_id, _amt, method='crypto', status='pending', external_id=_txn, meta={'order': _order, 'currency': _cur, 'url': _url})
+                    NLc = chr(10)
+                    _cm = NLc.join([
+                        '🤖 <b>СЧЁТ СОЗДАН</b>',
+                        '━━━━━━━━━━━━━━━━━━━━',
+                        '',
+                        '💵 Сумма: <b>' + ('%.2f' % _amt) + ' USD</b>',
+                        '💎 Сеть: <b>' + _cur_name + '</b>',
+                        '🆔 Заказ: <code>' + _order + '</code>',
+                        '',
+                        '━━━━━━━━━━━━━━━━━━━━',
+                        'Нажми кнопку ниже — откроется',
+                        'страница оплаты Plisio.',
+                        '',
+                        '<i>Баланс зачислится автоматически.</i>',
+                    ])
+                    _ckb = {'inline_keyboard': [
+                        [{'text': '💳 Оплатить ' + ('%.2f' % _amt) + ' USD', 'url': _url}],
+                        [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}],
+                    ]}
+                    tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                        'chat_id': chat_id,
+                        'text': _cm,
+                        'parse_mode': 'HTML',
+                        'reply_markup': _ckb,
+                    })
+                    continue
+
                 if pending == 'promo_input' and text and not text.startswith('/'):
                     _db.clear_pending(user_id)
                     code = text.strip()
