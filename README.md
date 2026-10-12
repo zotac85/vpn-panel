@@ -36,17 +36,52 @@
 
 ## 🆕 Что нового в v3.1.0
 
+**🌐 Управление доменами:**
+- Список всех доменов (мастер + ноды) в `/admin → ⚙️ SSH WS`
+- Редактор домена (FSM как WhiteDNS) — тапнул кнопку, отправил новое значение
+- Кнопка **📨 Уведомить клиентов** после смены — рассылка с превью и редактированием
+- В панели: `vpn → 9 → 10) Изменить домен ноды`
+
+**🔒 Прокси и Payload через бота:**
+- Редактор в стиле WhiteDNS (ввод через сообщение, замена целиком)
+- Список прокси + ✏️ Редактировать список
+- Payload + ✏️ Редактировать
+
+**⏰ Блокировка по сроку и трафику:**
+- Красивые баннеры в DarkTunnel:
+  - `❌ СРОК ДЕЙСТВИЯ КЛЮЧА ИСТЁК`
+  - `⚠️ ПРЕВЫШЕН ЛИМИТ ТРАФИКА`
+- Кликабельные ссылки на поддержку и канал (из `support.txt` / `channels.txt`)
+- `vpn-nologin.sh` — кастомный shell для заблокированных
+- `Match User` + `AllowTcpForwarding no` — реальный запрет SSH-туннеля
+- Автоблокировка/разблокировка через cron каждую минуту
+
 **🌐 WhiteDNS (MasterDnsVPN):**
 - Единый модуль управления — мастер и все ноды
-- Установка / перезапуск / стоп / редактирование / удаление через панель
 - Порт 53 (TCP+UDP) открывается автоматически
 - Ключ клиента показывается после установки
 
-**🔧 Исправлено в v3.1.0:**
-- auth failed при пересоздании ключа (унификация reset с create)
-- PerSourcePenalties банил WS-прокси → отключён на всех серверах
-- Android кешировал .dark → timestamp в имени файла
+**📡 UDP Custom / UDPGW разделены:**
+- `vpn → 3) UDP Custom` — только UDP Custom
+- `vpn → 2) WebSocket Proxy → 7) UDPGW` — управление UDPGW (порт 7300)
+- Установка UDPGW на ноды: `vpn → 9 → 11) Установить UDPGW на ноду`
+- Статус UDPGW в шапках главного меню и меню WS
+
+**🧹 Автоочистка (cron каждый час):**
+- Удаление истёкших и висячих юзеров (Linux + БД + ноды)
+- Синхронизация удалений на все ноды
+
+**🛡️ Самовосстановление `VPN_TRAFFIC`:**
+- `vpn-traffic-check.py` создаёт цепочку iptables если её снесло `ufw reset`
+- Автодобавление правил `--uid-owner` для всех юзеров
+
+**🔧 Исправлено:**
+- `auth failed` при пересоздании ключа (унификация reset с create)
+- `PerSourcePenalties` банил WS-прокси → отключён на всех серверах
+- Android кешировал `.dark` → timestamp в имени файла
 - Ускорена синхронизация (пропуск offline-нод)
+- `Include` в `sshd_config` — в конце (Match User переопределяет Banner)
+- `cmd_list` в `node-user.sh` — теперь видит `test*` без подчёркивания
 
 **🧹 Оптимизация:**
 - Журнал journald ограничен 200 МБ (было 3.7 ГБ)
@@ -165,8 +200,21 @@ vpn-panel/
 │   ├── vpn-nodes-check.py    # Статус нод
 │   └── modules/              # db, cabinet, admin, nodes_client, ...
 ├── support/support-bot.py
-├── scripts/                  # node-user.sh, vpn-limit-check.sh, ...
-├── modules/                  # nodes.sh, users.sh, security.sh, ...
+├── scripts/
+│   ├── node-user.sh          # CLI юзеров на ноде
+│   ├── vpn-limit-check.sh    # Devicelimit
+│   ├── vpn-nologin.sh        # Кастомный shell
+│   ├── vpn-expiry-check.sh   # Блокировка по сроку
+│   ├── vpn-auto-cleanup.sh   # Автоочистка
+│   ├── install-udpgw-node.sh # Установка UDPGW
+│   └── vpn-optimize.sh       # Оптимизация
+├── modules/
+│   ├── nodes.sh              # Управление нодами
+│   ├── udp.sh                # UDP Custom + UDPGW
+│   ├── ws.sh                 # WebSocket + UDPGW
+│   ├── security.sh           # Безопасность + TCP Brutal
+│   ├── masterdns.sh          # WhiteDNS
+│   └── ...
 └── configs/                  # Шаблоны конфигов
 ```
 
@@ -174,6 +222,7 @@ vpn-panel/
 - `/usr/local/bin/` — скрипты
 - `/usr/local/share/vpn-panel/` — панель + модули
 - `/etc/UDPCustom/` — конфиги, БД, тексты, лимиты
+- `/etc/ssh/sshd_config.d/` — `blocked-users.conf`, `overlimit-users.conf` (автогенерация)
 
 ---
 
