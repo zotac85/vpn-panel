@@ -1089,6 +1089,30 @@ def main():
         log.error("BOT_TOKEN не задан")
         sys.exit(1)
 
+    # Автосинхронизация username в /etc/UDPCustom/support.txt
+    try:
+        _me = tg(token, 'getMe')
+        _un = (_me or {}).get('result', {}).get('username', '')
+        if _un:
+            _sf = '/etc/UDPCustom/support.txt'
+            _cur = ''
+            try:
+                with open(_sf) as _f:
+                    _cur = _f.read().strip()
+            except: pass
+            _want = f"@{_un}"
+            if _cur != _want:
+                with open(_sf, 'w') as _f:
+                    _f.write(_want + "\n")
+                try:
+                    import os as _os
+                    _os.chmod(_sf, 0o600)
+                except: pass
+                log.info(f"support.txt обновлён: {_cur!r} -> {_want!r}")
+            else:
+                log.info(f"support.txt OK: {_want}")
+    except Exception as _se:
+        log.error(f"support.txt sync: {_se}")
     log.info("━━━ Support Bot запущен ━━━")
     log.info(f"Token: ...{token[-8:]}")
     log.info(f"Admin: {admin_id}")
