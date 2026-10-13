@@ -740,6 +740,35 @@ def _run_migrations():
         db_log.error(f"_run_migrations: {_e}")
 
 
+
+def ensure_master_node(name="Мастер", host="", ip=""):
+    """Идемпотентно создаёт/обновляет запись мастера в nodes (is_master=1).
+    Возвращает id мастер-ноды."""
+    try:
+        row = query_one("SELECT id FROM nodes WHERE is_master=1 LIMIT 1")
+        if row:
+            mid = row['id']
+            # Обновляем name/host если переданы непустые
+            if name:
+                execute("UPDATE nodes SET name=? WHERE id=? AND (name IS NULL OR name='')", (name, mid))
+            if host:
+                execute("UPDATE nodes SET host=? WHERE id=? AND (host IS NULL OR host='')", (host, mid))
+            if ip:
+                execute("UPDATE nodes SET ip=? WHERE id=? AND (ip IS NULL OR ip='')", (ip, mid))
+            return mid
+        # Нет мастера — создаём
+        execute(
+            "INSERT INTO nodes (name,host,ip,ssh_port,ws_port,ssh_user,is_master,is_active,status) "
+            "VALUES (?,?,?,22,2052,'root',1,1,'online')",
+            (name or "Мастер", host or "", ip or "")
+        )
+        row = query_one("SELECT id FROM nodes WHERE is_master=1 LIMIT 1")
+        mid = row['id'] if row else None
+        db_log.info(f"ensure_master_node: created id={mid} name={name!r} host={host!r}")
+        return mid
+    except Exception as e:
+        db_log.error(f"ensure_master_node: {e}")
+        return None
 try:
     init_schema()
     _run_migrations()

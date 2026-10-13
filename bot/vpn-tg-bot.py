@@ -4242,6 +4242,24 @@ def main():
     cfg = load_config()
     if not cfg.get('BOT_TOKEN'):
         log.error("BOT_TOKEN не задан"); sys.exit(1)
+    # ─── Автосоздание мастер-ноды в БД ───
+    try:
+        from bot_modules import db as _dbm
+        _loc = cfg.get('SERVER_LOCATION', '').strip() or 'Мастер'
+        _host = get_domain() or ''
+        _ip = ''
+        try:
+            import socket as _sock
+            _s = _sock.socket(_sock.AF_INET, _sock.SOCK_DGRAM)
+            _s.connect(('8.8.8.8', 80))
+            _ip = _s.getsockname()[0]
+            _s.close()
+        except Exception:
+            pass
+        _mid = _dbm.ensure_master_node(name=_loc, host=_host, ip=_ip)
+        log.info(f"Master node: id={_mid} name={_loc!r} host={_host!r} ip={_ip!r}")
+    except Exception as _me:
+        log.error(f"ensure_master_node failed: {_me}")
     # Команды для ВСЕХ юзеров
     tg_request(cfg['BOT_TOKEN'], 'setMyCommands', {'commands': [
         {'command': 'start', 'description': '👋 Начать'},
