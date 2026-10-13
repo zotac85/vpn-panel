@@ -349,76 +349,226 @@ menu_vip_tariffs() {
         esac
     done
 }
-menu_tgbot_main() {
+# ──────────────────────────────────────────────────────────────
+# УНИВЕРСАЛЬНЫЕ ХЕЛПЕРЫ УПРАВЛЕНИЯ БОТАМИ (осн. + поддержки)
+# ──────────────────────────────────────────────────────────────
+_conf_get() {
+    local conf="$1" key="$2"
+    grep "^${key}=" "$conf" 2>/dev/null | cut -d'=' -f2- | sed 's/^"//; s/"$//'
+}
+_conf_set() {
+    local conf="$1" key="$2" val="$3"
+    if grep -q "^${key}=" "$conf" 2>/dev/null; then
+        sed -i "s|^${key}=.*|${key}=\"${val}\"|" "$conf"
+    else
+        echo "${key}=\"${val}\"" >> "$conf"
+    fi
+}
+_bot_state() {
+    if systemctl is-active --quiet "$1" 2>/dev/null; then echo "active"; else echo "inactive"; fi
+}
+_bot_token_status() {
+    local t=$(_conf_get "$1" "BOT_TOKEN")
+    if [ -n "$t" ]; then echo -e "${GREEN}✅${NC}"; else echo -e "${RED}❌${NC}"; fi
+}
+_bot_show_log() {
+    local log="$1" label="$2"
+    header
+    echo -e "${YELLOW}--- 📜 Логи: $label (последние 30) ---${NC}"
+    echo ""
+    if [ -f "$log" ]; then
+        tail -n 30 "$log"
+    else
+        echo -e "${MAGENTA}Логов пока нет.${NC}"
+    fi
+    echo ""
+    read -p "Нажмите Enter..."
+}
+_bot_test_token() {
+    local conf="$1" label="$2"
+    header
+    echo -e "${YELLOW}--- 🧪 Тест токена: $label ---${NC}"
+    echo ""
+    local token=$(_conf_get "$conf" "BOT_TOKEN")
+    if [ -z "$token" ]; then
+        echo -e "${RED}❌  Токен не задан${NC}"
+        read -p "Enter..."
+        return
+    fi
+    echo -e "${CYAN}Запрос к Telegram API...${NC}"
+    local response=$(curl -s --max-time 10 "https://api.telegram.org/bot${token}/getMe")
+    if echo "$response" | grep -q '"ok":true'; then
+        local uname=$(echo "$response" | grep -oP '"username":"\K[^"]+')
+        local name=$(echo "$response" | grep -oP '"first_name":"\K[^"]+')
+        echo ""
+        echo -e "${GREEN}✅  Токен рабочий!${NC}"
+        echo -e " Имя      : ${CYAN}$name${NC}"
+        echo -e " Username : ${CYAN}@$uname${NC}"
+    else
+        echo ""
+        echo -e "${RED}❌  Ошибка: неверный токен${NC}"
+        echo "$response" | head -5
+    fi
+    echo ""
+    read -p "Нажмите Enter..."
+}
+_bot_edit_field() {
+    local conf="$1" field="$2" desc="$3" svc="$4"
+    local current=$(_conf_get "$conf" "$field")
+    echo ""
+    echo -e "${CYAN}$desc${NC}"
+    echo -e "Текущее: ${GREEN}${current:-не задано}${NC}"
+    read -p "Новое значение (Enter — отмена): " new_val
+    [ -z "$new_val" ] && return
+    _conf_set "$conf" "$field" "$new_val"
+    echo -e "${GREEN}✅  Сохранено${NC}"
+    if [ -n "$svc" ]; then
+        echo -e "${CYAN}Перезапускаем $svc...${NC}"
+        systemctl restart "$svc" 2>/dev/null
+        sleep 2
+        if systemctl is-active --quiet "$svc"; then
+            echo -e "${GREEN}✅  Сервис перезапущен${NC}"
+        else
+            echo -e "${RED}❌  Сервис не поднялся, проверь логи${NC}"
+        fi
+    fi
+    sleep 2
+}
+_bot_actions() {
+    local svc="$1" conf="$2" log="$3" label="$4" color="$5" extra="$6"
     while true; do
         header
-        echo -e "${YELLOW}🤖 ОСНОВНОЙ БОТ${NC}"
+        echo -e "${color}${label}${NC}"
         echo ""
-        local token=$(tg_get_config "BOT_TOKEN")
-        local admin=$(tg_get_config "ADMIN_ID")
-        [ -n "$token" ] && echo -e " Токен    : ${GREEN}✅  настроен${NC}" || echo -e " Токен    : ${RED}❌  не задан${NC}"
-        [ -n "$admin" ] && echo -e " Admin ID : ${CYAN}$admin${NC}" || echo -e " Admin ID : ${RED}❌  не задан${NC}"
-        systemctl is-active --quiet "$TG_SERVICE" && echo -e " Статус   : ${GREEN}🟢 Запущен${NC}" || echo -e " Статус   : ${RED}🔴 Остановлен${NC}"
+        local state=$(_bot_state "$svc")
+        if [ "$state" = "active" ]; then
+            echo -e " Статус : ${GREEN}🟢 active${NC}"
+        else
+            echo -e " Статус : ${RED}🔴 inactive${NC}"
+        fi
+        local tok=$(_conf_get "$conf" "BOT_TOKEN")
+        local adm=$(_conf_get "$conf" "ADMIN_ID")
+        [ -n "$tok" ] && echo -e " Токен  : ${GREEN}✅ настроен${NC}" || echo -e " Токен  : ${RED}❌ не задан${NC}"
+        [ -n "$adm" ] && echo -e " Admin  : ${CYAN}$adm${NC}" || echo -e " Admin  : ${RED}❌ не задан${NC}"
         echo ""
-        echo -e " 1) 🔑 Изменить BOT_TOKEN"
-        echo -e " 2) 👤 Изменить ADMIN_ID"
-        echo -e " 3) 🚀 Полная установка / настройка"
-        echo -e " 0) ↩️  Назад"
+        echo -e " 1) ▶️   Запустить"
+        echo -e " 2) 🔄  Перезапустить"
+        echo -e " 3) 🛑  Остановить"
+        echo -e " 4) 📜  Логи (последние 30 строк)"
+        echo -e " 5) 🧪  Тест токена (getMe)"
+        echo -e " 6) 🔑  Изменить BOT_TOKEN"
+        echo -e " 7) 👤  Изменить ADMIN_ID"
+        [ -n "$extra" ] && echo -e " 8) 🔔  Уведомления (LOG_BOT_TOKEN / LOG_CHAT_ID)"
         echo ""
-        read -p "Выберите [0-3]: " choice
-        case $choice in
-            1) tg_edit_field "BOT_TOKEN" "Токен бота (от @BotFather)" ;;
-            2) tg_edit_field "ADMIN_ID" "Telegram ID админа (от @userinfobot)" ;;
-            3) tg_install ;;
+        echo -e " 0) ↩️   Назад"
+        echo ""
+        if [ -n "$extra" ]; then
+            read -p "Выберите [0-8]: " ch
+        else
+            read -p "Выберите [0-7]: " ch
+        fi
+        case $ch in
+            1) systemctl start "$svc" 2>/dev/null; sleep 2
+               systemctl is-active --quiet "$svc" && echo -e "${GREEN}✅  Запущен${NC}" || echo -e "${RED}❌  Ошибка${NC}"; sleep 1 ;;
+            2) systemctl restart "$svc" 2>/dev/null; sleep 2
+               systemctl is-active --quiet "$svc" && echo -e "${GREEN}✅  Перезапущен${NC}" || echo -e "${RED}❌  Ошибка${NC}"; sleep 1 ;;
+            3) systemctl stop "$svc" 2>/dev/null; sleep 1
+               echo -e "${YELLOW}⏹  Остановлен${NC}"; sleep 1 ;;
+            4) _bot_show_log "$log" "$label" ;;
+            5) _bot_test_token "$conf" "$label" ;;
+            6) _bot_edit_field "$conf" "BOT_TOKEN" "Токен бота (от @BotFather)" "$svc" ;;
+            7) _bot_edit_field "$conf" "ADMIN_ID" "Telegram ID админа (@userinfobot)" "$svc" ;;
+            8) [ -n "$extra" ] && menu_log_settings ;;
             0) break ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
         esac
     done
 }
-
-# ──────────────────────────────────────────────────────────────
-# ПОДМЕНЮ: БОТ ПОДДЕРЖКИ
-# ──────────────────────────────────────────────────────────────
-menu_tgbot_support() {
+menu_common_settings() {
     while true; do
         header
-        echo -e "${YELLOW}💬 БОТ ПОДДЕРЖКИ${NC}"
+        echo -e "${YELLOW}⚙️   ОБЩИЕ НАСТРОЙКИ БОТА${NC}"
         echo ""
-        local token=$(sg_get_config "BOT_TOKEN")
-        local admin=$(sg_get_config "ADMIN_ID")
-        [ -n "$token" ] && echo -e " Токен    : ${GREEN}✅  настроен${NC}" || echo -e " Токен    : ${RED}❌  не задан${NC}"
-        [ -n "$admin" ] && echo -e " Admin ID : ${CYAN}$admin${NC}" || echo -e " Admin ID : ${RED}❌  не задан${NC}"
-        systemctl is-active --quiet "$SG_SERVICE" 2>/dev/null && echo -e " Статус   : ${GREEN}🟢 Запущен${NC}" || echo -e " Статус   : ${RED}🔴 Остановлен${NC}"
+        local require_sub=$(tg_get_config "REQUIRE_SUBSCRIPTION")
+        local cooldown=$(tg_get_config "COOLDOWN_HOURS")
+        [ "$require_sub" == "1" ] && RS="${GREEN}🟢 Вкл${NC}" || RS="${RED}🔴 Выкл${NC}"
+        echo -e " Проверка подписки : $RS"
+        echo -e " Кулдаун           : ${CYAN}${cooldown} ч${NC}"
         echo ""
-        echo -e " 1) 🔑 Изменить BOT_TOKEN"
-        echo -e " 2) 👤 Изменить ADMIN_ID"
-        echo -e " 3) 🚀 Установка / переустановка сервиса"
-        echo -e " 4) 🛑 Отключить (disable)"
-        echo -e " 5) 🔔 Уведомления (LOG_BOT_TOKEN / LOG_CHAT_ID)"
-        echo -e " 0) ↩️  Назад"
+        echo -e " 1) 🔄  Вкл/выкл проверку подписки"
+        echo -e " 2) ⏰  Кулдаун / срок / лимиты"
+        echo -e " 3) 💎  Тарифы VIP"
+        echo -e " 4) 🧠  Gemini — ИИ-проверка чеков"
         echo ""
-        read -p "Выберите [0-5]: " choice
-        case $choice in
-            1) sg_edit_field "BOT_TOKEN" "Токен бота поддержки (от @BotFather)" ;;
-            2) sg_edit_field "ADMIN_ID" "Telegram ID админа (от @userinfobot)" ;;
-            3) sg_install ;;
-            4)
-                systemctl stop "$SG_SERVICE" 2>/dev/null
-                systemctl disable "$SG_SERVICE" 2>/dev/null
-                echo -e "${YELLOW}Бот поддержки отключён${NC}"
+        echo -e " 5) 🚀  Переустановить сервис основного бота"
+        echo -e " 6) 🚀  Переустановить сервис бота поддержки"
+        echo ""
+        echo -e " 0) ↩️   Назад"
+        echo ""
+        read -p "Выберите [0-6]: " ch
+        case $ch in
+            1)
+                if [ "$require_sub" == "1" ]; then
+                    tg_set_config "REQUIRE_SUBSCRIPTION" "0"
+                    echo -e "${YELLOW}Проверка выключена${NC}"
+                else
+                    tg_set_config "REQUIRE_SUBSCRIPTION" "1"
+                    echo -e "${GREEN}Проверка включена${NC}"
+                fi
+                systemctl restart "$TG_SERVICE" 2>/dev/null
                 sleep 1
                 ;;
-            5) menu_log_settings ;;
+            2)
+                tg_edit_field "COOLDOWN_HOURS" "Кулдаун между тестами (часы)"
+                tg_edit_field "TEST_HOURS" "Срок тестового (часы)"
+                tg_edit_field "VERIFIED_MINUTES" "Срок verified (минуты)"
+                tg_edit_field "TEST_DEVICES" "Лимит устройств (шт)"
+                tg_edit_field "TEST_TRAFFIC_GB" "Лимит трафика (ГБ)"
+                systemctl restart "$TG_SERVICE" 2>/dev/null
+                ;;
+            3) menu_vip_tariffs ;;
+            4) menu_ai_settings ;;
+            5) tg_install ;;
+            6) sg_install ;;
             0) break ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
         esac
     done
 }
-
-# ──────────────────────────────────────────────────────────────
-# ──────────────────────────────────────────────────────────────
-# ИИ-ПРОВЕРКА ЧЕКОВ (GEMINI)
-# ──────────────────────────────────────────────────────────────
+menu_tgbot() {
+    while true; do
+        header
+        echo -e "${CYAN}═══════════════════════════════════════${NC}"
+        echo -e "${YELLOW}     🤖 УПРАВЛЕНИЕ БОТАМИ${NC}"
+        echo -e "${CYAN}═══════════════════════════════════════${NC}"
+        echo ""
+        local st_main=$(_bot_state "$TG_SERVICE")
+        local st_sup=$(_bot_state "$SG_SERVICE")
+        local tok_main=$(_bot_token_status "$TG_CONF")
+        local tok_sup=$(_bot_token_status "$SG_CONF")
+        [ "$st_main" = "active" ] && SM="${GREEN}🟢 Запущен ${NC}" || SM="${RED}🔴 Остановлен${NC}"
+        [ "$st_sup"  = "active" ] && SS="${GREEN}🟢 Запущен ${NC}" || SS="${RED}🔴 Остановлен${NC}"
+        echo -e " 🔵 Основной  : $SM | Токен: $tok_main"
+        echo -e " 🟢 Поддержка : $SS | Токен: $tok_sup"
+        echo ""
+        echo -e " 1) 🟦 Основной бот"
+        echo -e " 2) 🟩 Бот поддержки"
+        echo -e " 3) ⚙️   Общие настройки"
+        echo -e " 4) 📊 Статистика"
+        echo ""
+        echo -e " 0) ↩️   Назад"
+        echo ""
+        read -p "Выберите [0-4]: " ch
+        case $ch in
+            1) _bot_actions "$TG_SERVICE" "$TG_CONF" "$TG_LOG" "🟦  ОСНОВНОЙ БОТ" "${YELLOW}" "" ;;
+            2) _bot_actions "$SG_SERVICE" "$SG_CONF" "$SG_LOG" "🟩  БОТ ПОДДЕРЖКИ" "${YELLOW}" "yes" ;;
+            3) menu_common_settings ;;
+            4) tg_stats ;;
+            0) break ;;
+            *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
+        esac
+    done
+}
 tg_test_gemini() {
     local key=$(tg_get_config "GEMINI_API_KEY")
     if [ -z "$key" ]; then
@@ -559,76 +709,3 @@ menu_log_settings() {
 
 # ГЛАВНОЕ МЕНЮ TELEGRAM-БОТ
 # ──────────────────────────────────────────────────────────────
-menu_tgbot() {
-    while true; do
-        header
-        echo -e "${YELLOW}🤖 TELEGRAM-БОТ${NC}"
-        echo ""
-        echo -e " Статус   : $(tg_bot_status)"
-        local token=$(tg_get_config "BOT_TOKEN")
-        local admin=$(tg_get_config "ADMIN_ID")
-        local require_sub=$(tg_get_config "REQUIRE_SUBSCRIPTION")
-        local cooldown=$(tg_get_config "COOLDOWN_HOURS")
-        [ -n "$token" ] && echo -e " Токен    : ${GREEN}✅  настроен${NC}" || echo -e " Токен    : ${RED}❌  не задан${NC}"
-        [ -n "$admin" ] && echo -e " Admin ID : ${CYAN}$admin${NC}" || echo -e " Admin ID : ${RED}❌  не задан${NC}"
-        [ "$require_sub" == "1" ] && RS="${GREEN}🟢 Да${NC}" || RS="${RED}🔴 Нет${NC}"
-        echo -e " Проверка : $RS"
-        echo -e " Кулдаун  : ${CYAN}${cooldown} ч${NC}"
-        echo ""
-        echo -e "${CYAN}─── 📊 Управление ───${NC}"
-        echo -e " 1) 🚀 Запустить бота"
-        echo -e " 2) 🔄 Перезапустить"
-        echo -e " 3) 🛑 Остановить"
-        echo -e " 4) 🧪 Тест (проверка токена)"
-        echo -e " 5) 📜 Логи бота"
-        echo ""
-        echo -e "${CYAN}─── ⚙️  Настройки ───${NC}"
-        echo -e " 6) 🤖 Основной бот"
-        echo -e " 7) 💬 Бот поддержки"
-        echo -e " 8) 🔄 Вкл/выкл проверку подписки"
-        echo -e " 9) ⏰ Кулдаун / срок / лимиты"
-        echo -e " 11) 💎 Тарифы VIP"
-        echo -e " 12) 🧠 Gemini — ИИ-проверка чеков"
-        echo ""
-        echo -e "${CYAN}─── 📋 Просмотр ───${NC}"
-        echo -e " 10) 📊 Статистика"
-        echo ""
-        echo -e " 0) ↩️  Назад"
-        echo ""
-        read -p "Выберите [0-12]: " tg_choice
-        case $tg_choice in
-            1) systemctl restart "$TG_SERVICE" 2>/dev/null; sleep 1; systemctl is-active --quiet "$TG_SERVICE" && echo -e "${GREEN}✅  Бот запущен${NC}" || echo -e "${RED}❌  Ошибка${NC}"; sleep 1 ;;
-            2) systemctl restart "$TG_SERVICE" 2>/dev/null; echo -e "${GREEN}Бот перезапущен${NC}"; sleep 1 ;;
-            3) systemctl stop "$TG_SERVICE" 2>/dev/null; echo -e "${YELLOW}Бот остановлен${NC}"; sleep 1 ;;
-            4) tg_test_bot ;;
-            5) tg_show_log ;;
-            6) menu_tgbot_main ;;
-            7) menu_tgbot_support ;;
-            8)
-                local cur=$(tg_get_config "REQUIRE_SUBSCRIPTION")
-                if [ "$cur" == "1" ]; then
-                    tg_set_config "REQUIRE_SUBSCRIPTION" "0"
-                    echo -e "${YELLOW}Проверка подписки выключена${NC}"
-                else
-                    tg_set_config "REQUIRE_SUBSCRIPTION" "1"
-                    echo -e "${GREEN}Проверка подписки включена${NC}"
-                fi
-                systemctl restart "$TG_SERVICE" 2>/dev/null
-                sleep 1
-                ;;
-            9)
-                tg_edit_field "COOLDOWN_HOURS" "Кулдаун между тестами (часы)"
-                tg_edit_field "TEST_HOURS" "Срок тестового (часы)"
-                tg_edit_field "VERIFIED_MINUTES" "Срок verified (минуты)"
-                tg_edit_field "TEST_DEVICES" "Лимит устройств (шт)"
-                tg_edit_field "TEST_TRAFFIC_GB" "Лимит трафика (ГБ)"
-                systemctl restart "$TG_SERVICE" 2>/dev/null
-                ;;
-            10) tg_stats ;;
-            11) menu_vip_tariffs ;;
-            12) menu_ai_settings ;;
-            0) break ;;
-            *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
-        esac
-    done
-}
