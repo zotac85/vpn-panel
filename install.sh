@@ -643,6 +643,7 @@ chmod 644 /etc/cron.d/vpn-auto-cleanup
 echo -e "\n💾 Установка автобэкапа БД..."
 curl -sf -o /usr/local/bin/vpn-backup.sh "$REPO_URL/scripts/vpn-backup.sh" && chmod +x /usr/local/bin/vpn-backup.sh
 curl -sf -o /usr/local/bin/vpn-restore.sh "$REPO_URL/scripts/vpn-restore.sh" && chmod +x /usr/local/bin/vpn-restore.sh
+curl -sf -o /usr/local/bin/vpn-optimize.sh "$REPO_URL/scripts/vpn-optimize.sh" && chmod +x /usr/local/bin/vpn-optimize.sh
 if [ -f /usr/local/bin/vpn-backup.sh ]; then
     echo "0 4 * * * root /usr/local/bin/vpn-backup.sh >> /var/log/vpn-backup.log 2>&1" > /etc/cron.d/vpn-backup
     chmod 644 /etc/cron.d/vpn-backup
