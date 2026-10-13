@@ -92,10 +92,11 @@ if [ ! -f /etc/UDPCustom/rate.txt ]; then
     echo "20" > /etc/UDPCustom/rate.txt
 fi
 
-# support.txt — контакт поддержки (скачиваем из репо)
-if [ ! -f /etc/UDPCustom/support.txt ] || grep -q "@ArsenGuro" /etc/UDPCustom/support.txt 2>/dev/null; then
-    [ -f /etc/UDPCustom/support.txt ] && cp /etc/UDPCustom/support.txt /etc/UDPCustom/support.txt.bak
-    curl -sf -o /etc/UDPCustom/support.txt "$REPO_URL/configs/support.txt"
+# support.txt — username support-бота (заполняется панелью при вводе токена)
+# При первой установке создаём пустым; username появится после настройки support-бота в панели
+if [ ! -f /etc/UDPCustom/support.txt ]; then
+    touch /etc/UDPCustom/support.txt
+    chmod 600 /etc/UDPCustom/support.txt
 fi
 
 echo -e "\033[0;32m✅  Конфиги бота настроены\033[0m"
