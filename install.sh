@@ -150,7 +150,7 @@ if [ -d "$PANEL_DIR" ] || [ -f "/usr/local/bin/vpn" ]; then
             cp "$REPO_DIR/bot/vpn-tg-bot.py" /usr/local/bin/vpn-tg-bot.py
             chmod +x /usr/local/bin/vpn-tg-bot.py
             mkdir -p /usr/local/bin/bot_modules
-            for f in __init__.py admin.py autopost.py cabinet.py db.py dark_gen.py gemini_check.py support_db.py; do
+            for f in __init__.py admin.py autopost.py cabinet.py db.py dark_gen.py gemini_check.py plisio.py nodes_client.py support_db.py; do
                 if [ -f "$REPO_DIR/bot/modules/$f" ]; then
                     cp "$REPO_DIR/bot/modules/$f" "/usr/local/bin/bot_modules/$f"
                     echo "   ✓ $f"
@@ -358,6 +358,7 @@ curl -sf -o /usr/local/bin/bot_modules/cabinet.py "$REPO_URL/bot/modules/cabinet
 curl -sf -o /usr/local/bin/bot_modules/db.py "$REPO_URL/bot/modules/db.py"
 curl -sf -o /usr/local/bin/bot_modules/dark_gen.py "$REPO_URL/bot/modules/dark_gen.py"
 curl -sf -o /usr/local/bin/bot_modules/plisio.py "$REPO_URL/bot/modules/plisio.py"
+curl -sf -o /usr/local/bin/bot_modules/nodes_client.py "$REPO_URL/bot/modules/nodes_client.py"
 curl -sf -o /usr/local/bin/bot_modules/gemini_check.py "$REPO_URL/bot/modules/gemini_check.py"
 mkdir -p /usr/local/bin/bot_modules/assets
 curl -sf -o /usr/local/bin/bot_modules/assets/blank.dark "$REPO_URL/bot/modules/assets/blank.dark"
