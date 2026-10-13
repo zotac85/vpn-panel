@@ -392,9 +392,10 @@ menu_nodes() {
         echo -e " 9) 🔄 Перезагрузить ноду"
         echo -e " 10) 🌐 Изменить домен ноды"
         echo -e " 11) 📡 Установить UDPGW на ноду"
+        echo -e " 12) ⚙️  Настройки мастера"
         echo -e " 0) ↩️  Назад"
         echo ""
-        read -p "Выберите действие [0-11]: " n_choice
+        read -p "Выберите действие [0-12]: " n_choice
         case "$n_choice" in
             1) _nodes_add ;;
             2) _nodes_check_all ;;
@@ -407,11 +408,67 @@ menu_nodes() {
             9) _nodes_reboot ;;
             10) _nodes_change_domain ;;
             11) _nodes_install_udpgw ;;
+            12) _nodes_master_settings ;;
             0) return ;;
         esac
     done
 }
 
+_nodes_master_settings() {
+    local CONF="/etc/UDPCustom/bot.conf"
+    local DOMAIN_FILE="/etc/vpn-domain"
+    while true; do
+        clear
+        echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
+        echo -e "        ${YELLOW}⚙️   НАСТРОЙКИ МАСТЕРА${NC}"
+        echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
+        echo ""
+        local cur_dom=""
+        [ -f "$DOMAIN_FILE" ] && cur_dom=$(cat "$DOMAIN_FILE" 2>/dev/null | tr -d '\n')
+        local cur_loc=$(grep -E '^SERVER_LOCATION=' "$CONF" 2>/dev/null | head -1 | cut -d'=' -f2- | tr -d '"')
+        echo -e " Домен   : ${GREEN}${cur_dom:-не задан}${NC}"
+        echo -e " Локация : ${GREEN}${cur_loc:-не задана}${NC}"
+        echo ""
+        echo -e " 1) 🌐 Изменить домен мастера"
+        echo -e " 2) 📍 Изменить локацию мастера"
+        echo -e " 3) 🔄 Перезапустить WS на мастере"
+        echo ""
+        echo -e " 0) ↩️  Назад"
+        echo ""
+        read -p "Выберите [0-3]: " mch
+        case "$mch" in
+            1)
+                read -p "Новый домен (Enter — отмена): " nd
+                [ -z "$nd" ] && continue
+                echo "$nd" > "$DOMAIN_FILE"
+                python3 -c "import sqlite3; db=sqlite3.connect('/etc/UDPCustom/vpn.db'); db.execute(\"UPDATE nodes SET host=? WHERE is_master=1\", ('$nd',)); db.commit()" 2>/dev/null
+                echo -e "${GREEN}✅  Домен сохранён${NC}"
+                sleep 1
+                ;;
+            2)
+                read -p "Новая локация (например 'Германия 🇩🇪', Enter — отмена): " nl
+                [ -z "$nl" ] && continue
+                if grep -q "^SERVER_LOCATION=" "$CONF" 2>/dev/null; then
+                    sed -i "s|^SERVER_LOCATION=.*|SERVER_LOCATION=\"$nl\"|" "$CONF"
+                else
+                    echo "SERVER_LOCATION=\"$nl\"" >> "$CONF"
+                fi
+                python3 -c "import sqlite3; db=sqlite3.connect('/etc/UDPCustom/vpn.db'); db.execute(\"UPDATE nodes SET name=? WHERE is_master=1\", ('$nl',)); db.commit()" 2>/dev/null
+                systemctl restart vpn-tg-bot 2>/dev/null
+                echo -e "${GREEN}✅  Локация сохранена, бот перезапущен${NC}"
+                sleep 2
+                ;;
+            3)
+                systemctl restart ws-proxy 2>/dev/null
+                sleep 1
+                systemctl is-active --quiet ws-proxy && echo -e "${GREEN}✅  WS перезапущен${NC}" || echo -e "${RED}❌  Ошибка${NC}"
+                sleep 1
+                ;;
+            0) return ;;
+            *) echo -e "${RED}Неверный выбор${NC}"; sleep 1 ;;
+        esac
+    done
+}
 _nodes_add() {
     clear
     echo -e "${YELLOW}── Добавление ноды ──${NC}"
