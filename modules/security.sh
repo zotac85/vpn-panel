@@ -880,6 +880,33 @@ menu_icmp_block() {
     done
 }
 
+
+run_full_optimize() {
+    clear
+    echo -e "${CYAN}══════════════════════════════════════════════${NC}"
+    echo -e "     ${YELLOW}⚡ ПОЛНАЯ ОПТИМИЗАЦИЯ СЕРВЕРА${NC}"
+    echo -e "${CYAN}══════════════════════════════════════════════${NC}"
+    echo ""
+    echo "Будет установлено/настроено:"
+    echo "  ✓ apt update + upgrade"
+    echo "  ✓ IPv6 отключён"
+    echo "  ✓ UFW (SSH, WS, UDPGW)"
+    echo "  ✓ Fail2ban (whitelist: 127.0.0.1)"
+    echo "  ✓ TCP BBR"
+    echo "  ✓ TCP Brutal"
+    echo "  ✓ Буферы ядра"
+    echo "  ✓ Swap 1 GB"
+    echo ""
+    echo -e "${YELLOW}⚠️  apt upgrade может потребовать reboot${NC}"
+    echo ""
+    read -p "Продолжить? (y/n): " c
+    [[ "$c" != "y" && "$c" != "Y" ]] && return
+    echo ""
+    bash /usr/local/bin/vpn-optimize.sh ""
+    echo ""
+    read -p "Нажмите Enter..."
+}
+
 menu_sec() {
     while true; do
         header
@@ -965,25 +992,27 @@ fi
         echo -e " 12) ⚡ Оптимизировать буферы ядра"
         echo -e " 13) 💾 Создать / пересоздать swap"
         echo -e " 14) 🔥 Установить / Настроить TCP Brutal"
+        echo -e " 15) ⚡ Оптимизировать ВСЁ одной кнопкой"
         echo ""
         echo -e "${CYAN}─── 🔄 Управление ───${NC}"
-        echo -e " 15) 📊 Мониторинг (htop)"
-        echo -e " 16) 🔄 Перезагрузка сервера"
-        echo -e " 17) 🛑 Выключение сервера"
-        echo -e " 18) 🛡  Блокировка ICMP (анти-DPI)"
+        echo -e " 16) 📊 Мониторинг (htop)"
+        echo -e " 17) 🔄 Перезагрузка сервера"
+        echo -e " 18) 🛑 Выключение сервера"
+        echo -e " 19) 🛡  Блокировка ICMP (анти-DPI)"
         echo ""
         echo -e "${CYAN}─── 💾 Бэкап / Восстановление ───${NC}"
-        echo -e " 19) 💾 Создать бэкап сейчас"
-        echo -e " 20) 📂 Список бэкапов"
-        echo -e " 21) 📥 Восстановить из файла"
+        echo -e " 20) 💾 Создать бэкап сейчас"
+        echo -e " 21) 📂 Список бэкапов"
+        echo -e " 22) 📥 Восстановить из файла"
         echo ""
         echo -e " 0) ↩️  Назад в главное меню"
         echo ""
-        read -p "Выберите раздел [0-21]: " sec_choice
+        read -p "Выберите раздел [0-22]: " sec_choice
 
         case $sec_choice in
             1) system_update ;;
             14) manage_tcp_brutal ;;
+            15) run_full_optimize ;;
             2) change_timezone ;;
             3) change_dns ;;
             4) cleanup_system ;;
@@ -996,13 +1025,13 @@ fi
             11) toggle_bbr ;;
             12) optimize_udp_tm ;;
             13) create_swap ;;
-            14) monitoring_htop ;;
-            15) server_reboot ;;
-            16) server_shutdown ;;
-            17) menu_icmp_block ;;
-            18) backup_create_now ;;
-            19) backup_list ;;
-            20) backup_restore_menu ;;
+            16) monitoring_htop ;;
+            17) server_reboot ;;
+            18) server_shutdown ;;
+            19) menu_icmp_block ;;
+            20) backup_create_now ;;
+            21) backup_list ;;
+            22) backup_restore_menu ;;
             0) break ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
         esac
