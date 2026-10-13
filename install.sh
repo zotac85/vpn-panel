@@ -86,15 +86,15 @@ python3 -c "import Crypto" 2>/dev/null || PY_DEPS_OK=0
 python3 -c "import msgpack" 2>/dev/null || PY_DEPS_OK=0
 if [ "$PY_DEPS_OK" = "0" ]; then
     echo "→ Установка Python-зависимостей (pycryptodome, msgpack)..."
-    # Пробуем apt (Debian/Ubuntu)
+    # apt-пакеты (Debian 11/12, Ubuntu 22.04)
     apt install -y python3-cryptodome python3-msgpack >/dev/null 2>&1 || true
-    # Проверяем ещё раз
-    python3 -c "import Crypto" 2>/dev/null || {
-        # Fallback — pip (без ломания system packages)
+    apt install -y python3-crypto python3-msgpack >/dev/null 2>&1 || true
+    # Fallback — pip (PEP 668 — нужен --break-system-packages)
+    if ! python3 -c "import Crypto" 2>/dev/null || ! python3 -c "import msgpack" 2>/dev/null; then
         apt install -y python3-pip >/dev/null 2>&1 || true
-        pip3 install --break-system-packages pycryptodome msgpack google-genai >/dev/null 2>&1 || \
-        pip3 install pycryptodome msgpack google-genai >/dev/null 2>&1 || true
-    }
+        pip3 install --break-system-packages pycryptodome msgpack >/dev/null 2>&1 || \
+        pip3 install pycryptodome msgpack >/dev/null 2>&1 || true
+    fi
     if python3 -c "import Crypto" 2>/dev/null && python3 -c "import msgpack" 2>/dev/null; then
         echo -e "\033[0;32m✅   Python-зависимости установлены\033[0m"
     else
