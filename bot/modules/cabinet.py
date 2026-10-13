@@ -631,7 +631,7 @@ def do_key_reset_hwid(cfg, chat_id, user_id, key_name, new_hwid, msg_id=None):
     _days_left = max(1, (_exp_ts - int(time.time())) // 86400) if _exp_ts else 30
     _exp_date = time.strftime('%Y-%m-%d', time.localtime(_exp_ts + 172800)) if _exp_ts else ''
 
-    bash_script = f"""
+    bash_script = rf"""
 set -e
 username="{key_name}"
 password="{new_password}"
@@ -1296,8 +1296,8 @@ def _get_support():
     try:
         with open('/etc/UDPCustom/support.txt') as f:
             t = f.read().strip()
-            return t if t else '@ArsenGuro'
-    except: return '@ArsenGuro'
+            return t if t else ''
+    except: return ''
 
 
 def _get_rate():

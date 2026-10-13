@@ -229,7 +229,7 @@ def get_support():
                 t = f.read().strip()
                 if t: return t
         except: pass
-    return '@ArsenGuro'
+    return ''
 
 
 def get_payload():
@@ -2575,7 +2575,9 @@ def handle_channel_test(cfg, user_id, first_name, hwid=None):
         text += f"✅ Ключ получен с канала @{ch_name}\n"
         text += f"🕐 {now_str}\n"
     
-    text += f"\n💬 {get_support()}\n📢 @ArsenVipKeys"
+    _chs = get_channels()
+    _ch_line = f"📢 {_chs[0]}" if _chs else ""
+    text += f"\n💬 {get_support()}" + (f"\n{_ch_line}" if _ch_line else "")
     
     # Убираем кнопку "Получить тест" из welcome-сообщения
     welcome_file = f"/etc/UDPCustom/welcome_msgs/{user_id}"

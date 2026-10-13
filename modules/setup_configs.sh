@@ -52,6 +52,22 @@ fi
 if [ ! -f /etc/UDPCustom/help_faq.txt ]; then
     curl -sf -o /etc/UDPCustom/help_faq.txt "$REPO_URL/configs/help_faq.txt"
 fi
+# help_darktunnel.txt — инструкция DarkTunnel
+if [ ! -f /etc/UDPCustom/help_darktunnel.txt ]; then
+    curl -sf -o /etc/UDPCustom/help_darktunnel.txt "$REPO_URL/configs/help_darktunnel.txt"
+fi
+# help_httpcustom.txt — инструкция HttpCustom
+if [ ! -f /etc/UDPCustom/help_httpcustom.txt ]; then
+    curl -sf -o /etc/UDPCustom/help_httpcustom.txt "$REPO_URL/configs/help_httpcustom.txt"
+fi
+# help_whitedns.txt — инструкция WhiteDNS
+if [ ! -f /etc/UDPCustom/help_whitedns.txt ]; then
+    curl -sf -o /etc/UDPCustom/help_whitedns.txt "$REPO_URL/configs/help_whitedns.txt"
+fi
+# help_video.txt — видео-инструкции
+if [ ! -f /etc/UDPCustom/help_video.txt ]; then
+    curl -sf -o /etc/UDPCustom/help_video.txt "$REPO_URL/configs/help_video.txt"
+fi
 
 # vip_buy.txt — экран "Купить VIP"
 if [ ! -f /etc/UDPCustom/vip_buy.txt ] || ! grep -q "{tariffs}" /etc/UDPCustom/vip_buy.txt 2>/dev/null; then
@@ -76,9 +92,10 @@ if [ ! -f /etc/UDPCustom/rate.txt ]; then
     echo "20" > /etc/UDPCustom/rate.txt
 fi
 
-# support.txt — контакт поддержки
-if [ ! -f /etc/UDPCustom/support.txt ]; then
-    echo "@ArsenGuro" > /etc/UDPCustom/support.txt
+# support.txt — контакт поддержки (скачиваем из репо)
+if [ ! -f /etc/UDPCustom/support.txt ] || grep -q "@ArsenGuro" /etc/UDPCustom/support.txt 2>/dev/null; then
+    [ -f /etc/UDPCustom/support.txt ] && cp /etc/UDPCustom/support.txt /etc/UDPCustom/support.txt.bak
+    curl -sf -o /etc/UDPCustom/support.txt "$REPO_URL/configs/support.txt"
 fi
 
 echo -e "\033[0;32m✅  Конфиги бота настроены\033[0m"
