@@ -741,11 +741,8 @@ def _run_migrations():
 
 
 try:
-    _check = query_one("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
-    if not _check:
-        init_schema()
-    else:
-        _run_migrations()
+    init_schema()
+    _run_migrations()
 except Exception as _e:
     db_log.error(f"db init: {_e}")
 
