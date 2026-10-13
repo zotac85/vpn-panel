@@ -665,6 +665,20 @@ def init_schema():
         started_at INTEGER DEFAULT 0,
         finished_at INTEGER DEFAULT 0
     );
+    CREATE TABLE IF NOT EXISTS nodes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        host TEXT NOT NULL,
+        ip TEXT NOT NULL,
+        ssh_port INTEGER DEFAULT 22,
+        ws_port INTEGER DEFAULT 2052,
+        ssh_user TEXT DEFAULT 'root',
+        is_master INTEGER DEFAULT 0,
+        is_active INTEGER DEFAULT 1,
+        status TEXT DEFAULT 'unknown',
+        last_check TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
     """
     try:
         with _conn() as conn:
