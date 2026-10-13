@@ -337,6 +337,7 @@ FILES_MODULES=(
     "torrent_block.sh"
     "domain_proxy.sh"
     "tgbot.sh"
+    "nodes.sh"
 )
 
 # Telegram-бот: всегда обновляем (с бэкапом)
