@@ -253,7 +253,7 @@ def create_test_user(cfg, tg_id=0, hwid=None):
         return None, None
     password = gen_random(12)
     hours = int(cfg.get('TEST_HOURS', '8')); devices = int(cfg.get('TEST_DEVICES','1')); traffic_gb = int(cfg.get('TEST_TRAFFIC_GB','50'))
-    bash_script = f'''
+    bash_script = rf'''
 set -e
 username="{username}"; password="{password}"; hours={cfg.get('TEST_HOURS','8')}; devices={devices}; traffic_gb={traffic_gb}
 if ! id -u "$username" >/dev/null 2>&1; then
@@ -366,7 +366,7 @@ def create_vip_user(cfg, tg_id, days, price, traffic_gb, devices, custom_login=N
     exp_ts = int(time.time()) + days * 86400
     traffic_bytes = traffic_gb * 1073741824
 
-    bash_script = f'''
+    bash_script = rf'''
 set -e
 username="{username}"
 password="{password}"
@@ -1088,7 +1088,7 @@ def _do_key_delete(cfg, cb, tg_id, key_name):
 
     # Убираем maxlogins из limits.conf
     try:
-        _sp.run(['sed', '-i', f'/^{key_name} .*maxlogins/d', '/etc/security/limits.conf'], capture_output=True)
+        _sp.run(['sed', '-i', rf'/^{key_name} .*maxlogins/d', '/etc/security/limits.conf'], capture_output=True)
     except: pass
 
     # Убираем iptables-правило (по uid, но uid уже удалён — пробуем очистить)
@@ -3339,7 +3339,7 @@ def handle_cleanup(cfg, chat_id, user_id):
             # Убираем из users.db
             subprocess.run(['sed', '-i', f'/^{name}$/d', USERS_DB], capture_output=True)
             # Убираем maxlogins
-            subprocess.run(['sed', '-i', f'/^{name}\s\+hard\s\+maxlogins/d', '/etc/security/limits.conf'], capture_output=True)
+            subprocess.run(['sed', '-i', rf'/^{name}\s\+hard\s\+maxlogins/d', '/etc/security/limits.conf'], capture_output=True)
             removed += 1
         except:
             failed += 1
