@@ -229,7 +229,7 @@ def get_support():
                 t = f.read().strip()
                 if t: return t
         except: pass
-    return ''
+    return '@ArsenGuro'
 
 
 def get_payload():
@@ -253,7 +253,7 @@ def create_test_user(cfg, tg_id=0, hwid=None):
         return None, None
     password = gen_random(12)
     hours = int(cfg.get('TEST_HOURS', '8')); devices = int(cfg.get('TEST_DEVICES','1')); traffic_gb = int(cfg.get('TEST_TRAFFIC_GB','50'))
-    bash_script = rf'''
+    bash_script = f'''
 set -e
 username="{username}"; password="{password}"; hours={cfg.get('TEST_HOURS','8')}; devices={devices}; traffic_gb={traffic_gb}
 if ! id -u "$username" >/dev/null 2>&1; then
@@ -366,7 +366,7 @@ def create_vip_user(cfg, tg_id, days, price, traffic_gb, devices, custom_login=N
     exp_ts = int(time.time()) + days * 86400
     traffic_bytes = traffic_gb * 1073741824
 
-    bash_script = rf'''
+    bash_script = f'''
 set -e
 username="{username}"
 password="{password}"
@@ -1088,7 +1088,7 @@ def _do_key_delete(cfg, cb, tg_id, key_name):
 
     # Убираем maxlogins из limits.conf
     try:
-        _sp.run(['sed', '-i', rf'/^{key_name} .*maxlogins/d', '/etc/security/limits.conf'], capture_output=True)
+        _sp.run(['sed', '-i', f'/^{key_name} .*maxlogins/d', '/etc/security/limits.conf'], capture_output=True)
     except: pass
 
     # Убираем iptables-правило (по uid, но uid уже удалён — пробуем очистить)
@@ -2575,9 +2575,7 @@ def handle_channel_test(cfg, user_id, first_name, hwid=None):
         text += f"✅ Ключ получен с канала @{ch_name}\n"
         text += f"🕐 {now_str}\n"
     
-    _chs = get_channels()
-    _ch_line = f"📢 {_chs[0]}" if _chs else ""
-    text += f"\n💬 {get_support()}" + (f"\n{_ch_line}" if _ch_line else "")
+    text += f"\n💬 {get_support()}\n📢 @ArsenVipKeys"
     
     # Убираем кнопку "Получить тест" из welcome-сообщения
     welcome_file = f"/etc/UDPCustom/welcome_msgs/{user_id}"
@@ -3105,7 +3103,26 @@ def _fmt_key_row(key, kind):
     traffic = f"{human(used)}/{human(limit)}" if limit > 0 else f"{human(used)}/∞"
     icon = "💎" if kind == 'vip' else "🎁"
     tg_id = key.get('tg_id') or 0
-    return f"{icon} <code>{key['login']}</code>", f"   ⏰ {t} · 📊 {traffic} · 👤 <code>{tg_id}</code>"
+    tg_name = ""
+    try:
+        from bot_modules import db as _db2
+        u = _db2.get_user(tg_id) or {}
+        un = (u.get('username') or '').strip()
+        fn = (u.get('first_name') or '').strip()
+        if un: tg_name = f"@{un}"
+        elif fn: tg_name = fn
+    except Exception: pass
+    user_str = f"👤 {tg_name}" if tg_name else f"👤 <code>{tg_id}</code>"
+    lock_icon = ""
+    if kind == 'vip':
+        try:
+            _locked = key.get('hwid_locked')
+            _locked = True if _locked is None else bool(int(_locked))
+            lock_icon = " 🔒" if _locked else " 🔓"
+        except Exception: lock_icon = " 🔒"
+    head = f"{icon} <code>{key['login']}</code>{lock_icon}"
+    sub = f"⏰  {t} · 📊 {traffic} · {user_str}"
+    return head, sub
 
 
 def show_users_test(cfg, chat_id, user_id, page=1, msg_id=None, show_all=False):
@@ -3221,6 +3238,18 @@ def show_users_vip(cfg, chat_id, user_id, page=1, msg_id=None):
         nav.append({'text': '▶', 'callback_data': f'adm_users_vip:{page+1}'})
 
     kb = {'inline_keyboard': []}
+    key_btns = []
+    for k in keys:
+        try:
+            _locked = k.get('hwid_locked')
+            _locked = True if _locked is None else bool(int(_locked))
+            _icon = '\U0001F512' if _locked else '\U0001F513'
+        except Exception:
+            _icon = '\U0001F512'
+        short = k['login'][:18]
+        key_btns.append({'text': f'\U0001F48E {short} {_icon}', 'callback_data': f"adm_vip_key:{k['login']}"})
+    for i in range(0, len(key_btns), 2):
+        kb['inline_keyboard'].append(key_btns[i:i+2])
     if nav: kb['inline_keyboard'].append(nav)
     kb['inline_keyboard'].append([
         {'text': '🎁 Тестовые', 'callback_data': 'adm_users_test:1'},
@@ -3235,6 +3264,100 @@ def show_users_vip(cfg, chat_id, user_id, page=1, msg_id=None):
     else:
         smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
 
+
+def show_admin_vip_key(cfg, chat_id, user_id, key_login, msg_id=None):
+    """Карточка VIP-ключа с управлением."""
+    token = cfg['BOT_TOKEN']
+    if not is_admin(cfg, user_id):
+        return
+    try:
+        from bot_modules import db as _db
+    except Exception as e:
+        tg_request(token, 'answerCallbackQuery', {'callback_query_id': msg_id, 'text': f'DB err: {e}', 'show_alert': True})
+        return
+    key = _db.get_vip_key(key_login)
+    if not key:
+        tg_request(token, 'sendMessage', {'chat_id': chat_id, 'text': '❌ Ключ не найден'})
+        return
+    now = int(time.time())
+    exp = key.get('expires_at') or 0
+    if exp == 0:
+        t_left = "♾ бессрочно"
+    elif exp > now:
+        left = exp - now
+        h = left // 3600
+        t_left = f"{h//24}д" if h >= 24 else f"{h}ч"
+    else:
+        t_left = "❌ истёк"
+    used = key.get('traffic_used') or 0
+    limit = key.get('traffic_limit') or 0
+    def human(b):
+        try: b = int(b)
+        except: return "0"
+        if b >= 1073741824: return f"{b/1073741824:.1f}G"
+        if b >= 1048576: return f"{b/1048576:.0f}M"
+        if b >= 1024: return f"{b/1024:.0f}K"
+        return f"{b}B"
+    traffic = f"{human(used)}/{human(limit)}" if limit else f"{human(used)}/∞"
+    # Имя ТГ
+    tg_id = key.get('tg_id') or 0
+    tg_name = ""
+    tg_un = ""
+    try:
+        u = _db.get_user(tg_id) or {}
+        tg_un = (u.get('username') or '').strip()
+        fn = (u.get('first_name') or '').strip()
+        if tg_un: tg_name = f"@{tg_un}"
+        elif fn: tg_name = fn
+    except Exception: pass
+    # Статус HWID
+    _hwid = key.get('hwid') or ''
+    _locked = key.get('hwid_locked')
+    _locked = True if _locked is None else bool(int(_locked))
+    if _locked:
+        lock_str = "🔒 закрытый (1 устройство)"
+    else:
+        lock_str = f"🔓 открытый ({key.get('devices',1)} устр.)"
+    hwid_display = (_hwid[:16] + '...') if _hwid else "❌ нет"
+    NL = chr(10)
+    txt = NL.join([
+        f"💎 <b>VIP-КЛЮЧ</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        f"🔑 Логин: <code>{key['login']}</code>",
+        f"🔐 Пароль: <code>{key.get('password','?')}</code>",
+        "",
+        f"⏰  Срок: {t_left}",
+        f"📊 Трафик: {traffic}",
+        f"📱 Устройств: {key.get('devices',1)}",
+        "",
+        f"👤 Юзер: {tg_name or tg_id}",
+        f"🆔 TG ID: <code>{tg_id}</code>",
+        "",
+        f"🖥  HWID: <code>{hwid_display}</code>",
+        f"🔧 Конфиг: {lock_str}",
+        "",
+        f"📦 Тариф: {key.get('tariff','?')}",
+    ])
+    # Кнопки
+    kb = {'inline_keyboard': []}
+    if _locked:
+        kb['inline_keyboard'].append([
+            {'text': '🔓 Открыть конфиг', 'callback_data': f"adm_vip_unlock:{key_login}"}
+        ])
+    else:
+        kb['inline_keyboard'].append([
+            {'text': '🔒 Закрыть конфиг', 'callback_data': f"adm_vip_lock:{key_login}"}
+        ])
+    kb['inline_keyboard'].append([
+        {'text': '🗑 Удалить ключ', 'callback_data': f"adm_vip_del:{key_login}"}
+    ])
+    kb['inline_keyboard'].append([
+        {'text': '⬅️ К VIP-ключам', 'callback_data': 'adm_users_vip:1'}
+    ])
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': txt, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, txt, reply_markup=kb, parse_mode='HTML')
 
 def show_users_tg(cfg, chat_id, user_id, page=1, msg_id=None):
     """Список TG-юзеров"""
@@ -3341,7 +3464,7 @@ def handle_cleanup(cfg, chat_id, user_id):
             # Убираем из users.db
             subprocess.run(['sed', '-i', f'/^{name}$/d', USERS_DB], capture_output=True)
             # Убираем maxlogins
-            subprocess.run(['sed', '-i', rf'/^{name}\s\+hard\s\+maxlogins/d', '/etc/security/limits.conf'], capture_output=True)
+            subprocess.run(['sed', '-i', f'/^{name}\s\+hard\s\+maxlogins/d', '/etc/security/limits.conf'], capture_output=True)
             removed += 1
         except:
             failed += 1
@@ -4244,24 +4367,6 @@ def main():
     cfg = load_config()
     if not cfg.get('BOT_TOKEN'):
         log.error("BOT_TOKEN не задан"); sys.exit(1)
-    # ─── Автосоздание мастер-ноды в БД ───
-    try:
-        from bot_modules import db as _dbm
-        _loc = cfg.get('SERVER_LOCATION', '').strip() or 'Мастер'
-        _host = get_domain() or ''
-        _ip = ''
-        try:
-            import socket as _sock
-            _s = _sock.socket(_sock.AF_INET, _sock.SOCK_DGRAM)
-            _s.connect(('8.8.8.8', 80))
-            _ip = _s.getsockname()[0]
-            _s.close()
-        except Exception:
-            pass
-        _mid = _dbm.ensure_master_node(name=_loc, host=_host, ip=_ip)
-        log.info(f"Master node: id={_mid} name={_loc!r} host={_host!r} ip={_ip!r}")
-    except Exception as _me:
-        log.error(f"ensure_master_node failed: {_me}")
     # Команды для ВСЕХ юзеров
     tg_request(cfg['BOT_TOKEN'], 'setMyCommands', {'commands': [
         {'command': 'start', 'description': '👋 Начать'},
@@ -5054,6 +5159,71 @@ def main():
                         except: pg = 1
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         show_users_vip(cfg, cb['message']['chat']['id'], cb_user_id, pg, cb['message']['message_id'])
+                        continue
+                    elif cb_data.startswith('adm_vip_key:'):
+                        _login = cb_data.split(':', 1)[1]
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        show_admin_vip_key(cfg, cb['message']['chat']['id'], cb_user_id, _login, cb['message']['message_id'])
+                        continue
+                    elif cb_data.startswith('adm_vip_unlock:'):
+                        _login = cb_data.split(':', 1)[1]
+                        try:
+                            from bot_modules import db as _dbu
+                            from bot_modules import cabinet as _cab
+                            _dbu.set_vip_hwid_locked(_login, 0)
+                            # Меняем пароль — старый конфиг перестанет работать
+                            _new_pw = _cab.rotate_key_password(_login)
+                            # Уведомление юзеру
+                            try:
+                                _k = _dbu.get_vip_key(_login) or {}
+                                _tg = _k.get('tg_id')
+                                if _tg:
+                                    _umsg = (f"🔓 <b>Твой конфиг разблокирован</b>{chr(10)}"
+                                             f"━━━━━━━━━━━━━━━━━━━━{chr(10)}"
+                                             f"🔑 Ключ: <code>{_login}</code>{chr(10)}"
+                                             f"🔐 Новый пароль: <code>{_new_pw or '?'}</code>{chr(10)}"
+                                             f"{chr(10)}"
+                                             f"⚠️ <b>Старый конфиг больше не работает!</b>{chr(10)}"
+                                             f"Скачай новый: <b>Личный кабинет → Мои ключи → 📄 DarkTunnel</b>{chr(10)}"
+                                             f"{chr(10)}"
+                                             f"Теперь доступно до {_k.get('devices',1)} устройств.")
+                                    tg_request(cfg['BOT_TOKEN'], 'sendMessage', {'chat_id': _tg, 'text': _umsg, 'parse_mode': 'HTML'})
+                            except Exception: pass
+                            tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': '🔓 Открыто, пароль сменён', 'show_alert': False})
+                        except Exception as e:
+                            tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': f'Ошибка: {e}', 'show_alert': True})
+                        show_admin_vip_key(cfg, cb['message']['chat']['id'], cb_user_id, _login, cb['message']['message_id'])
+                        continue
+                    elif cb_data.startswith('adm_vip_lock:'):
+                        _login = cb_data.split(':', 1)[1]
+                        try:
+                            from bot_modules import db as _dbu
+                            from bot_modules import cabinet as _cab
+                            _dbu.set_vip_hwid_locked(_login, 1)
+                            _new_pw = _cab.rotate_key_password(_login)
+                            try:
+                                _k = _dbu.get_vip_key(_login) or {}
+                                _tg = _k.get('tg_id')
+                                if _tg:
+                                    _umsg = (f"🔒 <b>Твой конфиг снова закрыт</b>{chr(10)}"
+                                             f"━━━━━━━━━━━━━━━━━━━━{chr(10)}"
+                                             f"🔑 Ключ: <code>{_login}</code>{chr(10)}"
+                                             f"🔐 Новый пароль: <code>{_new_pw or '?'}</code>{chr(10)}"
+                                             f"{chr(10)}"
+                                             f"⚠️ <b>Старый конфиг больше не работает!</b>{chr(10)}"
+                                             f"Скачай новый: <b>Личный кабинет → Мои ключи → 📄 DarkTunnel</b>{chr(10)}"
+                                             f"{chr(10)}"
+                                             f"Конфиг будет работать только на одном устройстве (с привязкой HWID).")
+                                    tg_request(cfg['BOT_TOKEN'], 'sendMessage', {'chat_id': _tg, 'text': _umsg, 'parse_mode': 'HTML'})
+                            except Exception: pass
+                            tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': '🔒 Закрыто, пароль сменён', 'show_alert': False})
+                        except Exception as e:
+                            tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': f'Ошибка: {e}', 'show_alert': True})
+                        show_admin_vip_key(cfg, cb['message']['chat']['id'], cb_user_id, _login, cb['message']['message_id'])
+                        continue
+                    elif cb_data.startswith('adm_vip_del:'):
+                        _login = cb_data.split(':', 1)[1]
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': '⚠️ Удаление пока не реализовано, делай через панель vpn', 'show_alert': True})
                         continue
                     elif cb_data.startswith('adm_users_tg:'):
                         try:

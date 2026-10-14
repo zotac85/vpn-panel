@@ -611,6 +611,101 @@ def ask_key_hwid(cfg, chat_id, user_id, key_name, msg_id=None):
         _send(token, chat_id, text, kb)
 
 
+def rotate_key_password(key_name):
+    """Меняет только пароль ключа (HWID не трогает). Возвращает новый пароль или None.
+    Используется админ-панелью при переключении открытый/закрытый конфиг."""
+    import subprocess as _sp
+    import secrets as _sec
+    import string as _str
+    import os as _os
+    key = db.get_test_key(key_name) or db.get_vip_key(key_name)
+    if not key:
+        return None
+    alphabet = _str.ascii_letters + _str.digits
+    new_password = ''.join(_sec.choice(alphabet) for _ in range(12))
+    _devices = int(key['devices']) if key and key.get('devices') else 1
+    _traffic_limit = int(key['traffic_limit']) if key and key.get('traffic_limit') else 0
+    _exp_ts = int(key['expires_at']) if key and key.get('expires_at') else 0
+    _exp_date = time.strftime('%Y-%m-%d', time.localtime(_exp_ts + 172800)) if _exp_ts else ''
+    bash_script = f"""
+set -e
+username="{key_name}"
+password="{new_password}"
+devices={_devices}
+traffic_bytes={_traffic_limit}
+exp_ts={_exp_ts}
+exp_date="{_exp_date}"
+if ! id -u "$username" >/dev/null 2>&1; then
+    useradd -M -s /bin/false "$username"
+fi
+echo "$username:$password" | chpasswd
+usermod -s /bin/false "$username" 2>/dev/null || true
+grep -q "^${{username}}$" /etc/UDPCustom/users.db 2>/dev/null || echo "$username" >> /etc/UDPCustom/users.db
+sort -u -o /etc/UDPCustom/users.db /etc/UDPCustom/users.db
+mkdir -p /etc/UDPCustom/limits /etc/UDPCustom/traffic /etc/UDPCustom/traffic_limits /etc/UDPCustom/expire_ts /etc/UDPCustom/passwords
+echo "$devices" > "/etc/UDPCustom/limits/$username"
+sed -i "/^${{username}}[[:space:]]\+hard[[:space:]]\+maxlogins/d" /etc/security/limits.conf
+echo "$username hard maxlogins $devices" >> /etc/security/limits.conf
+if [ "$traffic_bytes" -gt 0 ]; then
+    echo "$traffic_bytes" > "/etc/UDPCustom/traffic_limits/$username"
+fi
+[ -f "/etc/UDPCustom/traffic/$username" ] || echo "0" > "/etc/UDPCustom/traffic/$username"
+uid=$(id -u "$username")
+if iptables -L VPN_TRAFFIC -n >/dev/null 2>&1; then
+    iptables -C VPN_TRAFFIC -m owner --uid-owner "$uid" -j RETURN 2>/dev/null || \
+        iptables -A VPN_TRAFFIC -m owner --uid-owner "$uid" -j RETURN 2>/dev/null || true
+fi
+if [ -n "$exp_date" ]; then
+    chage -E "$exp_date" "$username" 2>/dev/null || true
+fi
+echo "$exp_ts" > "/etc/UDPCustom/expire_ts/$username"
+echo "$password" > "/etc/UDPCustom/passwords/$username"
+chmod 600 "/etc/UDPCustom/passwords/$username"
+echo "OK"
+"""
+    try:
+        _r = _sp.run(['bash', '-c', bash_script], capture_output=True, text=True, timeout=30)
+        if 'OK' not in _r.stdout:
+            cab_log.error(f"rotate bash error: {_r.stderr}")
+            return None
+    except Exception as e:
+        cab_log.error(f"rotate bash exception: {e}")
+        return None
+    try:
+        with open(f"{PASSWORDS_DIR}/{key_name}", 'w') as f:
+            f.write(new_password)
+        _os.chmod(f"{PASSWORDS_DIR}/{key_name}", 0o600)
+    except Exception as e:
+        cab_log.error(f"rotate passwd file: {e}")
+    # Синхронизация нового пароля на все ноды
+    try:
+        _dev_lim = None
+        _exp_ts_sync = None
+        try:
+            _dev_lim = int(key['devices']) if key and key['devices'] else None
+        except Exception:
+            _dev_lim = None
+        try:
+            _exp_ts_sync = int(key['expires_at']) if key and key['expires_at'] else None
+        except Exception:
+            _exp_ts_sync = None
+        sync_res = nc.sync_user_to_all_nodes(key_name, new_password, action="add", device_limit=_dev_lim, exp_ts=_exp_ts_sync)
+        for node_name, (ok, msg) in sync_res.items():
+            cab_log.info(f"rotate sync {key_name} -> {node_name}: {'OK' if ok else 'FAIL'} {msg}")
+        try:
+            nc.unban_all_nodes()
+            cab_log.info(f"rotate unban_all_nodes done for {key_name}")
+        except Exception as _e:
+            cab_log.error(f"rotate unban_all_nodes failed: {_e}")
+    except Exception as e:
+        cab_log.error(f"Node sync rotate failed for {key_name}: {e}")
+    try:
+        db.execute("UPDATE vip_keys SET password=? WHERE login=?", (new_password, key_name))
+        db.execute("UPDATE test_keys SET password=? WHERE login=?", (new_password, key_name))
+    except Exception as e:
+        cab_log.error(f"rotate db update: {e}")
+    return new_password
+
 def do_key_reset_hwid(cfg, chat_id, user_id, key_name, new_hwid, msg_id=None):
     """Меняет пароль Linux-юзера + обновляет hwid и password в БД."""
     import subprocess as _sp
@@ -631,7 +726,7 @@ def do_key_reset_hwid(cfg, chat_id, user_id, key_name, new_hwid, msg_id=None):
     _days_left = max(1, (_exp_ts - int(time.time())) // 86400) if _exp_ts else 30
     _exp_date = time.strftime('%Y-%m-%d', time.localtime(_exp_ts + 172800)) if _exp_ts else ''
 
-    bash_script = rf"""
+    bash_script = f"""
 set -e
 username="{key_name}"
 password="{new_password}"
@@ -916,6 +1011,14 @@ def _build_dark_url_for_key(cfg, key_name, domain=None, ws_port=None, location_n
         _hwid = key['hwid']
     except (KeyError, IndexError, TypeError):
         _hwid = None
+    # VIP: если hwid_locked=0 — принудительно открытый конфиг
+    # Для тестов флаг не применяется
+    if key_name.startswith('vip_'):
+        try:
+            if not db.is_vip_hwid_locked(key_name):
+                _hwid = None
+        except Exception:
+            pass
     _loc = location_name if location_name else cfg.get("SERVER_LOCATION", "VPN")
     if _hwid:
         try:
@@ -953,50 +1056,6 @@ def _build_dark_url_for_key(cfg, key_name, domain=None, ws_port=None, location_n
             cab_log.error(f"_build_dark_url_for_key open: {e}")
             return None, None
     return None, None
-
-
-def send_dark_files_all_nodes(cfg, chat_id, user_id, key_name):
-    """Сохраняет darktunnel:// в .dark и отправляет как документ."""
-    import os as _os, tempfile
-    token = cfg['BOT_TOKEN']
-    key = db.get_test_key(key_name) or db.get_vip_key(key_name)
-    if not key or int(key['tg_id']) != int(user_id):
-        _send(token, chat_id, "\u274C  Ключ не найден")
-        return
-    if key['expires_at'] > 0 and key['expires_at'] < int(time.time()):
-        _send(token, chat_id, "\u274C  Ключ истёк")
-        return
-    dt_url, cfg_name = _build_dark_url_for_key(cfg, key_name)
-    if not dt_url:
-        _send(token, chat_id, "\u274C  Не удалось создать конфиг (нужен HWID)")
-        return
-    # Сохраняем как .dark
-    safe_name = key_name.replace('/', '_')
-    fname = f"{safe_name}.dark"
-    tmp_path = None
-    try:
-        fd, tmp_path = tempfile.mkstemp(suffix='.dark')
-        with _os.fdopen(fd, 'w', encoding='utf-8') as f:
-            f.write(dt_url)
-        # Отправляем через curl (multipart)
-        import subprocess
-        cmd = [
-            'curl', '-s', '-X', 'POST',
-            f'https://api.telegram.org/bot{token}/sendDocument',
-            '-F', f'chat_id={chat_id}',
-            '-F', f'document=@{tmp_path};filename={fname}',
-            '-F', f'caption=\U0001F4E5 <b>{fname}</b>\n\nСкачай и открой через DarkTunnel \u2192 \u22EE \u2192 Import \u2192 File',
-            '-F', 'parse_mode=HTML',
-        ]
-        subprocess.run(cmd, capture_output=True, timeout=30)
-        cab_log.info(f"dark file sent: {fname}")
-    except Exception as e:
-        cab_log.error(f"send_dark_file: {e}")
-        _send(token, chat_id, f"\u274C  Ошибка отправки: {e}")
-    finally:
-        if tmp_path and _os.path.exists(tmp_path):
-            try: _os.remove(tmp_path)
-            except: pass
 
 
 def send_dark_files_all_nodes(cfg, chat_id, user_id, key_name):
@@ -1051,7 +1110,9 @@ def send_dark_files_all_nodes(cfg, chat_id, user_id, key_name):
                 flag = 'node'
             flag = ''.join(ch for ch in flag if ch.isalnum() or ch in '_-') or 'node'
             import time as _t
-            fname = f"{safe_name}_{flag}_{int(_t.time())}.dark"
+            import secrets as _ss
+            _suf = _ss.token_hex(3)
+            fname = f"{safe_name}_{flag}_{int(_t.time())}_{_suf}.dark"
             fd, tmp_path = tempfile.mkstemp(suffix='.dark')
             with _os.fdopen(fd, 'w', encoding='utf-8') as f:
                 f.write(dt_url)
@@ -1296,8 +1357,8 @@ def _get_support():
     try:
         with open('/etc/UDPCustom/support.txt') as f:
             t = f.read().strip()
-            return t if t else ''
-    except: return ''
+            return t if t else '@ArsenGuro'
+    except: return '@ArsenGuro'
 
 
 def _get_rate():

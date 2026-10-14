@@ -231,14 +231,15 @@ def get_vip_keys(tg_id, active_only=False):
 
 def create_vip_key(login, tg_id, password, expires_at, devices=1,
                    traffic_limit=0, tariff="vip_30d",
-                   price_paid=0, paid_via="manual", hwid=None):
+                   price_paid=0, paid_via="manual", hwid=None,
+                   hwid_locked=1):
     execute("""INSERT OR REPLACE INTO vip_keys
         (login, tg_id, password, created_at, expires_at, devices,
-         traffic_used, traffic_limit, tariff, price_paid, paid_via, hwid)
-        VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)""",
+         traffic_used, traffic_limit, tariff, price_paid, paid_via, hwid, hwid_locked)
+        VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)""",
         (login, int(tg_id), password, int(time.time()),
          int(expires_at), int(devices), int(traffic_limit),
-         tariff, float(price_paid), paid_via, hwid))
+         tariff, float(price_paid), paid_via, hwid, int(hwid_locked)))
     return query_one("SELECT * FROM vip_keys WHERE login=?", (login,))
 
 
@@ -286,6 +287,26 @@ def get_user_source_channel(tg_id):
     except Exception:
         return None
 
+
+def set_vip_hwid_locked(login, locked):
+    """Устанавливает hwid_locked у VIP-ключа. locked=1 (закрытый) / 0 (открытый)."""
+    try:
+        execute("UPDATE vip_keys SET hwid_locked=? WHERE login=?",
+                (int(locked), login))
+        return True
+    except Exception as e:
+        db_log.error(f"set_vip_hwid_locked: {e}")
+        return False
+def is_vip_hwid_locked(login):
+    """Возвращает True если конфиг ключа закрытый (с HWID)."""
+    try:
+        r = query_one("SELECT hwid_locked FROM vip_keys WHERE login=?", (login,))
+        if not r:
+            return True
+        v = r.get('hwid_locked')
+        return True if v is None else bool(int(v))
+    except Exception:
+        return True
 
 def get_vip_key(login):
     return query_one("SELECT * FROM vip_keys WHERE login=?", (login,))
@@ -665,20 +686,6 @@ def init_schema():
         started_at INTEGER DEFAULT 0,
         finished_at INTEGER DEFAULT 0
     );
-    CREATE TABLE IF NOT EXISTS nodes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        host TEXT NOT NULL,
-        ip TEXT NOT NULL,
-        ssh_port INTEGER DEFAULT 22,
-        ws_port INTEGER DEFAULT 2052,
-        ssh_user TEXT DEFAULT 'root',
-        is_master INTEGER DEFAULT 0,
-        is_active INTEGER DEFAULT 1,
-        status TEXT DEFAULT 'unknown',
-        last_check TEXT,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    );
     """
     try:
         with _conn() as conn:
@@ -740,38 +747,12 @@ def _run_migrations():
         db_log.error(f"_run_migrations: {_e}")
 
 
-
-def ensure_master_node(name="Мастер", host="", ip=""):
-    """Идемпотентно создаёт/обновляет запись мастера в nodes (is_master=1).
-    Возвращает id мастер-ноды."""
-    try:
-        row = query_one("SELECT id FROM nodes WHERE is_master=1 LIMIT 1")
-        if row:
-            mid = row['id']
-            # Обновляем name/host если переданы непустые
-            if name:
-                execute("UPDATE nodes SET name=? WHERE id=? AND (name IS NULL OR name='')", (name, mid))
-            if host:
-                execute("UPDATE nodes SET host=? WHERE id=? AND (host IS NULL OR host='')", (host, mid))
-            if ip:
-                execute("UPDATE nodes SET ip=? WHERE id=? AND (ip IS NULL OR ip='')", (ip, mid))
-            return mid
-        # Нет мастера — создаём
-        execute(
-            "INSERT INTO nodes (name,host,ip,ssh_port,ws_port,ssh_user,is_master,is_active,status) "
-            "VALUES (?,?,?,22,2052,'root',1,1,'online')",
-            (name or "Мастер", host or "", ip or "")
-        )
-        row = query_one("SELECT id FROM nodes WHERE is_master=1 LIMIT 1")
-        mid = row['id'] if row else None
-        db_log.info(f"ensure_master_node: created id={mid} name={name!r} host={host!r}")
-        return mid
-    except Exception as e:
-        db_log.error(f"ensure_master_node: {e}")
-        return None
 try:
-    init_schema()
-    _run_migrations()
+    _check = query_one("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+    if not _check:
+        init_schema()
+    else:
+        _run_migrations()
 except Exception as _e:
     db_log.error(f"db init: {_e}")
 
