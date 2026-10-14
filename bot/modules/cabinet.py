@@ -548,26 +548,54 @@ def show_key_reset_confirm(cfg, chat_id, user_id, key_name, msg_id=None):
     if not key or int(key['tg_id']) != int(user_id):
         _send(token, chat_id, "\u274C  Ключ не найден")
         return
+    # Открытый VIP-ключ — пароль меняется, HWID не запрашивается
+    _open_vip = False
+    if key_name.startswith('vip_'):
+        try:
+            _open_vip = not db.is_vip_hwid_locked(key_name)
+        except Exception:
+            _open_vip = False
     NL = chr(10)
-    text = NL.join([
-        "\U0001F504 <b>ОБНОВИТЬ КОНФИГ?</b>",
-        "\u2501"*20,
-        "",
-        f"\U0001F511 Логин: <code>{key_name}</code>",
-        "",
-        "\u2501"*20,
-        "\u26A0\uFE0F <b>Важно!</b>",
-        "",
-        "Будет создан новый конфиг,",
-        "привязанный к <b>текущему устройству</b>.",
-        "",
-        "\U0001F4F2 <b>Пригодится, если:</b>",
-        "  \u2022 сменил телефон",
-        "  \u2022 переустановил приложение",
-        "  \u2022 сменился HWID",
-        "",
-        "Старый конфиг <b>перестанет работать</b>.",
-    ])
+    if _open_vip:
+        text = NL.join([
+            "\U0001F504 <b>ОБНОВИТЬ ПАРОЛЬ?</b>",
+            "\u2501"*20,
+            "",
+            f"\U0001F511 Логин: <code>{key_name}</code>",
+            "",
+            "\u2501"*20,
+            "\U0001F513 <b>Ключ открытый</b>",
+            "",
+            "HWID запрашиваться не будет,",
+            "конфиг останется открытым",
+            f"(до {key['devices']} устройств).",
+            "",
+            "\U0001F4F2 <b>Пригодится, если:</b>",
+            "  \u2022 кто-то узнал пароль",
+            "  \u2022 нужно обновить доступ",
+            "",
+            "Старый конфиг <b>перестанет работать</b>.",
+        ])
+    else:
+        text = NL.join([
+            "\U0001F504 <b>ОБНОВИТЬ КОНФИГ?</b>",
+            "\u2501"*20,
+            "",
+            f"\U0001F511 Логин: <code>{key_name}</code>",
+            "",
+            "\u2501"*20,
+            "\u26A0\uFE0F <b>Важно!</b>",
+            "",
+            "Будет создан новый конфиг,",
+            "привязанный к <b>текущему устройству</b>.",
+            "",
+            "\U0001F4F2 <b>Пригодится, если:</b>",
+            "  \u2022 сменил телефон",
+            "  \u2022 переустановил приложение",
+            "  \u2022 сменился HWID",
+            "",
+            "Старый конфиг <b>перестанет работать</b>.",
+        ])
     kb = {'inline_keyboard': [
         [{'text': '\U0001F504 Обновить', 'callback_data': f'cab_key_resethwid:{key_name}'}],
         [{'text': '\u2B05\uFE0F Отмена', 'callback_data': f'cab_key:{key_name}'}]
@@ -2256,6 +2284,46 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         return True
     if cb_data.startswith('cab_key_resethwid:'):
         key_name = cb_data.split(':', 1)[1]
+        # Открытый VIP-ключ: не спрашиваем HWID, сразу ротируем пароль
+        _is_open_vip = False
+        if key_name.startswith('vip_'):
+            try:
+                _is_open_vip = not db.is_vip_hwid_locked(key_name)
+            except Exception:
+                _is_open_vip = False
+        if _is_open_vip:
+            try:
+                _k = db.get_vip_key(key_name) or {}
+                _dev = _k.get('devices', 1)
+            except Exception:
+                _dev = 1
+            _new_pw = rotate_key_password(key_name)
+            if _new_pw:
+                NL = chr(10)
+                _txt = NL.join([
+                    "\u2705  <b>ПАРОЛЬ ОБНОВЛЁН</b>",
+                    "\u2501"*20,
+                    "",
+                    f"\U0001F511 Логин: <code>{key_name}</code>",
+                    f"\U0001F513 Открытый конфиг (до {_dev} устр.)",
+                    "",
+                    "\u2501"*20,
+                    "\U0001F4F2 <b>Что делать:</b>",
+                    "1. Удали старый конфиг из DarkTunnel",
+                    "2. Нажми \u00ab\U0001F4F2 Получить конфиг\u00bb ниже",
+                    "3. Импортируй новый и подключись",
+                ])
+                _kb = {'inline_keyboard': [
+                    [{'text': '\U0001F4F2 Получить конфиг', 'callback_data': f'cab_dt:{key_name}'}],
+                    [{'text': '\u2B05\uFE0F К ключу', 'callback_data': f'cab_key:{key_name}'}]
+                ]}
+                if msg_id:
+                    _edit(token, chat_id, msg_id, _txt, _kb)
+                else:
+                    _send(token, chat_id, _txt, _kb)
+            else:
+                _send(token, chat_id, "\u274C  Не удалось обновить пароль")
+            return True
         ask_key_hwid(cfg, chat_id, user_id, key_name, msg_id)
         return True
     if cb_data.startswith('cab_key_del:'):
