@@ -846,23 +846,17 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None, hwid=None):
     connect_line = f"{domain}:{ws_port}@{username}:{password}"
     traffic = cfg.get('TEST_TRAFFIC_GB','50'); devices = cfg.get('TEST_DEVICES','1')
     # Читаем test_issued.txt (редактируемый админом)
-    tpl_issued = get_test_issued_text()
-    hours = cfg.get("TEST_HOURS", "8")
-    if tpl_issued:
-        text = (tpl_issued
-                .replace("{username}", username)
-                .replace("{hours}", str(hours))
-                .replace("{gb}", str(traffic))
-                .replace("{devices}", str(devices)))
-    else:
-        text = (f"🎉 <b>ТЕСТОВЫЙ ДОСТУП ГОТОВ</b>\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"🎁 Ключ: <code>{username}</code>\n"
-                f"⏰ Срок: {hours} часов\n"
-                f"📊 Трафик: {traffic} ГБ\n"
-                f"📱 Устройств: {devices}\n\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"🔑 Логин, пароль и конфиг — в личном кабинете")
+    # Единый формат карточки ключа (как в кабинете)
+    try:
+        from bot_modules.cabinet import format_key_card as _fkc
+        text, kb_test = _fkc(cfg, username)
+        if not text:
+            text = f"🎁 <code>{username}</code>"
+            kb_test = {'inline_keyboard': [[{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]]}
+    except Exception as _e:
+        log.error(f'handle_test format_key_card: {_e}')
+        text = f"🎁 <code>{username}</code>"
+        kb_test = {'inline_keyboard': [[{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]]}
     # Убираем кнопку "Получить тест" из welcome-сообщения
     # Генерим зашифрованный конфиг (если есть HWID)
     dt_url = None
@@ -905,9 +899,6 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None, hwid=None):
             os.remove(welcome_file)
         except: pass
     
-    kb_test = {'inline_keyboard': [
-        [{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
-    ]}
     smart_send(token, chat_id, text, reply_markup=kb_test, parse_mode="HTML")
     # Авто-отправка .dark файла (если конфиг зашифрован)
     try:
@@ -2678,39 +2669,27 @@ def handle_channel_test(cfg, user_id, first_name, hwid=None):
             dt_url = generate_darktunnel_url(username, password, domain, ws_port, proxy, cfg)
     else:
         dt_url = generate_darktunnel_url(username, password, domain, ws_port, proxy, cfg)
-    traffic = cfg.get('TEST_TRAFFIC_GB', '50')
-    devices = cfg.get('TEST_DEVICES', '1')
-    hours = cfg.get('TEST_HOURS', '8')
-    
+    # Единый формат карточки ключа
+    try:
+        from bot_modules.cabinet import format_key_card as _fkc2
+        text, kb_ch_test = _fkc2(cfg, username)
+        if not text:
+            text = f"🎁 <code>{username}</code>"
+            kb_ch_test = {'inline_keyboard': [[{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]]}
+    except Exception as _e:
+        log.error(f'channel_test format_key_card: {_e}')
+        text = f"🎁 <code>{username}</code>"
+        kb_ch_test = {'inline_keyboard': [[{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]]}
+    # Инфа о канале — только для админа
     _is_adm_local = str(user_id) == str(admin_id)
-    
-    # ─── Одно красивое сообщение ───
-    text = (
-        f"🎉 <b>Тестовый доступ готов!</b>\n\n"
-        f"⏰  Срок: <b>{hours} ч</b>  |  📊 <b>{traffic} ГБ</b>  |  💻 <b>{devices} устр.</b>\n"
-    )
-    if dt_url:
-        text += "\n━━━━━━━━━━━━━━━━━━━━\n"
-        text += "📲 <b>Твои конфиги:</b>\n"
-        try:
-            import sqlite3 as _sq
-            _con = _sq.connect("/etc/UDPCustom/vpn.db")
-            _rows = _con.execute("SELECT name FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
-            _con.close()
-            for _nname_t in _rows:
-                text += f"  • {_nname_t[0]}\n"
-        except Exception as _e:
-            log.error(f"nodes list text: {_e}")
     if _is_adm_local:
-        channels = get_channels()
-        ch_name = channels[0].lstrip('@') if channels else 'ArsenVipKeys'
-        from datetime import datetime
-        now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        text += f"\n━━━━━━━━━━━━━━━━━━\n"
-        text += f"✅ Ключ получен с канала @{ch_name}\n"
-        text += f"🕐 {now_str}\n"
-    
-    text += f"\n💬 {get_support()}\n📢 @ArsenVipKeys"
+        try:
+            channels = get_channels()
+            ch_name = channels[0].lstrip('@') if channels else 'ArsenVipKeys'
+            from datetime import datetime
+            now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            text += f"\n\n✅ Ключ получен с канала @{ch_name}\n🕐 {now_str}"
+        except Exception: pass
     
     # Убираем кнопку "Получить тест" из welcome-сообщения
     welcome_file = f"/etc/UDPCustom/welcome_msgs/{user_id}"
@@ -2725,9 +2704,6 @@ def handle_channel_test(cfg, user_id, first_name, hwid=None):
             })
             os.remove(welcome_file)
         except: pass
-    kb_ch_test = {'inline_keyboard': [
-        [{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
-    ]}
     smart_send(token, user_id, text, reply_markup=kb_ch_test, parse_mode='HTML')
     # Авто-отправка .dark файла (если конфиг зашифрован)
     try:

@@ -1133,21 +1133,36 @@ def do_key_extend(cfg, chat_id, user_id, key_name, tariff_idx, msg_id=None):
         _send(token, chat_id, _txt, kb)
     cab_log.info(f"VIP extended {key_name} by user {user_id}: +{t['days']}d/{t['gb']}GB/{t['devices']}dev")
 
-def show_key_detail(cfg, chat_id, user_id, key_name, msg_id=None):
-    """Детали ключа (из БД)"""
-    token = cfg['BOT_TOKEN']
-
-    key = db.get_test_key(key_name)
-    kind = 'test'
+def format_key_card(cfg, key_name):
+    """Единый формат карточки ключа. Возвращает (text, keyboard).
+    Используется в show_key_detail, handle_test, handle_channel_test."""
+    key = db.get_test_key(key_name) or db.get_vip_key(key_name)
     if not key:
-        key = db.get_vip_key(key_name)
-        kind = 'vip'
-    if not key or int(key['tg_id']) != int(user_id):
-        _send(token, chat_id, "❌ Ключ не найден")
-        return
-
-    location = cfg.get('SERVER_LOCATION', '🇩🇪 Германия')
-    # Активные ноды (мастер + online)
+        return None, None
+    is_vip = key_name.startswith('vip_')
+    icon = "💎" if is_vip else "🎁"
+    now = int(time.time())
+    exp_ts = key.get('expires_at') or 0
+    if exp_ts == 0:
+        t_left = "♾"
+    elif exp_ts > now:
+        t_left = _human_time(exp_ts - now)
+    else:
+        t_left = "❌ истёк"
+    used = key.get('traffic_used') or 0
+    limit = key.get('traffic_limit') or 0
+    def _gb(b):
+        try: b = int(b)
+        except: return "0"
+        if b >= 1073741824:
+            v = b / 1073741824
+            return f"{v:.0f}" if v == int(v) else f"{v:.1f}"
+        if b >= 1048576: return f"{b/1048576:.0f}M"
+        if b >= 1024: return f"{b/1024:.0f}K"
+        return f"{b}B"
+    traffic = f"{_gb(used)}/{_gb(limit)} GB" if limit else f"{_gb(used)}/∞"
+    devices = key.get('devices', 1)
+    # Активные локации
     _locs = []
     try:
         import sqlite3 as _sq
@@ -1158,80 +1173,58 @@ def show_key_detail(cfg, chat_id, user_id, key_name, msg_id=None):
         _con.close()
         _locs = [r[0] for r in _rows]
     except Exception as _e:
-        cab_log.error(f"key_detail locs: {_e}")
-    now = int(time.time())
-    created_ts = key['created_at'] or now
-    exp_ts = key['expires_at'] or 0
-
-    from datetime import datetime
-    created_str = datetime.fromtimestamp(created_ts).strftime('%d.%m.%Y %H:%M')
-    if exp_ts > 0:
-        exp_str = datetime.fromtimestamp(exp_ts).strftime('%d.%m.%Y %H:%M')
-        left = exp_ts - now
-        if left > 0:
-            t = _human_time(left)
-        else:
-            t = "❌ истёк"
-    else:
-        exp_str = "♾ бессрочно"
-        t = "♾ бессрочно"
-
-    traffic = _human_bytes(key['traffic_used'])
-    if key['traffic_limit'] > 0:
-        traffic += f" / {_human_bytes(key['traffic_limit'])}"
-    else:
-        traffic += " / ∞"
-
-    icon = "💎" if kind == 'vip' else "🎁"
+        cab_log.error(f"format_key_card locs: {_e}")
+    # Извлекаем флаги (эмодзи-страны) из имён нод
+    _flags = []
+    for _l in _locs:
+        _em = ''
+        for _ch in _l:
+            if ord(_ch) > 0x1F000:
+                _em += _ch
+        _flags.append(_em if _em else _l[:2].upper())
+    flags_str = ' '.join(_flags) if _flags else '🇩🇪'
     NL = chr(10)
     lines = [
-        f"{icon} <b>КЛЮЧ {key_name}</b>",
-        "━━━━━━━━━━━━━━━━━━━━",
+        f"{icon} <b>{key_name}</b>",
+        f"⏰ {t_left}  ·  📊 {traffic}  ·  📱 {devices}",
         "",
-        f"📅 Создан:     {created_str}",
-        f"⏰ Истекает:   {exp_str}",
-        f"⏳ Осталось:   {t}",
-        f"📊 Трафик:     {traffic}",
-        f"📱 Устройств:  {key['devices']}",
+        f"📡 Локации: {flags_str}",
         "",
-        "📡 <b>Доступные локации:</b>",
-    ]
-    for _l in _locs:
-        lines.append(f"  • {_l}")
-    lines += [
-        "",
-        "<b>📲 Как импортировать:</b>",
-        "",
-        "<b>Вариант 1 (через приложение):</b>",
-        "DarkTunnel → ⋮ (три точки справа) → Config → Import → File",
-        "",
-        "<b>Вариант 2 (через файл):</b>",
-        "Нажми на .dark файл → Открыть с помощью → DarkTunnel",
-        "━━━━━━━━━━━━━━━━━━━━"
+        "<b>Как импортировать:</b>",
+        "1️⃣ Нажми три точки ⋮ → Config → Import → File",
+        "2️⃣ Нажми на файл .dark → Открыть с помощью → DarkTunnel",
     ]
     text = NL.join(lines)
+    kb = {'inline_keyboard': [
+        [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'},
+         {'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
+    ]}
+    if is_vip:
+        kb['inline_keyboard'].insert(0, [
+            {'text': '⏰ Продлить', 'callback_data': f'cab_key_extend:{key_name}'}
+        ])
+    return text, kb
 
-    is_active = exp_ts == 0 or exp_ts > now
-    keyboard = {'inline_keyboard': []}
-    back_kind = 'cab_keys_vip' if kind == 'vip' else 'cab_keys_test'
-    keyboard['inline_keyboard'].append([
-        {'text': '⬅️ К ключам', 'callback_data': back_kind}
-    ])
-    keyboard['inline_keyboard'].append([
-        {'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}
-    ])
-
+def show_key_detail(cfg, chat_id, user_id, key_name, msg_id=None):
+    """Детали ключа — использует единый format_key_card."""
+    token = cfg['BOT_TOKEN']
+    key = db.get_test_key(key_name) or db.get_vip_key(key_name)
+    if not key or int(key['tg_id']) != int(user_id):
+        _send(token, chat_id, "❌  Ключ не найден")
+        return
+    text, keyboard = format_key_card(cfg, key_name)
+    if not text:
+        _send(token, chat_id, "❌  Ошибка")
+        return
     if msg_id:
         _edit(token, chat_id, msg_id, text, keyboard)
     else:
         _send(token, chat_id, text, keyboard)
-    # Автоотправка .dark файлов при открытии карточки активного ключа
-    if is_active:
-        try:
-            send_dark_files_all_nodes(cfg, chat_id, user_id, key_name)
-        except Exception as _e:
-            cab_log.error(f"auto send_dark on key_detail: {_e}")
-
+    # Авто-отправка .dark
+    try:
+        send_dark_files_all_nodes(cfg, chat_id, user_id, key_name)
+    except Exception as _e:
+        cab_log.error(f"auto send_dark on key_detail: {_e}")
 
 def _build_dark_url_for_key(cfg, key_name, domain=None, ws_port=None, location_name=None):
     """Возвращает darktunnel:// или None."""
