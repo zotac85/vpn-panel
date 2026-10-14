@@ -854,17 +854,22 @@ echo "OK"
         "\u2501"*20,
         "\U0001F4F2 <b>Что делать:</b>",
         "1. Удали старый конфиг из DarkTunnel",
-        "2. Нажми \u00ab\U0001F4F2 Получить конфиг\u00bb ниже",
-        "3. Импортируй новый и подключись",
+        "2. Скачай новый из сообщения ниже",
+        "3. Импортируй и подключись",
     ])
     kb = {'inline_keyboard': [
-        [{'text': '\U0001F4F2 Получить конфиг', 'callback_data': f'cab_dt:{key_name}'}],
-        [{'text': '\u2B05\uFE0F К ключу', 'callback_data': f'cab_key:{key_name}'}]
+        [{'text': '⬅️ К ключу', 'callback_data': f'cab_key:{key_name}'}],
+        [{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
     ]}
     if msg_id:
         _edit(token, chat_id, msg_id, text, kb)
     else:
         _send(token, chat_id, text, kb)
+    # Автоотправка .dark после сброса
+    try:
+        send_dark_files_all_nodes(cfg, chat_id, user_id, key_name)
+    except Exception as _e:
+        cab_log.error(f"auto send_dark on reset: {_e}")
     cab_log.info(f"Key config reset (hwid+pw): {key_name} by tg={user_id}")
 
 
@@ -1142,6 +1147,18 @@ def show_key_detail(cfg, chat_id, user_id, key_name, msg_id=None):
         return
 
     location = cfg.get('SERVER_LOCATION', '🇩🇪 Германия')
+    # Активные ноды (мастер + online)
+    _locs = []
+    try:
+        import sqlite3 as _sq
+        _con = _sq.connect("/etc/UDPCustom/vpn.db")
+        _rows = _con.execute(
+            "SELECT name FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id"
+        ).fetchall()
+        _con.close()
+        _locs = [r[0] for r in _rows]
+    except Exception as _e:
+        cab_log.error(f"key_detail locs: {_e}")
     now = int(time.time())
     created_ts = key['created_at'] or now
     exp_ts = key['expires_at'] or 0
@@ -1176,26 +1193,44 @@ def show_key_detail(cfg, chat_id, user_id, key_name, msg_id=None):
         f"⏳ Осталось:   {t}",
         f"📊 Трафик:     {traffic}",
         f"📱 Устройств:  {key['devices']}",
-        f"🌍 Локация:    {location}",
+        "",
+        "📡 <b>Доступные локации:</b>",
+    ]
+    for _l in _locs:
+        lines.append(f"  • {_l}")
+    lines += [
+        "",
+        "<b>📲 Как импортировать:</b>",
+        "",
+        "<b>Вариант 1 (через приложение):</b>",
+        "DarkTunnel → ⋮ (три точки справа) → Config → Import → File",
+        "",
+        "<b>Вариант 2 (через файл):</b>",
+        "Нажми на .dark файл → Открыть с помощью → DarkTunnel",
         "━━━━━━━━━━━━━━━━━━━━"
     ]
     text = NL.join(lines)
 
     is_active = exp_ts == 0 or exp_ts > now
     keyboard = {'inline_keyboard': []}
-    if is_active:
-        keyboard['inline_keyboard'].append([
-            {'text': '📲 Получить конфиг', 'callback_data': f'cab_dt:{key_name}'}
-        ])
     back_kind = 'cab_keys_vip' if kind == 'vip' else 'cab_keys_test'
     keyboard['inline_keyboard'].append([
         {'text': '⬅️ К ключам', 'callback_data': back_kind}
+    ])
+    keyboard['inline_keyboard'].append([
+        {'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}
     ])
 
     if msg_id:
         _edit(token, chat_id, msg_id, text, keyboard)
     else:
         _send(token, chat_id, text, keyboard)
+    # Автоотправка .dark файлов при открытии карточки активного ключа
+    if is_active:
+        try:
+            send_dark_files_all_nodes(cfg, chat_id, user_id, key_name)
+        except Exception as _e:
+            cab_log.error(f"auto send_dark on key_detail: {_e}")
 
 
 def _build_dark_url_for_key(cfg, key_name, domain=None, ws_port=None, location_name=None):
@@ -1360,7 +1395,7 @@ def send_dark_files_all_nodes(cfg, chat_id, user_id, key_name):
             fd, tmp_path = tempfile.mkstemp(suffix='.dark')
             with _os.fdopen(fd, 'w', encoding='utf-8') as f:
                 f.write(dt_url)
-            caption = "\U0001F4E5 <b>" + loc_name + "</b>\n\nСкачай и открой через DarkTunnel"
+            caption = "\U0001F4E5 <b>" + loc_name + "</b>"
             # Отправка через urllib (чтобы получить message_id для smart-удаления)
             try:
                 import urllib.request as _ur, json as _j
@@ -2158,16 +2193,37 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         show_help_video(cfg, chat_id, user_id, msg_id)
         return True
     if cb_data == 'cab_main':
-        show_cabinet(cfg, chat_id, user_id, first_name, msg_id)
+        # Удаляем сообщение, откуда нажали кнопку (чтобы не оставалось выше)
+        try:
+            _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg_id})
+        except Exception: pass
+        # Удаляем .dark файлы
+        try:
+            _smart_files_clear(token, chat_id)
+        except Exception: pass
+        # Отправляем кабинет НОВЫМ сообщением (внизу чата)
+        show_cabinet(cfg, chat_id, user_id, first_name)
         return True
     if cb_data == 'cab_keys':
-        show_my_keys(cfg, chat_id, user_id, 'all', msg_id)
+        try: _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg_id})
+        except Exception: pass
+        try: _smart_files_clear(token, chat_id)
+        except Exception: pass
+        show_my_keys(cfg, chat_id, user_id, 'all')
         return True
     if cb_data == 'cab_keys_test':
-        show_my_keys(cfg, chat_id, user_id, 'test', msg_id)
+        try: _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg_id})
+        except Exception: pass
+        try: _smart_files_clear(token, chat_id)
+        except Exception: pass
+        show_my_keys(cfg, chat_id, user_id, 'test')
         return True
     if cb_data == 'cab_keys_vip':
-        show_my_keys(cfg, chat_id, user_id, 'vip', msg_id)
+        try: _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg_id})
+        except Exception: pass
+        try: _smart_files_clear(token, chat_id)
+        except Exception: pass
+        show_my_keys(cfg, chat_id, user_id, 'vip')
         return True
     if cb_data == 'cab_buy_vip':
         try:

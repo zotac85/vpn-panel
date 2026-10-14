@@ -6343,7 +6343,14 @@ def main():
                 elif text.startswith('/deladmin'): handle_deladmin(cfg, chat_id, user_id, text[9:].strip())
                 elif text.startswith('/autopost'): handle_autopost(cfg, chat_id, user_id, text[9:].strip())
                 elif text.startswith('/restart'): handle_restart(cfg, chat_id, user_id, text[8:].strip())
-                elif text == '\U0001F464 Кабинет' or text.startswith('/cabinet'): show_cabinet(cfg, chat_id, user_id, first_name)
+                elif text == '\U0001F464 Кабинет' or text.startswith('/cabinet'):
+                    # Удаляем ранее отправленные .dark файлы
+                    try:
+                        from bot_modules.cabinet import _smart_files_clear as _sfc
+                        _sfc(cfg['BOT_TOKEN'], chat_id)
+                    except Exception as _e:
+                        log.error(f"clear dark on /cabinet: {_e}")
+                    show_cabinet(cfg, chat_id, user_id, first_name)
                 elif text == '\u2699\uFE0F Админка' or text.startswith('/admin'): show_admin_panel(cfg, chat_id, user_id)
                 elif text == '\U0001F381 Помощь' or text.startswith('/help'): handle_help(cfg, chat_id)
         except KeyboardInterrupt: log.info("Остановка"); break
