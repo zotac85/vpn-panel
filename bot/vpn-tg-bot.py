@@ -5216,6 +5216,37 @@ def main():
                         except Exception as _e:
                             log.error(f"show_vip_final_confirm (skip): {_e}")
                         continue
+                    elif cb_data.startswith('cab_key_extend:'):
+                        _login = cb_data.split(':', 1)[1]
+                        try:
+                            from bot_modules.cabinet import show_extend_tariffs as _set
+                            _set(cfg, cb['message']['chat']['id'], cb_user_id, _login, cb['message']['message_id'])
+                        except Exception as _e:
+                            log.error(f'cab_key_extend: {_e}')
+                        continue
+                    elif cb_data.startswith('cab_extend_pick:'):
+                        _parts = cb_data.split(':')
+                        _login = _parts[1]
+                        try: _tid = int(_parts[2])
+                        except: _tid = 1
+                        try:
+                            from bot_modules.cabinet import show_extend_confirm as _sec
+                            _sec(cfg, cb['message']['chat']['id'], cb_user_id, _login, _tid, cb['message']['message_id'])
+                        except Exception as _e:
+                            log.error(f'cab_extend_pick: {_e}')
+                        continue
+                    elif cb_data.startswith('cab_extend_pay:'):
+                        _parts = cb_data.split(':')
+                        _login = _parts[1]
+                        try: _tid = int(_parts[2])
+                        except: _tid = 1
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': '💎 Продлеваю...'})
+                        try:
+                            from bot_modules.cabinet import do_key_extend as _dke
+                            _dke(cfg, cb['message']['chat']['id'], cb_user_id, _login, _tid, cb['message']['message_id'])
+                        except Exception as _e:
+                            log.error(f'cab_extend_pay: {_e}')
+                        continue
                     elif cb_data.startswith('cab_vip_confirm:'):
                         try:
                             idx = int(cb_data.split(':', 1)[1])

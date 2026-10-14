@@ -523,14 +523,17 @@ def show_my_keys(cfg, chat_id, user_id, kind='all', msg_id=None):
             {'text': f"🎁 Тестовые ({len(test_keys)})", 'callback_data': 'cab_keys_test'},
             {'text': f"💎 VIP ({len(vip_keys)})", 'callback_data': 'cab_keys_vip'}
         ])
-        # Кнопки: ключ + сброс пароля + удалить в одном ряду
+        # Кнопки: ключ + сброс пароля + продлить (VIP) + удалить
         for kk, k in items[:10]:
             icon = "💎" if kk == 'vip' else "🎁"
-            keyboard['inline_keyboard'].append([
+            row = [
                 {'text': f"{icon} {k['login']}", 'callback_data': f"cab_key:{k['login']}"},
-                {'text': '🔄', 'callback_data': f"cab_key_reset:{k['login']}"},
-                {'text': '🗑', 'callback_data': f"cab_key_del:{k['login']}"}
-            ])
+                {'text': '🔄', 'callback_data': f"cab_key_reset:{k['login']}"}
+            ]
+            if kk == 'vip':
+                row.append({'text': '⏰', 'callback_data': f"cab_key_extend:{k['login']}"})
+            row.append({'text': '🗑', 'callback_data': f"cab_key_del:{k['login']}"})
+            keyboard['inline_keyboard'].append(row)
     keyboard['inline_keyboard'].append([
         {'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}
     ])
@@ -951,6 +954,179 @@ def show_key_delete_confirm(cfg, chat_id, user_id, key_name, msg_id=None):
     else:
         _send(token, chat_id, text, kb)
 
+
+def show_extend_tariffs(cfg, chat_id, user_id, key_name, msg_id=None):
+    """Экран выбора тарифа для продления VIP-ключа."""
+    token = cfg['BOT_TOKEN']
+    key = db.get_vip_key(key_name)
+    if not key or int(key['tg_id']) != int(user_id):
+        _send(token, chat_id, "\u274C Ключ не найден")
+        return
+    tariffs = _parse_vip_tariffs(cfg)
+    if not tariffs:
+        _send(token, chat_id, "\u274C Тарифы не настроены")
+        return
+    balance = db.get_balance(user_id)
+    NL = chr(10)
+    lines = [
+        "\U0001F48E <b>ПРОДЛЕНИЕ КЛЮЧА</b>",
+        "\u2501"*20,
+        "",
+        f"\U0001F511 Ключ: <code>{key_name}</code>",
+        f"\U0001F4B0 Баланс: <b>{balance:.2f} USDT</b>",
+        "",
+        "\u2501"*20,
+        "Выбери тариф для продления:",
+        "",
+        "<i>Срок и трафик добавятся к текущим,</i>",
+        "<i>устройств — по новому тарифу.</i>",
+    ]
+    text = NL.join(lines)
+    kb_rows = []
+    for i, t in enumerate(tariffs, 1):
+        btn = f"\U0001F48E +{t['days']}д · {t['gb']}ГБ · {t['devices']}устр · {t['price']:.2f}$"
+        kb_rows.append([{'text': btn, 'callback_data': f'cab_extend_pick:{key_name}:{i}'}])
+    kb_rows.append([{'text': '\u2B05\uFE0F Отмена', 'callback_data': f'cab_key:{key_name}'}])
+    kb = {'inline_keyboard': kb_rows}
+    if msg_id:
+        _edit(token, chat_id, msg_id, text, kb)
+    else:
+        _send(token, chat_id, text, kb)
+
+def show_extend_confirm(cfg, chat_id, user_id, key_name, tariff_idx, msg_id=None):
+    """Подтверждение продления."""
+    token = cfg['BOT_TOKEN']
+    key = db.get_vip_key(key_name)
+    if not key or int(key['tg_id']) != int(user_id):
+        _send(token, chat_id, "\u274C Ключ не найден")
+        return
+    tariffs = _parse_vip_tariffs(cfg)
+    if not tariffs or tariff_idx < 1 or tariff_idx > len(tariffs):
+        _send(token, chat_id, "\u274C Тариф не найден")
+        return
+    t = tariffs[tariff_idx - 1]
+    balance = db.get_balance(user_id)
+    if balance < t['price']:
+        _send(token, chat_id, f"\u274C Недостаточно средств. Нужно {t['price']:.2f} USDT, у тебя {balance:.2f}")
+        return
+    now = int(time.time())
+    cur_exp = key.get('expires_at') or 0
+    cur_used = key.get('traffic_used') or 0
+    cur_limit = key.get('traffic_limit') or 0
+    new_exp = (cur_exp if cur_exp > now else now) + int(t['days']) * 86400
+    new_limit = int(t['gb']) * 1073741824
+    NL = chr(10)
+    from datetime import datetime as _dt
+    lines = [
+        "\U0001F48E <b>ПОДТВЕРДИ ПРОДЛЕНИЕ</b>",
+        "\u2501"*20,
+        "",
+        f"\U0001F511 Ключ: <code>{key_name}</code>",
+        f"\U0001F4E6 Тариф: <b>+{t['days']}д · {t['gb']}ГБ · {t['devices']}устр</b>",
+        f"\U0001F4B5 Цена: <b>{t['price']:.2f} USDT</b>",
+        f"\U0001F4B0 Баланс: <b>{balance:.2f} USDT</b>",
+        "",
+        "\u2501"*20,
+        "<b>Что изменится:</b>",
+        "",
+        f"\u23F0 Срок: <code>{_dt.fromtimestamp(cur_exp).strftime('%d.%m.%Y') if cur_exp else '—'}</code> \u2192 <code>{_dt.fromtimestamp(new_exp).strftime('%d.%m.%Y')}</code>",
+        f"\U0001F4CA Лимит трафика: <code>{_human_bytes(cur_limit)}</code> \u2192 <code>{_human_bytes(new_limit)}</code>",
+        f"\U0001F4F1 Устройств: <code>{key.get('devices',1)}</code> \u2192 <code>{t['devices']}</code>",
+        "",
+        f"<i>Использовано трафика сохранится ({_human_bytes(cur_used)})</i>",
+    ]
+    text = NL.join(lines)
+    kb = {'inline_keyboard': [
+        [{'text': f'\u2705 Оплатить {t['price']:.2f} USDT', 'callback_data': f'cab_extend_pay:{key_name}:{tariff_idx}'}],
+        [{'text': '\u2B05\uFE0F Отмена', 'callback_data': f'cab_key:{key_name}'}]
+    ]}
+    if msg_id:
+        _edit(token, chat_id, msg_id, text, kb)
+    else:
+        _send(token, chat_id, text, kb)
+
+def do_key_extend(cfg, chat_id, user_id, key_name, tariff_idx, msg_id=None):
+    """Выполняет продление VIP-ключа."""
+    token = cfg['BOT_TOKEN']
+    key = db.get_vip_key(key_name)
+    if not key or int(key['tg_id']) != int(user_id):
+        _send(token, chat_id, "\u274C Ключ не найден")
+        return
+    tariffs = _parse_vip_tariffs(cfg)
+    if not tariffs or tariff_idx < 1 or tariff_idx > len(tariffs):
+        _send(token, chat_id, "\u274C Тариф не найден")
+        return
+    t = tariffs[tariff_idx - 1]
+    balance = db.get_balance(user_id)
+    if balance < t['price']:
+        _send(token, chat_id, f"\u274C Недостаточно средств")
+        return
+    # Списываем
+    try:
+        db.add_balance(user_id, -t['price'], method='purchase',
+                       meta={'tariff': f'extend_{t["days"]}d', 'key': key_name})
+    except Exception as e:
+        cab_log.error(f"extend balance charge: {e}")
+        _send(token, chat_id, f"\u274C Ошибка списания: {e}")
+        return
+    now = int(time.time())
+    cur_exp = key.get('expires_at') or 0
+    cur_used = key.get('traffic_used') or 0
+    new_exp = (cur_exp if cur_exp > now else now) + int(t['days']) * 86400
+    new_limit = int(t['gb']) * 1073741824
+    # Обновляем БД
+    try:
+        db.execute(
+            "UPDATE vip_keys SET expires_at=?, traffic_limit=?, devices=?, tariff=? WHERE login=?",
+            (new_exp, new_limit, int(t['devices']), f"vip_{t['days']}d", key_name)
+        )
+    except Exception as e:
+        cab_log.error(f"extend DB update: {e}")
+    # Обновляем Linux-юзера (срок, лимиты, iptables) — через rotate
+    try:
+        new_pw = rotate_key_password(key_name)
+    except Exception as e:
+        cab_log.error(f"extend rotate: {e}")
+        new_pw = None
+    # Обновляем срок в expire_ts и chage
+    import subprocess as _sp
+    try:
+        _sp.run(['bash', '-c',
+            f'echo {new_exp} > /etc/UDPCustom/expire_ts/{key_name}; '
+            f'echo {new_limit} > /etc/UDPCustom/traffic_limits/{key_name}; '
+            f'echo {t["devices"]} > /etc/UDPCustom/limits/{key_name}; '
+            f'sed -i "/^{key_name}[[:space:]]\+hard[[:space:]]\+maxlogins/d" /etc/security/limits.conf; '
+            f'echo "{key_name} hard maxlogins {t["devices"]}" >> /etc/security/limits.conf; '
+            f'chage -E $(date -d "@{new_exp + 172800}" +%Y-%m-%d) {key_name}'
+        ], capture_output=True, timeout=15)
+    except Exception as e:
+        cab_log.error(f"extend linux update: {e}")
+    # Уведомление юзеру
+    NL = chr(10)
+    from datetime import datetime as _dt
+    _txt = NL.join([
+        "\u2705 <b>КЛЮЧ ПРОДЛЁН</b>",
+        "\u2501"*20,
+        "",
+        f"\U0001F511 Ключ: <code>{key_name}</code>",
+        f"\U0001F4E6 Тариф: <b>+{t['days']}д · {t['gb']}ГБ · {t['devices']}устр</b>",
+        f"\U0001F4B5 Списано: <b>{t['price']:.2f} USDT</b>",
+        f"\U0001F4B0 Баланс: <b>{db.get_balance(user_id):.2f} USDT</b>",
+        "",
+        f"\u23F0 Новый срок до: <code>{_dt.fromtimestamp(new_exp).strftime('%d.%m.%Y %H:%M')}</code>",
+        "",
+        "\U0001F513 Твой конфиг остаётся действительным,",
+        "если нужен новый пароль — пересоздай конфиг.",
+    ])
+    kb = {'inline_keyboard': [
+        [{'text': '\U0001F4F2 Получить конфиг', 'callback_data': f'cab_dt:{key_name}'}],
+        [{'text': '\u2B05\uFE0F К ключу', 'callback_data': f'cab_key:{key_name}'}]
+    ]}
+    if msg_id:
+        _edit(token, chat_id, msg_id, _txt, kb)
+    else:
+        _send(token, chat_id, _txt, kb)
+    cab_log.info(f"VIP extended {key_name} by user {user_id}: +{t['days']}d/{t['gb']}GB/{t['devices']}dev")
 
 def show_key_detail(cfg, chat_id, user_id, key_name, msg_id=None):
     """Детали ключа (из БД)"""
