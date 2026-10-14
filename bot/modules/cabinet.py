@@ -1262,6 +1262,41 @@ def _build_dark_url_for_key(cfg, key_name, domain=None, ws_port=None, location_n
     return None, None
 
 
+SMART_FILES_DIR = "/etc/UDPCustom/smart_files"
+
+def _smart_files_clear(token, chat_id):
+    """Удаляет все ранее отправленные .dark файлы бота в этом чате."""
+    import os as _os
+    path = f"{SMART_FILES_DIR}/{chat_id}"
+    if not _os.path.exists(path):
+        return
+    try:
+        with open(path) as f:
+            ids = [int(x.strip()) for x in f if x.strip().isdigit()]
+        for mid in ids:
+            try:
+                import urllib.request as _ur, urllib.parse as _up, json as _j
+                url = f"https://api.telegram.org/bot{token}/deleteMessage"
+                data = _up.urlencode({'chat_id': chat_id, 'message_id': mid}).encode()
+                req = _ur.Request(url, data=data)
+                _ur.urlopen(req, timeout=5).read()
+            except Exception:
+                pass
+        _os.remove(path)
+    except Exception as e:
+        cab_log.error(f"_smart_files_clear: {e}")
+
+def _smart_files_save(chat_id, msg_id):
+    """Сохраняет ID файла в список для удаления при следующей отправке."""
+    import os as _os
+    try:
+        _os.makedirs(SMART_FILES_DIR, exist_ok=True)
+        path = f"{SMART_FILES_DIR}/{chat_id}"
+        with open(path, 'a') as f:
+            f.write(f"{msg_id}\n")
+    except Exception as e:
+        cab_log.error(f"_smart_files_save: {e}")
+
 def send_dark_files_all_nodes(cfg, chat_id, user_id, key_name):
     """Отправляет .dark для каждой активной ноды (мастер + online-ноды).
     Возвращает список названий локаций, куда отправка прошла успешно."""
@@ -1298,6 +1333,11 @@ def send_dark_files_all_nodes(cfg, chat_id, user_id, key_name):
         _send(token, chat_id, "\u274C  Нет доступных нод")
         return []
 
+    # Удаляем предыдущие .dark файлы этого чата
+    try:
+        _smart_files_clear(token, chat_id)
+    except Exception as _e:
+        cab_log.error(f"clear prev dark: {_e}")
     sent = []
     for loc_name, dom, port in nodes:
         try:
@@ -1321,17 +1361,35 @@ def send_dark_files_all_nodes(cfg, chat_id, user_id, key_name):
             with _os.fdopen(fd, 'w', encoding='utf-8') as f:
                 f.write(dt_url)
             caption = "\U0001F4E5 <b>" + loc_name + "</b>\n\nСкачай и открой через DarkTunnel"
-            cmd = [
-                'curl', '-s', '-X', 'POST',
-                f'https://api.telegram.org/bot{token}/sendDocument',
-                '-F', f'chat_id={chat_id}',
-                '-F', f'document=@{tmp_path};filename={fname}',
-                '-F', f'caption={caption}',
-                '-F', 'parse_mode=HTML',
-            ]
-            subprocess.run(cmd, capture_output=True, timeout=30)
+            # Отправка через urllib (чтобы получить message_id для smart-удаления)
+            try:
+                import urllib.request as _ur, json as _j
+                with open(tmp_path, 'rb') as _f:
+                    _file_data = _f.read()
+                _bnd = '----SmartDark' + _ss.token_hex(8)
+                _body = b''
+                _body += f'--{_bnd}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n{chat_id}\r\n'.encode('utf-8')
+                _body += f'--{_bnd}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n{caption}\r\n'.encode('utf-8')
+                _body += f'--{_bnd}\r\nContent-Disposition: form-data; name="parse_mode"\r\n\r\nHTML\r\n'.encode('utf-8')
+                _body += f'--{_bnd}\r\nContent-Disposition: form-data; name="document"; filename="{fname}"\r\nContent-Type: application/octet-stream\r\n\r\n'.encode('utf-8')
+                _body += _file_data + b'\r\n'
+                _body += f'--{_bnd}--\r\n'.encode('utf-8')
+                _req = _ur.Request(
+                    f"https://api.telegram.org/bot{token}/sendDocument",
+                    data=_body,
+                    headers={'Content-Type': f'multipart/form-data; boundary={_bnd}'}
+                )
+                with _ur.urlopen(_req, timeout=35) as _r:
+                    _resp = _j.loads(_r.read().decode('utf-8'))
+                if _resp and _resp.get('ok'):
+                    _mid = _resp['result']['message_id']
+                    _smart_files_save(chat_id, _mid)
+                    cab_log.info(f"dark file sent: {fname} ({loc_name}) mid={_mid}")
+                else:
+                    cab_log.error(f"send dark fail: {_resp}")
+            except Exception as _e:
+                cab_log.error(f"send dark urllib: {_e}")
             sent.append(loc_name)
-            cab_log.info(f"dark file sent: {fname} ({loc_name})")
             try: _os.remove(tmp_path)
             except: pass
         except Exception as e:
@@ -1364,29 +1422,11 @@ def show_darktunnel_url(cfg, chat_id, user_id, key_name, msg_id=None):
     except Exception as e:
         cab_log.error(f"show_darktunnel_url nodes: {e}")
 
-    NL = chr(10)
-    lines = [
-        "\U0001F4F2 <b>КОНФИГ DarkTunnel</b>",
-        "\u2501"*20,
-        "",
-        "<b>\U0001F4E5 Твои конфиги:</b>",
-    ]
-    for loc in locs:
-        lines.append(f"  \u2022 {loc}")
-    lines += [
-        "",
-        "<i>Открой DarkTunnel \u2192 \u2795 \u2192 Import \u2192 File</i>",
-    ]
-    text = NL.join(lines)
-    keyboard = {'inline_keyboard': [
-        [{'text': '\U0001F4E5 Отправить .dark заново', 'callback_data': f'cab_darkfile:{key_name}'}],
-        [{'text': '\U0001F5D1 Удалить сообщение', 'callback_data': f'cab_delmsg:{key_name}'}]
-    ]}
-    _send(token, chat_id, text, keyboard)
-
-    # Отправляем .dark файлы со всех нод
+    # Сразу отправляем .dark файлы со всех нод (без промежуточного сообщения)
     try:
         send_dark_files_all_nodes(cfg, chat_id, user_id, key_name)
+    except Exception as _e:
+        cab_log.error(f"auto send_dark_files: {_e}")
     except Exception as _e:
         cab_log.error(f"auto send_dark_files: {_e}")
 

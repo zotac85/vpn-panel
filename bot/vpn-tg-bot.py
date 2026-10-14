@@ -88,6 +88,35 @@ def tg_send_document(token, chat_id, file_path, caption=None):
 
 SMART_DIR = "/etc/UDPCustom/smart_chat"
 
+SMART_FILES_DIR = "/etc/UDPCustom/smart_files"
+
+def smart_files_save(chat_id, msg_id):
+    """Сохраняет ID отправленного файла в список."""
+    try:
+        os.makedirs(SMART_FILES_DIR, exist_ok=True)
+        path = f"{SMART_FILES_DIR}/{chat_id}"
+        with open(path, 'a') as f:
+            f.write(f"{msg_id}\n")
+    except Exception as e:
+        log.error(f"smart_files_save: {e}")
+
+def smart_files_clear(token, chat_id):
+    """Удаляет все ранее отправленные файлы бота в этом чате."""
+    path = f"{SMART_FILES_DIR}/{chat_id}"
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path) as f:
+            ids = [int(x.strip()) for x in f if x.strip().isdigit()]
+        for mid in ids:
+            try:
+                tg_request(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': mid})
+            except Exception:
+                pass
+        os.remove(path)
+    except Exception as e:
+        log.error(f"smart_files_clear: {e}")
+
 def smart_send(token, chat_id, text, reply_markup=None, parse_mode='HTML'):
     """Отправляет сообщение, удаляя предыдущее сообщение бота в этом чате."""
     try:
@@ -677,6 +706,16 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
             'reply_markup': {'remove_keyboard': True},
         })
     except: pass
+    # Удаляем предыдущее welcome-сообщение (если было)
+    _old_wf = f'/etc/UDPCustom/welcome_msgs/{user_id}'
+    if os.path.exists(_old_wf):
+        try:
+            with open(_old_wf) as _f:
+                _old_id = int(_f.read().strip())
+            tg_request(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': _old_id})
+        except: pass
+        try: os.remove(_old_wf)
+        except: pass
     result = smart_send(token, chat_id, text, reply_markup=keyboard, parse_mode='HTML')
     if result and result.get('ok'):
         msg_id = result['result']['message_id']
@@ -686,18 +725,7 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
             with open(f'{welcome_dir}/{user_id}', 'w') as f:
                 f.write(str(msg_id))
         except: pass
-        import threading
-        def _auto_del():
-            import time as _t
-            _t.sleep(600)
-            if os.path.exists(f'{welcome_dir}/{user_id}'):
-                try:
-                    with open(f'{welcome_dir}/{user_id}') as f:
-                        saved_id = int(f.read().strip())
-                    tg_request(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': saved_id})
-                    os.remove(f'{welcome_dir}/{user_id}')
-                except: pass
-        threading.Thread(target=_auto_del, daemon=True).start()
+        # Авто-удаление отключено (welcome удаляется при выдаче теста)
 
 
 def _has_username(token, user_id):
@@ -806,9 +834,9 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None, hwid=None):
             _kb = {'inline_keyboard': [
                 [{'text': '\u27A1\uFE0F Пропустить', 'callback_data': 'test_hwid_skip'}]
             ]}
-            send_message(token, chat_id, _hw_msg, parse_mode='HTML', reply_markup=_kb)
+            smart_send(token, chat_id, _hw_msg, reply_markup=_kb, parse_mode='HTML')
         else:
-            send_message(token, chat_id, _hw_msg, parse_mode='HTML')
+            smart_send(token, chat_id, _hw_msg, parse_mode='HTML')
         return
     username, password = create_test_user(cfg, user_id, hwid=hwid)
     if not username:
@@ -869,22 +897,15 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None, hwid=None):
         try:
             with open(welcome_file) as f:
                 w_id = int(f.read().strip())
-            # Новая клавиатура без "Получить тест"
-            new_kb = {'inline_keyboard': [
-                [{'text': '🔑 Мой ключ', 'callback_data': 'mykey'}],
-            ]}
-            # Сохраняем админ-кнопки
-            admin_id = cfg.get('ADMIN_ID', '')
-            tg_request(token, 'editMessageReplyMarkup', {
+            # Удаляем welcome-сообщение полностью
+            tg_request(token, 'deleteMessage', {
                 'chat_id': chat_id,
-                'message_id': w_id,
-                'reply_markup': new_kb
+                'message_id': w_id
             })
             os.remove(welcome_file)
         except: pass
     
     kb_test = {'inline_keyboard': [
-        [{'text': '📲 Получить конфиг', 'callback_data': f'cab_dt:{username}'}],
         [{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
     ]}
     smart_send(token, chat_id, text, reply_markup=kb_test, parse_mode="HTML")
@@ -2623,9 +2644,9 @@ def handle_channel_test(cfg, user_id, first_name, hwid=None):
             _kb = {'inline_keyboard': [
                 [{'text': '\u27A1\uFE0F Пропустить', 'callback_data': 'test_hwid_skip'}]
             ]}
-            tg_request(token, 'sendMessage', {'chat_id': user_id, 'text': _hw_msg, 'parse_mode': 'HTML', 'reply_markup': _kb})
+            smart_send(token, user_id, _hw_msg, reply_markup=_kb, parse_mode='HTML')
         else:
-            tg_request(token, 'sendMessage', {'chat_id': user_id, 'text': _hw_msg, 'parse_mode': 'HTML'})
+            smart_send(token, user_id, _hw_msg, parse_mode='HTML')
         return
     username, password = create_test_user(cfg, user_id, hwid=hwid)
     if not username:
@@ -2697,17 +2718,17 @@ def handle_channel_test(cfg, user_id, first_name, hwid=None):
         try:
             with open(welcome_file) as f:
                 w_id = int(f.read().strip())
-            new_kb = {'inline_keyboard': [
-                [{'text': '🔑 Мой ключ', 'callback_data': 'mykey'}],
-            ]}
-            tg_request(token, 'editMessageReplyMarkup', {
+            # Удаляем welcome-сообщение полностью
+            tg_request(token, 'deleteMessage', {
                 'chat_id': user_id,
-                'message_id': w_id,
-                'reply_markup': new_kb
+                'message_id': w_id
             })
             os.remove(welcome_file)
         except: pass
-    send_message_ttl(token, user_id, text, ttl=1800, parse_mode='HTML')
+    kb_ch_test = {'inline_keyboard': [
+        [{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
+    ]}
+    smart_send(token, user_id, text, reply_markup=kb_ch_test, parse_mode='HTML')
     # Авто-отправка .dark файла (если конфиг зашифрован)
     try:
         if dt_url and dt_url.startswith('darktunnel://'):
@@ -4474,7 +4495,7 @@ def handle_mykey(cfg, chat_id, user_id):
     if dt_url:
         text += f"\n🔗 <b>Ссылка-конфиг:</b>\n<code>{dt_url}</code>"
     
-    send_message_ttl(token, chat_id, text, ttl=1800, parse_mode='HTML')
+    smart_send(token, chat_id, text, parse_mode='HTML')
 
 
 def main():
