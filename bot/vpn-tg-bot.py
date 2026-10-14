@@ -1021,6 +1021,120 @@ def _ref_test_bonus(cfg, invited_id):
     except: pass
 
 
+def show_admin_vip_del_confirm(cfg, chat_id, user_id, key_login, msg_id=None):
+    """Подтверждение удаления VIP-ключа из админки."""
+    token = cfg['BOT_TOKEN']
+    if not is_admin(cfg, user_id):
+        return
+    try:
+        from bot_modules import db as _db
+    except Exception as e:
+        send_message(token, chat_id, f"❌ DB err: {e}")
+        return
+    key = _db.get_vip_key(key_login)
+    if not key:
+        send_message(token, chat_id, "❌ Ключ не найден")
+        return
+    NL = chr(10)
+    _tgid = key.get('tg_id') or 0
+    _tgun = ""
+    try:
+        u = _db.get_user(_tgid) or {}
+        if u.get('username'): _tgun = f"@{u['username']}"
+        elif u.get('first_name'): _tgun = u['first_name']
+    except Exception: pass
+    txt = NL.join([
+        "🗑 <b>УДАЛИТЬ VIP-КЛЮЧ?</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        f"🔑 Логин: <code>{key_login}</code>",
+        f"👤 Юзер: {_tgun or _tgid}",
+        "",
+        "⚠️ <b>Внимание!</b>",
+        "• Ключ будет удалён с мастера и всех нод",
+        "• Юзер потеряет доступ к серверу",
+        "• Возврат баланса <b>НЕ производится</b>",
+        "",
+        "Это действие нельзя отменить.",
+    ])
+    kb = {'inline_keyboard': [
+        [{'text': '✅ Удалить окончательно', 'callback_data': f"adm_vip_delok:{key_login}"}],
+        [{'text': '⬅️ Отмена', 'callback_data': f"adm_vip_key:{key_login}"}]
+    ]}
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': txt, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, txt, reply_markup=kb, parse_mode='HTML')
+
+def _do_admin_vip_delete(cfg, chat_id, user_id, key_login, msg_id=None):
+    """Удаляет VIP-ключ полностью (мастер + ноды). Без возврата баланса."""
+    token = cfg['BOT_TOKEN']
+    if not is_admin(cfg, user_id):
+        return
+    try:
+        from bot_modules import db as _db
+    except Exception as e:
+        send_message(token, chat_id, f"❌ DB err: {e}")
+        return
+    key = _db.get_vip_key(key_login)
+    if not key:
+        send_message(token, chat_id, "❌ Ключ не найден")
+        return
+    _tgid = key.get('tg_id') or 0
+    # Удаляем Linux-юзера на мастере
+    import subprocess as _sp
+    try:
+        _sp.run(['userdel', '-f', key_login], capture_output=True, timeout=10)
+    except Exception as e:
+        log.error(f"admin userdel {key_login}: {e}")
+    # Удаляем на нодах
+    try:
+        sync_res = nc.sync_user_to_all_nodes(key_login, "", action="del")
+        for node_name, (ok, msg) in sync_res.items():
+            log.info(f"admin del {key_login} -> {node_name}: {'OK' if ok else 'FAIL'} {msg}")
+    except Exception as e:
+        log.error(f"admin Node sync del failed {key_login}: {e}")
+    # Чистим файлы
+    for p in [f"/etc/UDPCustom/limits/{key_login}",
+              f"/etc/UDPCustom/expire_ts/{key_login}",
+              f"/etc/UDPCustom/traffic/{key_login}",
+              f"/etc/UDPCustom/traffic_limits/{key_login}",
+              f"/etc/UDPCustom/passwords/{key_login}"]:
+        try:
+            if os.path.exists(p): os.remove(p)
+        except Exception: pass
+    try:
+        _sp.run(['sed', '-i', f'/^{key_login}$/d', '/etc/UDPCustom/users.db'], capture_output=True)
+    except Exception: pass
+    try:
+        _sp.run(['sed', '-i', f'/^{key_login} .*maxlogins/d', '/etc/security/limits.conf'], capture_output=True)
+    except Exception: pass
+    # Удаляем из БД
+    try:
+        _db.execute("DELETE FROM vip_keys WHERE login=?", (key_login,))
+    except Exception as e:
+        log.error(f"admin DB delete {key_login}: {e}")
+    # Уведомляем юзера
+    if _tgid:
+        try:
+            _umsg = (f"🗑 <b>Твой ключ удалён администратором</b>{chr(10)}"
+                     f"━━━━━━━━━━━━━━━━━━━━{chr(10)}"
+                     f"🔑 Ключ: <code>{key_login}</code>{chr(10)}"
+                     f"{chr(10)}"
+                     f"Если это ошибка — обратись в поддержку.")
+            tg_request(token, 'sendMessage', {'chat_id': _tgid, 'text': _umsg, 'parse_mode': 'HTML'})
+        except Exception: pass
+    # Показываем успех
+    _txt = (f"✅ <b>КЛЮЧ УДАЛЁН</b>{chr(10)}"
+            f"━━━━━━━━━━━━━━━━━━━━{chr(10)}"
+            f"🔑 <code>{key_login}</code>")
+    _kb = {'inline_keyboard': [[
+        {'text': '⬅️ К VIP-ключам', 'callback_data': 'adm_users_vip:1'}
+    ]]}
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': _txt, 'parse_mode': 'HTML', 'reply_markup': _kb})
+    else:
+        smart_send(token, chat_id, _txt, reply_markup=_kb, parse_mode='HTML')
+
 def _do_key_delete(cfg, cb, tg_id, key_name):
     """Удаляет ключ: userdel + чистка файлов + возврат баланса для VIP."""
     token = cfg['BOT_TOKEN']
@@ -5223,7 +5337,13 @@ def main():
                         continue
                     elif cb_data.startswith('adm_vip_del:'):
                         _login = cb_data.split(':', 1)[1]
-                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': '⚠️ Удаление пока не реализовано, делай через панель vpn', 'show_alert': True})
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        show_admin_vip_del_confirm(cfg, cb['message']['chat']['id'], cb_user_id, _login, cb['message']['message_id'])
+                        continue
+                    elif cb_data.startswith('adm_vip_delok:'):
+                        _login = cb_data.split(':', 1)[1]
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': '🗑 Удаляю...'})
+                        _do_admin_vip_delete(cfg, cb['message']['chat']['id'], cb_user_id, _login, cb['message']['message_id'])
                         continue
                     elif cb_data.startswith('adm_users_tg:'):
                         try:
