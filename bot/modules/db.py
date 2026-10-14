@@ -743,6 +743,14 @@ def _run_migrations():
                     db_log.info(f"migrate: added hwid to {_tbl}")
             except Exception as _me:
                 db_log.warning(f"migrate {_tbl}.hwid: {_me}")
+        # vip_keys.hwid_locked
+        try:
+            _vcols = [r['name'] for r in query("PRAGMA table_info(vip_keys)")]
+            if "hwid_locked" not in _vcols:
+                execute("ALTER TABLE vip_keys ADD COLUMN hwid_locked INTEGER DEFAULT 1")
+                db_log.info("migrate: added hwid_locked to vip_keys")
+        except Exception as _me:
+            db_log.warning(f"migrate vip_keys.hwid_locked: {_me}")
     except Exception as _e:
         db_log.error(f"_run_migrations: {_e}")
 
