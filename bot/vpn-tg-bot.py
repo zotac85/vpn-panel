@@ -5184,7 +5184,7 @@ def main():
                                              f"🔐 Новый пароль: <code>{_new_pw or '?'}</code>{chr(10)}"
                                              f"{chr(10)}"
                                              f"⚠️ <b>Старый конфиг больше не работает!</b>{chr(10)}"
-                                             f"Скачай новый: <b>Личный кабинет → Мои ключи → 📄 DarkTunnel</b>{chr(10)}"
+                                             f"Пересоздай: <b>Личный кабинет → Мои ключи → 🔄 Обновить</b>{chr(10)}"
                                              f"{chr(10)}"
                                              f"Теперь доступно до {_k.get('devices',1)} устройств.")
                                     tg_request(cfg['BOT_TOKEN'], 'sendMessage', {'chat_id': _tg, 'text': _umsg, 'parse_mode': 'HTML'})
@@ -5211,7 +5211,7 @@ def main():
                                              f"🔐 Новый пароль: <code>{_new_pw or '?'}</code>{chr(10)}"
                                              f"{chr(10)}"
                                              f"⚠️ <b>Старый конфиг больше не работает!</b>{chr(10)}"
-                                             f"Скачай новый: <b>Личный кабинет → Мои ключи → 📄 DarkTunnel</b>{chr(10)}"
+                                             f"Пересоздай: <b>Личный кабинет → Мои ключи → 🔄 Обновить</b>{chr(10)}"
                                              f"{chr(10)}"
                                              f"Конфиг будет работать только на одном устройстве (с привязкой HWID).")
                                     tg_request(cfg['BOT_TOKEN'], 'sendMessage', {'chat_id': _tg, 'text': _umsg, 'parse_mode': 'HTML'})
