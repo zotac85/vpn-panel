@@ -48,8 +48,15 @@ _nodes_check() {
 _nodes_sync_key() {
     local ip="$1" sport="$2"
     if [ ! -f "$SSH_KEY.pub" ]; then
-        echo "Нет ключа $SSH_KEY.pub. Сгенерируйте: ssh-keygen -t ed25519"
-        return 1
+        echo -e "${CYAN}Генерируем SSH-ключ мастера...${NC}"
+        mkdir -p /root/.ssh
+        chmod 700 /root/.ssh
+        ssh-keygen -t ed25519 -f "$SSH_KEY" -N "" -C "vpn-panel-master" >/dev/null 2>&1
+        if [ ! -f "$SSH_KEY.pub" ]; then
+            echo -e "${RED}Не удалось создать ключ${NC}"
+            return 1
+        fi
+        echo -e "${GREEN}✅ Ключ создан: $SSH_KEY${NC}"
     fi
     echo "Введите пароль root@$ip (один раз):"
     cat "$SSH_KEY.pub" | ssh -o StrictHostKeyChecking=no -p "$sport" root@"$ip" \
