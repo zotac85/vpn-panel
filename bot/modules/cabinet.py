@@ -857,10 +857,7 @@ echo "OK"
         "2. Скачай новый из сообщения ниже",
         "3. Импортируй и подключись",
     ])
-    kb = {'inline_keyboard': [
-        [{'text': '⬅️ К ключу', 'callback_data': f'cab_key:{key_name}'}],
-        [{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
-    ]}
+    kb = {'inline_keyboard': [[{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'}, {'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]]}
     if msg_id:
         _edit(token, chat_id, msg_id, text, kb)
     else:
