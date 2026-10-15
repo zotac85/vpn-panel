@@ -1,6 +1,7 @@
-<h5><b><font color='#FFFF00'>🚀 ArsenVipKeys</font></b>  <font color='#F0FF00'>·  📍 {location}</font></h5>
+<h5><b><font color='#FFD700'>🚀 ArsenVipKeys</font></b></h5>
+<h6><font color='#ADFF2F'>📍 {location}</font></h6>
 
-<h6><font color='#FF6666'>❌ DDOS · Взлом · Торренты · Спам · Кардинг</font></h6>
-<h6><font color='#FFAA00'>📱 {devices} устр.  ·  🚫 Нарушение = бан</font></h6>
+<h6><font color='#FF4444'>❌ DDOS · Взлом · Торренты · Спам · Кардинг</font></h6>
+<h6><font color='#FFA500'>📱 {devices} устр.  ·  🚫 Нарушение = бан</font></h6>
 
 <h6><b><a href='https://t.me/{support}'>💬 @{support}</a></b>  ·  <b><a href='https://t.me/{channel}'>📢 @{channel}</a></b></h6>
