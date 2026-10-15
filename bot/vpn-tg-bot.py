@@ -1250,10 +1250,10 @@ def _do_key_delete(cfg, cb, tg_id, key_name):
     lines.append("")
     lines.append("━━━━━━━━━━━━━━━━━━━━")
 
-    kb = {'inline_keyboard': [
-        [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'}],
-        [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
-    ]}
+    kb = {'inline_keyboard': [[
+        {'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'},
+        {'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}
+    ]]}
     tg_request(token, 'editMessageText', {
         'chat_id': chat_id,
         'message_id': msg_id,
@@ -1373,8 +1373,7 @@ def _do_vip_purchase(cfg, cb, tg_id, idx):
         "📲 Конфиг — в <b>Личном кабинете</b>"
     ])
     kb = {'inline_keyboard': [
-        [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'}],
-        [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
+        [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'}, {'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
     ]}
     tg_request(token, 'editMessageText', {
         'chat_id': chat_id,
