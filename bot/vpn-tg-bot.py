@@ -237,16 +237,6 @@ def get_test_ready_text():
     return None
 
 
-def get_test_issued_text():
-    """Текст 'тестовый доступ готов' из /etc/UDPCustom/test_issued.txt"""
-    p = '/etc/UDPCustom/test_issued.txt'
-    if os.path.exists(p):
-        try:
-            with open(p) as f:
-                t = f.read().strip()
-                if t: return t.replace('{support}', get_support())
-        except: pass
-    return None
 
 
 def get_support():
@@ -845,7 +835,6 @@ def handle_test(cfg, chat_id, user_id, first_name, cb_id=None, hwid=None):
     domain = get_domain(); ws_port = get_ws_port(); proxy = get_random_proxy()
     connect_line = f"{domain}:{ws_port}@{username}:{password}"
     traffic = cfg.get('TEST_TRAFFIC_GB','50'); devices = cfg.get('TEST_DEVICES','1')
-    # Читаем test_issued.txt (редактируемый админом)
     # Единый формат карточки ключа (как в кабинете)
     try:
         from bot_modules.cabinet import format_key_card as _fkc
@@ -1250,10 +1239,9 @@ def _do_key_delete(cfg, cb, tg_id, key_name):
     lines.append("")
     lines.append("━━━━━━━━━━━━━━━━━━━━")
 
-    kb = {'inline_keyboard': [[
-        {'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'},
-        {'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}
-    ]]}
+    kb = {'inline_keyboard': [
+        [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'}, {'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
+    ]}
     tg_request(token, 'editMessageText', {
         'chat_id': chat_id,
         'message_id': msg_id,
@@ -1970,8 +1958,6 @@ EDIT_FILES = {
     'welcome': {'file': 'welcome.txt', 'name': '👋 Приветствие', 'ph': '{name}, {channels_list}'},
     'start': {'file': 'start.txt', 'name': '📖 Как получить тест', 'ph': '{name}, {primary}, {sponsors_list}, {hours}, {gb}, {devices}, {location}, {support}'},
     'test_ready': {'file': 'test_ready.txt', 'name': '🎁 Тест доступен', 'ph': '{name}, {hours}, {gb}, {devices}, {location}'},
-    'test_issued': {'file': 'test_issued.txt', 'name': '🎉 Тест готов', 'ph': '{username}, {hours}, {gb}, {devices}'},
-    'help': {'file': 'help.txt', 'name': '🏠 Меню /help', 'ph': '{primary}'},
     'help_instruction': {'file': 'help_instruction.txt', 'name': '📲 Инструкция', 'ph': '{primary}, {support}, {hours}, {gb}, {devices}, {location}'},
     'help_faq': {'file': 'help_faq.txt', 'name': '❓  FAQ', 'ph': '{primary}, {support}, {hours}, {gb}, {devices}, {location}'},
     'vip_buy': {'file': 'vip_buy.txt', 'name': '💎 Купить VIP', 'ph': '{balance}, {tariffs}'},
