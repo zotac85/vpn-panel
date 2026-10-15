@@ -49,10 +49,22 @@ if [ -f /etc/UDPCustom/channels.txt ]; then
     [ -n "$_ch" ] && CHANNEL="$_ch"
 fi
 
+# Читаем основной бот (username через getMe)
+MAIN_BOT="bot"
+if [ -f "$BOT_CONF" ]; then
+    _tok=$(grep -E '^BOT_TOKEN=' "$BOT_CONF" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')
+    if [ -n "$_tok" ]; then
+        _resp=$(curl -sf --max-time 10 "https://api.telegram.org/bot${_tok}/getMe" 2>/dev/null)
+        if [ -n "$_resp" ]; then
+            _u=$(echo "$_resp" | grep -oP '"username"\s*:\s*"\K[^"]+' | head -1)
+            [ -n "$_u" ] && MAIN_BOT="$_u"
+        fi
+    fi
+fi
 # Обновляем из шаблона репы (если есть)
 if [ -f "$TEMPLATE" ]; then
-    # Подставляем {location}, {devices}, {support}, {channel}
-    _new=$(sed -e "s|{location}|$LOCATION|g" -e "s|{devices}|$DEVICES|g" -e "s|{support}|$SUPPORT|g" -e "s|{channel}|$CHANNEL|g" "$TEMPLATE")
+    # Подставляем {location}, {devices}, {support}, {channel}, {main_bot}
+    _new=$(sed -e "s|{location}|$LOCATION|g" -e "s|{devices}|$DEVICES|g" -e "s|{support}|$SUPPORT|g" -e "s|{channel}|$CHANNEL|g" -e "s|{main_bot}|$MAIN_BOT|g" "$TEMPLATE")
     # Сравниваем с текущим
     if [ -f "$BANNER_FILE" ]; then
         _cur=$(cat "$BANNER_FILE")
