@@ -5,8 +5,15 @@
 # ──────────────────────────────────────────────────────────────
 echo -e "\n🎨 Настройка баннера..."
 BANNER_FILE="/etc/UDPCustom/ssh_banner.txt"
-TEMPLATE="/root/vpn-panel-sync/configs/ssh_banner.txt"
 BOT_CONF="/etc/UDPCustom/bot.conf"
+REPO_URL="https://raw.githubusercontent.com/zotac85/vpn-panel/main"
+# Скачиваем свежий шаблон из GitHub (fallback — локальный репо-клон)
+TEMPLATE="/tmp/ssh_banner_template.$$"
+if ! curl -sf -o "$TEMPLATE" "$REPO_URL/configs/ssh_banner.txt"; then
+    if [ -f /root/vpn-panel-sync/configs/ssh_banner.txt ]; then
+        cp /root/vpn-panel-sync/configs/ssh_banner.txt "$TEMPLATE"
+    fi
+fi
 
 # Подключение Banner в sshd_config
 if ! grep -qE '^[[:space:]]*Banner' /etc/ssh/sshd_config; then
@@ -82,20 +89,20 @@ if [ -f "$TEMPLATE" ]; then
 else
     # Нет шаблона в репе — fallback (создаём только если пусто)
     if [ ! -s "$BANNER_FILE" ]; then
-        cat > "$BANNER_FILE" << 'BANNER_DEF'
-<h5><font color='cyan'>🚀 ArsenVipKeys — Премиум Сервер 🚀</font></h5>
-<h6><font color='red'>❌  БЕЗ DDOS</font></h6>
-<h6><font color='red'>❌  БЕЗ ВЗЛОМА</font></h6>
-<h6><font color='red'>❌  БЕЗ ТОРРЕНТОВ</font></h6>
-<h6><font color='red'>❌  БЕЗ СПАМА</font></h6>
-<h6><font color='red'>❌  БЕЗ КАРДИНГА</font></h6>
-<h6><font color='yellow'>🚫 НАРУШЕНИЕ = БАН НАВСЕГДА 🚫</font></h6>
-<h5><font color='green'>💬 Поддержка: t.me/ArsenGuro</font></h5>
-<h5><font color='cyan'>📢 Канал: t.me/ArsenVipKeys</font></h5>
-<h6><font color='lime'>✅  ПОДКЛЮЧЕНО</font></h6>
+        cat > "$BANNER_FILE" << BANNER_DEF
+<h5><b><a href='https://t.me/${CHANNEL}'>📢 Канал: @${CHANNEL}</a></b></h5>
+<h6><font color='#ADFF2F'>📍 Локация: ${LOCATION}</font></h6>
+
+<h6><font color='#FF4444'>❌ DDOS · Взлом · Торренты · Спам</font></h6>
+<h6><font color='#FFA500'>📱 ${DEVICES} устр.  ·  🚫 Нарушение = бан</font></h6>
+
+<h6><b><a href='https://t.me/${SUPPORT}'>💬 Поддержка: @${SUPPORT}</a></b></h6>
+<h6><b><a href='https://t.me/${MAIN_BOT}'>🤖 Бот: @${MAIN_BOT}</a></b></h6>
 BANNER_DEF
         echo -e "\033[0;32m✅  Баннер создан (fallback).\033[0m"
     else
         echo -e "\033[0;32m✅  Баннер уже настроен.\033[0m"
     fi
 fi
+# Чистим временный файл
+[ -f "$TEMPLATE" ] && rm -f "$TEMPLATE" 2>/dev/null || true
