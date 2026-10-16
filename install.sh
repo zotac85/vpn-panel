@@ -6,7 +6,36 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 PANEL_DIR="/usr/local/share/vpn-panel"
-REPO_URL="https://raw.githubusercontent.com/zotac85/vpn-panel/main"
+# ═══════════════════════════════════════════════════════════════
+# ПРИВАТНЫЙ РЕПОЗИТОРИЙ — клонируем через токен
+# ═══════════════════════════════════════════════════════════════
+# Токен читается из файла (создать вручную один раз):
+#   echo "github_pat_..." > /root/.vpn-panel.token
+#   chmod 600 /root/.vpn-panel.token
+TOKEN_FILE="/root/.vpn-panel.token"
+if [ ! -f "$TOKEN_FILE" ]; then
+    echo -e "\033[0;31m❌ Не найден файл токена: $TOKEN_FILE\033[0m"
+    echo -e "\033[0;33mСоздай его командой:\033[0m"
+    echo -e "  echo \"github_pat_...\" > $TOKEN_FILE"
+    echo -e "  chmod 600 $TOKEN_FILE"
+    exit 1
+fi
+GITHUB_TOKEN=$(cat "$TOKEN_FILE" | tr -d ' \n\r')
+REPO_OWNER="zotac85"
+REPO_NAME="vpn-panel"
+SRC_DIR="/tmp/vpn-panel-src-$$"
+[ -d "$SRC_DIR" ] && rm -rf "$SRC_DIR"
+echo -e "\033[0;36m📦 Загрузка репозитория...\033[0m"
+if ! command -v git >/dev/null 2>&1; then
+    apt-get update -qq >/dev/null 2>&1
+    apt-get install -y -qq git >/dev/null 2>&1
+fi
+if ! git clone --depth 1 "https://${GITHUB_TOKEN}@github.com/${REPO_OWNER}/${REPO_NAME}.git" "$SRC_DIR" >/dev/null 2>&1; then
+    echo -e "\033[0;31m❌ Не удалось загрузить репозиторий. Проверь токен / интернет.\033[0m"
+    exit 1
+fi
+rm -rf "$SRC_DIR/.git"
+REPO_URL="file://${SRC_DIR}"
 
 echo -e "\033[0;36m==============================================\033[0m"
 echo -e "        \033[1;33m⚡ VPN PANEL INSTALLER / UPDATER ⚡\033[0m"
@@ -64,7 +93,7 @@ if [ ! -d "$PANEL_DIR" ] && [ ! -f "/usr/local/bin/vpn" ] && [ "$1" != "--master
         2)
             echo ""
             echo -e "\033[0;36m→ Установка ноды...\033[0m"
-            bash <(curl -Ls "$REPO_URL/install-node.sh")
+            bash "$SRC_DIR/install-node.sh"
             exit $?
             ;;
         0)
@@ -881,5 +910,9 @@ else
     sed -i '/check-device-limit-pam/d' /etc/pam.d/sshd
 fi
 
+# ═══════════════════════════════════════════════════════════════
+# Чистим временный клон
+# ═══════════════════════════════════════════════════════════════
+[ -d "$SRC_DIR" ] && rm -rf "$SRC_DIR" 2>/dev/null || true
 echo -e "\n\033[0;32m🟢 Операция успешно завершена, Хозяин!\033[0m"
 echo -e "Запуск панели: \033[1;33mvpn\033[0m"
