@@ -219,6 +219,11 @@ fi
 
 echo -e "${GREEN}✅    vpn-expiry-check + check-device-limit-pam установлены${NC}"
 
+# Настройка таймаута SSH (чтобы мертвые сессии не занимали лимит)
+echo 'ClientAliveInterval 30' >> /etc/ssh/sshd_config
+echo 'ClientAliveCountMax 2' >> /etc/ssh/sshd_config
+systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+
 # 5. UFW
 echo ""
 echo -e "${YELLOW}[5/6] Настраиваю firewall${NC}"

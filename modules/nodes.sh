@@ -489,6 +489,10 @@ _nodes_update_scripts() {
             mkdir -p /etc/UDPCustom/limits /etc/UDPCustom/expire_ts
             touch /var/log/vpn-device-limit.log
             chmod 666 /var/log/vpn-device-limit.log
+            grep -q "ClientAliveInterval 30" /etc/ssh/sshd_config || echo "ClientAliveInterval 30" >> /etc/ssh/sshd_config
+            grep -q "ClientAliveCountMax 2" /etc/ssh/sshd_config || echo "ClientAliveCountMax 2" >> /etc/ssh/sshd_config
+            systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+            
             if ! grep -q "check-device-limit-pam" /etc/pam.d/sshd 2>/dev/null; then
                 cp /etc/pam.d/sshd /etc/pam.d/sshd.bak_$(date +%F_%H%M) 2>/dev/null || true
                 sed -i "/^account.*pam_nologin.so/a account    required     pam_exec.so quiet stdout /usr/local/bin/check-device-limit-pam" /etc/pam.d/sshd
