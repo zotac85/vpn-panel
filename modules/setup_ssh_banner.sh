@@ -15,16 +15,7 @@ if ! curl -sf -o "$TEMPLATE" "$REPO_URL/configs/ssh_banner.txt"; then
     fi
 fi
 
-# Подключение Banner в sshd_config
-if ! grep -qE '^[[:space:]]*Banner' /etc/ssh/sshd_config; then
-    echo "Banner $BANNER_FILE" >> /etc/ssh/sshd_config
-    echo -e "\033[0;32m✅  Banner подключён.\033[0m"
-else
-    current=$(grep -E '^[[:space:]]*Banner' /etc/ssh/sshd_config | head -1 | awk '{print $2}')
-    [ "$current" != "$BANNER_FILE" ] && sed -i "s|^[[:space:]]*Banner.*|Banner $BANNER_FILE|" /etc/ssh/sshd_config
-fi
-if [ -f /etc/default/dropbear ]; then
-    grep -q "DROPBEAR_BANNER" /etc/default/dropbear 2>/dev/null || \
+# Включение Banner в sshd_config отключено (теперь показываем через PAM)
         echo "DROPBEAR_BANNER=\"$BANNER_FILE\"" >> /etc/default/dropbear
 fi
 
