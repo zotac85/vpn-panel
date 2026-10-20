@@ -400,9 +400,10 @@ menu_nodes() {
         echo -e " 10) 🌐 Изменить домен ноды"
         echo -e " 11) 📡 Установить UDPGW на ноду"
         echo -e " 12) ⚙️  Настройки мастера"
+        echo -e " 13) 🔄 Обновить скрипты на нодах"
         echo -e " 0) ↩️  Назад"
         echo ""
-        read -p "Выберите действие [0-12]: " n_choice
+        read -p "Выберите действие [0-13]: " n_choice
         case "$n_choice" in
             1) _nodes_add ;;
             2) _nodes_check_all ;;
@@ -416,11 +417,97 @@ menu_nodes() {
             10) _nodes_change_domain ;;
             11) _nodes_install_udpgw ;;
             12) _nodes_master_settings ;;
+            13) _nodes_update_scripts ;;
             0) return ;;
         esac
     done
 }
 
+_nodes_update_scripts() {
+    clear
+    echo -e "${YELLOW}── Обновление скриптов на нодах ──${NC}"
+    echo ""
+    while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
+        [ -z "$_id" ] && continue
+        [ "$_im" = "1" ] && continue
+        echo "  $_id) $_name ($_ip)"
+    done < <(_nodes_py list)
+    echo "  all) Все ноды"
+    echo ""
+    read -p "Введите ID ноды (или all): " nid
+    [ -z "$nid" ] && return
+
+    echo ""
+    echo -e "${CYAN}Копирую свежие скрипты...${NC}"
+    echo ""
+
+    # Получаем список нод для обновления
+    local nodes_to_update=()
+    if [ "$nid" = "all" ]; then
+        while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
+            [ -z "$_id" ] && continue
+            [ "$_im" = "1" ] && continue
+            nodes_to_update+=("$_id")
+        done < <(_nodes_py list)
+    else
+        nodes_to_update=("$nid")
+    fi
+
+    if [ ${#nodes_to_update[@]} -eq 0 ]; then
+        echo -e "${RED}Нет нод для обновления${NC}"
+        read -p "Enter..."; return
+    fi
+
+    # Копируем файлы с мастера
+    local src_node_user="/root/vpn-panel-sync/scripts/node-user.sh"
+    local src_pam="/root/vpn-panel-sync/scripts/check-device-limit-pam"
+    [ ! -f "$src_node_user" ] && { echo -e "${RED}Не найден $src_node_user${NC}"; read -p "Enter..."; return; }
+    [ ! -f "$src_pam" ] && { echo -e "${RED}Не найден $src_pam${NC}"; read -p "Enter..."; return; }
+
+    for id in "${nodes_to_update[@]}"; do
+        local row=$(_nodes_py get "$id")
+        [ -z "$row" ] && { echo -e "${RED}Нода $id не найдена${NC}"; continue; }
+        IFS='|' read -r name host ip sport wsport suser <<< "$row"
+
+        echo -e "${CYAN}→ Обновляю $name ($ip)...${NC}"
+
+        # 1. Копируем node-user.sh
+        scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" \
+            "$src_node_user" root@"$ip":/usr/local/bin/node-user.sh >/dev/null 2>&1 \
+            && echo "  ✓ node-user.sh" \
+            || { echo -e "  ${RED}✗ node-user.sh${NC}"; continue; }
+
+        # 2. Копируем check-device-limit-pam
+        scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" \
+            "$src_pam" root@"$ip":/usr/local/bin/check-device-limit-pam >/dev/null 2>&1 \
+            && echo "  ✓ check-device-limit-pam" \
+            || echo -e "  ${RED}✗ check-device-limit-pam${NC}"
+
+        # 3. Настраиваем на ноде
+        ssh -q -o StrictHostKeyChecking=no -o BatchMode=yes -o LogLevel=QUIET -p "$sport" root@"$ip" '
+            chmod +x /usr/local/bin/node-user.sh /usr/local/bin/check-device-limit-pam
+            mkdir -p /etc/UDPCustom/limits /etc/UDPCustom/expire_ts
+            touch /var/log/vpn-device-limit.log
+            chmod 666 /var/log/vpn-device-limit.log
+            if ! grep -q "check-device-limit-pam" /etc/pam.d/sshd 2>/dev/null; then
+                cp /etc/pam.d/sshd /etc/pam.d/sshd.bak_$(date +%F_%H%M) 2>/dev/null || true
+                sed -i "/^account.*pam_nologin.so/a account    required     pam_exec.so quiet stdout /usr/local/bin/check-device-limit-pam" /etc/pam.d/sshd
+            fi
+            if sshd -t 2>/dev/null; then
+                systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
+                echo "  ✓ PAM настроен, sshd перезагружен"
+            else
+                echo "  ⚠️  ошибка PAM"
+            fi
+        ' 2>&1 | sed 's/^/  /'
+
+        echo ""
+    done
+
+    echo -e "${GREEN}✅ Готово${NC}"
+    echo ""
+    read -p "Нажмите Enter..."
+}
 _nodes_master_settings() {
     local CONF="/etc/UDPCustom/bot.conf"
     local DOMAIN_FILE="/etc/vpn-domain"
