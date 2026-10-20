@@ -38,5 +38,20 @@ if [ "$COUNT" -ge "$LIMIT" ]; then
     exit 1
 fi
 
+# Считаем оставшиеся дни
+DAYS_LEFT="?"
+if [ -f "/etc/UDPCustom/expire_ts/$USER" ]; then
+    EXP=$(cat "/etc/UDPCustom/expire_ts/$USER")
+    NOW=$(date +%s)
+    DIFF=$(( (EXP - NOW) / 86400 ))
+    [ "$DIFF" -lt 0 ] && DIFF=0
+    DAYS_LEFT="$DIFF дн."
+fi
+
 log_event "INFO" "count=$COUNT/$LIMIT ips=[$ACTIVE_IPS] OK"
+echo ""
+echo "<h5><b><font color='#00FF00'>✅ Успешное подключение!</font></b></h5>"
+echo "<h6>📱 Твой лимит: <b>$((COUNT+1)) из $LIMIT</b> устройств</h6>"
+echo "<h6>⏰ Осталось: <b>$DAYS_LEFT</b></h6>"
+echo ""
 exit 0
