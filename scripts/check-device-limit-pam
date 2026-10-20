@@ -32,10 +32,12 @@ COUNT=$(pgrep -u "$USER" -f "sshd-session:" 2>/dev/null | wc -l)
 ACTIVE_PIDS=$(pgrep -u "$USER" -f "sshd-session:" 2>/dev/null | tr '\n' ',' | sed 's/,$//')
 
 if [ "$COUNT" -ge "$LIMIT" ]; then
-    log_event "REJECT" "count=$COUNT/$LIMIT ips=[$ACTIVE_IPS] REJECTED"
-    echo "<h5><b><font color='#FF0000'>❌ ПРЕВЫШЕН ЛИМИТ УСТРОЙСТВ ($COUNT/$LIMIT)</font></b></h5>"
-    echo "<h6><font color='#FF4444'>Отключите другое устройство и попробуйте снова</font></h6>"
-    exit 1
+    echo "$(date +%s)" > "/tmp/limit_exceeded_$USER"
+    log_event "WARN" "count=$COUNT/$LIMIT GRACE_PERIOD_STARTED"
+    echo "<h5><b><font color='#FFA500'>⚠️ ПРЕВЫШЕН ЛИМИТ УСТРОЙСТВ ($COUNT/$LIMIT)</font></b></h5>"
+    echo "<h6><font color='#FFA500'>У вас есть 60 секунд, чтобы отключить лишнее устройство, иначе соединение будет разорвано.</font></h6>"
+else
+    rm -f "/tmp/limit_exceeded_$USER"
 fi
 
 # Считаем оставшиеся дни
