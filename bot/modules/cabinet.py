@@ -675,8 +675,6 @@ grep -q "^${{username}}$" /etc/UDPCustom/users.db 2>/dev/null || echo "$username
 sort -u -o /etc/UDPCustom/users.db /etc/UDPCustom/users.db
 mkdir -p /etc/UDPCustom/limits /etc/UDPCustom/traffic /etc/UDPCustom/traffic_limits /etc/UDPCustom/expire_ts /etc/UDPCustom/passwords
 echo "$devices" > "/etc/UDPCustom/limits/$username"
-sed -i "/^${{username}}[[:space:]]\+hard[[:space:]]\+maxlogins/d" /etc/security/limits.conf
-echo "$username hard maxlogins $devices" >> /etc/security/limits.conf
 if [ "$traffic_bytes" -gt 0 ]; then
     echo "$traffic_bytes" > "/etc/UDPCustom/traffic_limits/$username"
 fi
@@ -780,8 +778,6 @@ sort -u -o /etc/UDPCustom/users.db /etc/UDPCustom/users.db
 # Лимиты
 mkdir -p /etc/UDPCustom/limits /etc/UDPCustom/traffic /etc/UDPCustom/traffic_limits /etc/UDPCustom/expire_ts /etc/UDPCustom/passwords
 echo "$devices" > "/etc/UDPCustom/limits/$username"
-sed -i "/^${{username}}[[:space:]]\+hard[[:space:]]\+maxlogins/d" /etc/security/limits.conf
-echo "$username hard maxlogins $devices" >> /etc/security/limits.conf
 
 # Лимит трафика (счётчик НЕ трогаем — только предел)
 if [ "$traffic_bytes" -gt 0 ]; then
@@ -1097,8 +1093,6 @@ def do_key_extend(cfg, chat_id, user_id, key_name, tariff_idx, msg_id=None):
             f'echo {new_exp} > /etc/UDPCustom/expire_ts/{key_name}; '
             f'echo {new_limit} > /etc/UDPCustom/traffic_limits/{key_name}; '
             f'echo {t["devices"]} > /etc/UDPCustom/limits/{key_name}; '
-            f'sed -i "/^{key_name}[[:space:]]\+hard[[:space:]]\+maxlogins/d" /etc/security/limits.conf; '
-            f'echo "{key_name} hard maxlogins {t["devices"]}" >> /etc/security/limits.conf; '
             f'chage -E $(date -d "@{new_exp + 172800}" +%Y-%m-%d) {key_name}'
         ], capture_output=True, timeout=15)
     except Exception as e:

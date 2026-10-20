@@ -283,8 +283,6 @@ usermod -s /bin/false "$username" 2>/dev/null || true
 echo "$username" >> /etc/UDPCustom/users.db
 sort -u -o /etc/UDPCustom/users.db /etc/UDPCustom/users.db
 echo "$devices" > "/etc/UDPCustom/limits/$username"
-sed -i "/^${{username}}[[:space:]]\\+hard[[:space:]]\\+maxlogins/d" /etc/security/limits.conf
-echo "$username hard maxlogins $devices" >> /etc/security/limits.conf
 mkdir -p /etc/UDPCustom/traffic_limits /etc/UDPCustom/traffic
 bytes=$((traffic_gb * 1073741824)); echo "$bytes" > "/etc/UDPCustom/traffic_limits/$username"; echo "0" > "/etc/UDPCustom/traffic/$username"
 uid=$(id -u "$username")
@@ -398,8 +396,6 @@ echo "$username" >> /etc/UDPCustom/users.db
 sort -u -o /etc/UDPCustom/users.db /etc/UDPCustom/users.db
 mkdir -p /etc/UDPCustom/limits /etc/UDPCustom/traffic /etc/UDPCustom/traffic_limits /etc/UDPCustom/expire_ts /etc/UDPCustom/passwords
 echo "$devices" > "/etc/UDPCustom/limits/$username"
-sed -i "/^${{username}}[[:space:]]\+hard[[:space:]]\+maxlogins/d" /etc/security/limits.conf
-echo "$username hard maxlogins $devices" >> /etc/security/limits.conf
 echo "$traffic_bytes" > "/etc/UDPCustom/traffic_limits/$username"
 echo "0" > "/etc/UDPCustom/traffic/$username"
 uid=$(id -u "$username")
@@ -1107,7 +1103,7 @@ def _do_admin_vip_delete(cfg, chat_id, user_id, key_login, msg_id=None):
         _sp.run(['sed', '-i', f'/^{key_login}$/d', '/etc/UDPCustom/users.db'], capture_output=True)
     except Exception: pass
     try:
-        _sp.run(['sed', '-i', f'/^{key_login} .*maxlogins/d', '/etc/security/limits.conf'], capture_output=True)
+        pass
     except Exception: pass
     # Удаляем из БД
     try:
@@ -1201,9 +1197,8 @@ def _do_key_delete(cfg, cb, tg_id, key_name):
         _sp.run(['sed', '-i', f'/^{key_name}$/d', '/etc/UDPCustom/users.db'], capture_output=True)
     except: pass
 
-    # Убираем maxlogins из limits.conf
     try:
-        _sp.run(['sed', '-i', f'/^{key_name} .*maxlogins/d', '/etc/security/limits.conf'], capture_output=True)
+        pass
     except: pass
 
     # Убираем iptables-правило (по uid, но uid уже удалён — пробуем очистить)
@@ -3559,8 +3554,6 @@ def handle_cleanup(cfg, chat_id, user_id):
                 except: pass
             # Убираем из users.db
             subprocess.run(['sed', '-i', f'/^{name}$/d', USERS_DB], capture_output=True)
-            # Убираем maxlogins
-            subprocess.run(['sed', '-i', f'/^{name}\s\+hard\s\+maxlogins/d', '/etc/security/limits.conf'], capture_output=True)
             removed += 1
         except:
             failed += 1

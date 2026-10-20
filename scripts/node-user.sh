@@ -83,11 +83,6 @@ cmd_setlimit() {
     [[ "$limit" =~ ^[0-9]+$ ]] || { echo "ERROR: лимит должен быть числом"; exit 1; }
     mkdir -p /etc/UDPCustom/limits
     echo "$limit" > "/etc/UDPCustom/limits/$user"
-    # Также обновляем limits.conf
-    sed -i "/^${user}[[:space:]]\+hard[[:space:]]\+maxlogins/d" /etc/security/limits.conf 2>/dev/null || true
-    if [ "$limit" -gt 0 ]; then
-        echo "${user} hard maxlogins ${limit}" >> /etc/security/limits.conf
-    fi
     log "SETLIMIT $user = $limit"
     echo "OK: limit $user = $limit"
 }
