@@ -36,6 +36,7 @@ if [ "$COUNT" -ge "$LIMIT" ]; then
     log_event "WARN" "count=$COUNT/$LIMIT GRACE_PERIOD_STARTED"
     echo "<h5><b><font color='#FFA500'>⚠️ ПРЕВЫШЕН ЛИМИТ УСТРОЙСТВ ($COUNT/$LIMIT)</font></b></h5>"
     echo "<h6><font color='#FFA500'>У вас есть 60 секунд, чтобы отключить лишнее устройство, иначе соединение будет разорвано.</font></h6>"
+    exit 0
 else
     rm -f "/tmp/limit_exceeded_$USER"
 fi
@@ -55,5 +56,9 @@ echo ""
 echo "<h5><b><font color='#00FF00'>✅ Успешное подключение!</font></b></h5>"
 echo "<h6>📱 Твой лимит: <b>$((COUNT+1)) из $LIMIT</b> устройств</h6>"
 echo "<h6>⏰ Осталось: <b>$DAYS_LEFT</b></h6>"
+echo ""
+if [ -f /etc/UDPCustom/ssh_banner.txt ]; then
+    cat /etc/UDPCustom/ssh_banner.txt
+fi
 echo ""
 exit 0

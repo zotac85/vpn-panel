@@ -124,7 +124,7 @@ def get_lock_state(user):
 def set_lock_state(user, state):
     if state == 'locked':
         subprocess.run(['usermod', '-L', user], capture_output=True)
-        subprocess.run(['usermod', '-s', '/usr/sbin/nologin', user], capture_output=True)
+        subprocess.run(['usermod', '-s', '/usr/local/bin/vpn-nologin.sh', user], capture_output=True)
         subprocess.run(['pkill', '-KILL', '-u', user], capture_output=True)
     else:
         subprocess.run(['usermod', '-U', user], capture_output=True)
