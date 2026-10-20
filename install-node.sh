@@ -3,7 +3,27 @@
 # Без панели, без ботов, без БД
 
 set -e
-REPO_URL="https://raw.githubusercontent.com/zotac85/vpn-panel/main"
+# ═══════════════════════════════════════════════════════════════
+# Токен для доступа к приватному репо
+# ═══════════════════════════════════════════════════════════════
+TOKEN_FILE="/root/.vpn-panel.token"
+if [ ! -f "$TOKEN_FILE" ]; then
+    echo -e "\033[0;31m❌ Не найден файл токена: $TOKEN_FILE\033[0m"
+    echo -e "\033[0;33mСоздай его командой:\033[0m"
+    echo -e "  echo \"github_pat_...\" > $TOKEN_FILE"
+    echo -e "  chmod 600 $TOKEN_FILE"
+    exit 1
+fi
+GITHUB_TOKEN=$(cat "$TOKEN_FILE" | tr -d ' \n\r')
+SRC_DIR="/tmp/vpn-panel-src-$$"
+[ -d "$SRC_DIR" ] && rm -rf "$SRC_DIR"
+echo -e "\033[0;36m📦 Загрузка репозитория...\033[0m"
+if ! git clone --depth 1 "https://${GITHUB_TOKEN}@github.com/zotac85/vpn-panel.git" "$SRC_DIR" >/dev/null 2>&1; then
+    echo -e "\033[0;31m❌ Не удалось загрузить репозиторий. Проверь токен.\033[0m"
+    exit 1
+fi
+rm -rf "$SRC_DIR/.git"
+REPO_URL="file://${SRC_DIR}"
 GREEN="\033[0;32m"; RED="\033[0;31m"; YELLOW="\033[1;33m"; CYAN="\033[0;36m"; NC="\033[0m"
 
 [ "$(id -u)" -eq 0 ] || { echo -e "${RED}Запускать от root${NC}"; exit 1; }
@@ -167,9 +187,37 @@ else
 fi
 echo "* * * * * root /usr/local/bin/vpn-expiry-check.sh" > /etc/cron.d/vpn-expiry-check
 chmod 644 /etc/cron.d/vpn-expiry-check
-# Убираем PAM-хук (если был добавлен ранее — он вешает SSH)
+# Убираем старый PAM-хук (если был)
 sed -i '/check-expiration-pam/d' /etc/pam.d/sshd 2>/dev/null
-echo -e "${GREEN}✅   vpn-expiry-check установлен + PAM-хук убран${NC}"
+
+# ─── Установка PAM-скрипта лимита устройств ───
+echo ""
+echo -e "${YELLOW}[4.8/6] Устанавливаю check-device-limit-pam${NC}"
+curl -sf -o /usr/local/bin/check-device-limit-pam "$REPO_URL/scripts/check-device-limit-pam"
+chmod +x /usr/local/bin/check-device-limit-pam
+if [ ! -x /usr/local/bin/check-device-limit-pam ]; then
+    echo -e "${RED}Не удалось скачать check-device-limit-pam${NC}"
+    exit 1
+fi
+mkdir -p /etc/UDPCustom/limits
+touch /var/log/vpn-device-limit.log
+chmod 666 /var/log/vpn-device-limit.log
+
+# Настраиваем PAM (idempotent)
+if ! grep -q "check-device-limit-pam" /etc/pam.d/sshd; then
+    cp /etc/pam.d/sshd /etc/pam.d/sshd.bak_$(date +%F_%H%M)
+    sed -i '/^account.*pam_unix.so/i account    required     pam_exec.so quiet stdout /usr/local/bin/check-device-limit-pam' /etc/pam.d/sshd
+    echo -e "${GREEN}✅    PAM настроен${NC}"
+else
+    echo -e "${GREEN}✅    PAM уже настроен${NC}"
+fi
+
+if sshd -t 2>/dev/null; then
+    systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
+    echo -e "${GREEN}✅    sshd перезагружен${NC}"
+fi
+
+echo -e "${GREEN}✅    vpn-expiry-check + check-device-limit-pam установлены${NC}"
 
 # 5. UFW
 echo ""
@@ -205,3 +253,6 @@ echo -e "  node-user.sh del <user>"
 echo -e "  node-user.sh list"
 echo -e "  node-user.sh traffic-all"
 echo -e "${CYAN}=================================================${NC}"
+
+# Чистим временный клон
+[ -d "$SRC_DIR" ] && rm -rf "$SRC_DIR" 2>/dev/null || true

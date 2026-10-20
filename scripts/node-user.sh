@@ -71,7 +71,25 @@ cmd_add() {
         mkdir -p /etc/UDPCustom/expire_ts
         echo "$exp_ts" > "/etc/UDPCustom/expire_ts/$user"
     fi
+    # Инициализируем лимит устройств по умолчанию (если нет)
+    mkdir -p /etc/UDPCustom/limits
+    [ -f "/etc/UDPCustom/limits/$user" ] || echo "3" > "/etc/UDPCustom/limits/$user"
     log "ADD $user uid=$uid exp=$exp_ts"
+}
+
+cmd_setlimit() {
+    local user="$1" limit="$2"
+    is_our_user "$user" || { echo "ERROR: не наш юзер"; exit 1; }
+    [[ "$limit" =~ ^[0-9]+$ ]] || { echo "ERROR: лимит должен быть числом"; exit 1; }
+    mkdir -p /etc/UDPCustom/limits
+    echo "$limit" > "/etc/UDPCustom/limits/$user"
+    # Также обновляем limits.conf
+    sed -i "/^${user}[[:space:]]\+hard[[:space:]]\+maxlogins/d" /etc/security/limits.conf 2>/dev/null || true
+    if [ "$limit" -gt 0 ]; then
+        echo "${user} hard maxlogins ${limit}" >> /etc/security/limits.conf
+    fi
+    log "SETLIMIT $user = $limit"
+    echo "OK: limit $user = $limit"
 }
 
 cmd_del() {
@@ -195,6 +213,7 @@ case "$1" in
     add)                shift; cmd_add "$@" ;;
     del)                shift; cmd_del "$@" ;;
     passwd)             shift; cmd_passwd "$@" ;;
+    setlimit)           shift; cmd_setlimit "$@" ;;
     list)               cmd_list ;;
     traffic)            shift; cmd_traffic "$@" ;;
     traffic-all)        cmd_traffic_all ;;

@@ -1,0 +1,42 @@
+#!/bin/bash
+USER="$PAM_USER"
+LIMITS_DIR="/etc/UDPCustom/limits"
+DB_USERS="/etc/UDPCustom/users.db"
+[ "$USER" == "root" ] && exit 0
+[ -z "$USER" ] && exit 0
+# Проверяем что это наш VPN-юзер (uid >= 1000), не читаем users.db
+UID_NUM=$(id -u "$USER" 2>/dev/null)
+[ -z "$UID_NUM" ] && exit 0
+[ "$UID_NUM" -lt 1000 ] && exit 0
+
+LOG_FILE="/var/log/vpn-device-limit.log"
+CLIENT_IP="${PAM_RHOST:-unknown}"
+TS=$(date '+%Y-%m-%d %H:%M:%S')
+
+log_event() {
+    # $1 = tag (INFO/WARN/REJECT), $2 = message
+    echo "[$TS] [$1] user=$USER ip=$CLIENT_IP $2" >> "$LOG_FILE"
+}
+LIMIT=3
+[ -f "$LIMITS_DIR/$USER" ] && LIMIT=$(cat "$LIMITS_DIR/$USER")
+[[ "$LIMIT" =~ ^[0-9]+$ ]] || LIMIT=3
+[ "$LIMIT" -le 0 ] && exit 0
+WS_P=""
+[ -f /usr/local/bin/ws-proxy.py ] && \
+    WS_P=$(awk -F'=' '/listen_port/ {print $2}' /usr/local/bin/ws-proxy.py | tr -dc '0-9')
+FILTER="( sport = :22 or sport = :36712 or sport = :7300"
+[[ "$WS_P" =~ ^[0-9]+$ ]] && FILTER="$FILTER or sport = :$WS_P"
+FILTER="$FILTER )"
+# Считаем активные sshd-session юзера (правильный подсчёт)
+COUNT=$(pgrep -u "$USER" -f "sshd-session:" 2>/dev/null | wc -l)
+ACTIVE_PIDS=$(pgrep -u "$USER" -f "sshd-session:" 2>/dev/null | tr '\n' ',' | sed 's/,$//')
+
+if [ "$COUNT" -ge "$LIMIT" ]; then
+    log_event "REJECT" "count=$COUNT/$LIMIT ips=[$ACTIVE_IPS] REJECTED"
+    echo "<h5><b><font color='#FF0000'>❌ ПРЕВЫШЕН ЛИМИТ УСТРОЙСТВ ($COUNT/$LIMIT)</font></b></h5>"
+    echo "<h6><font color='#FF4444'>Отключите другое устройство и попробуйте снова</font></h6>"
+    exit 1
+fi
+
+log_event "INFO" "count=$COUNT/$LIMIT ips=[$ACTIVE_IPS] OK"
+exit 0
