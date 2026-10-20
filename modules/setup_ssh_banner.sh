@@ -81,14 +81,11 @@ else
     # Нет шаблона в репе — fallback (создаём только если пусто)
     if [ ! -s "$BANNER_FILE" ]; then
         cat > "$BANNER_FILE" << BANNER_DEF
-<h5><b><a href='https://t.me/${CHANNEL}'>📢 Канал: @${CHANNEL}</a></b></h5>
 <h6><font color='#ADFF2F'>📍 Локация: ${LOCATION}</font></h6>
-
 <h6><font color='#FF4444'>❌ DDOS · Взлом · Торренты · Спам</font></h6>
-<h6><font color='#FFA500'>📱 ${DEVICES} устр.  ·  🚫 Нарушение = бан</font></h6>
-
 <h6><b><a href='https://t.me/${SUPPORT}'>💬 Поддержка: @${SUPPORT}</a></b></h6>
 <h6><b><a href='https://t.me/${MAIN_BOT}'>🤖 Бот: @${MAIN_BOT}</a></b></h6>
+<h5><b><a href='https://t.me/${CHANNEL}'>📢 Канал: @${CHANNEL}</a></b></h5>
 BANNER_DEF
         echo -e "\033[0;32m✅  Баннер создан (fallback).\033[0m"
     else
