@@ -2312,7 +2312,7 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         kb = {'inline_keyboard': [
             [{'text': '⭐ Telegram Stars', 'callback_data': 'cab_topup_stars'}],
             [{'text': '💳 Ручное (TMCELL)', 'callback_data': 'cab_topup_manual'}],
-            [{'text': '🤖 Крипто-бот', 'callback_data': 'cab_topup_crypto'}],
+            [{'text': '🪙 CRYPTO USDT', 'callback_data': 'cab_topup_crypto'}],
             [{'text': '⬅️ К балансу', 'callback_data': 'cab_balance'}]
         ]}
         _edit(token, chat_id, msg_id, text, kb)
