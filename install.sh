@@ -563,6 +563,8 @@ fi
 
 # ── БЛОКИРОВКА ИСТЁКШИХ (SSH-туннель + сообщение) ──
 curl -sf -o /usr/local/bin/vpn-nologin.sh "$REPO_URL/scripts/vpn-nologin.sh"
+curl -sf -o /usr/local/bin/check-device-limit-pam "$REPO_URL/scripts/check-device-limit-pam"
+chmod +x /usr/local/bin/check-device-limit-pam
 curl -sf -o /usr/local/bin/vpn-expiry-check.sh "$REPO_URL/scripts/vpn-expiry-check.sh"
 chmod +x /usr/local/bin/vpn-nologin.sh /usr/local/bin/vpn-expiry-check.sh
 # vpn-nologin.sh в /etc/shells
