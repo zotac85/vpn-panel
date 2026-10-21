@@ -42,7 +42,9 @@ tg_set_config() {
     local key="$1"
     local value="$2"
     if grep -q "^${key}=" "$TG_CONF" 2>/dev/null; then
-        sed -i "s|^${key}=.*|${key}=\"${value}\"|" "$TG_CONF"
+        grep -v "^${key}=" "$TG_CONF" > "${TG_CONF}.tmp"
+        echo "${key}=\"${value}\"" >> "${TG_CONF}.tmp"
+        mv "${TG_CONF}.tmp" "$TG_CONF"
     else
         echo "${key}=\"${value}\"" >> "$TG_CONF"
     fi
@@ -194,7 +196,9 @@ sg_set_config() {
     local field="$1"
     local value="$2"
     if grep -q "^${field}=" "$SG_CONF" 2>/dev/null; then
-        sed -i "s|^${field}=.*|${field}=\"${value}\"|" "$SG_CONF"
+        grep -v "^${field}=" "$SG_CONF" > "${SG_CONF}.tmp"
+        echo "${field}=\"${value}\"" >> "${SG_CONF}.tmp"
+        mv "${SG_CONF}.tmp" "$SG_CONF"
     else
         echo "${field}=\"${value}\"" >> "$SG_CONF"
     fi
