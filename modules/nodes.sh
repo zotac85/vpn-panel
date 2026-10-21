@@ -133,11 +133,8 @@ _nodes_install_banner() {
     scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" "$TMP" root@"$ip":/etc/UDPCustom/ssh_banner.txt >/dev/null 2>&1
     ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "
         chmod 644 /etc/UDPCustom/ssh_banner.txt
-        if ! grep -qE '^[[:space:]]*Banner' /etc/ssh/sshd_config; then
-            echo 'Banner /etc/UDPCustom/ssh_banner.txt' >> /etc/ssh/sshd_config
-        else
-            sed -i 's|^[[:space:]]*Banner.*|Banner /etc/UDPCustom/ssh_banner.txt|' /etc/ssh/sshd_config
-        fi
+        sed -i '/^Banner/d' /etc/ssh/sshd_config 2>/dev/null || true
+        rm -f /etc/ssh/sshd_config.d/*banner* 2>/dev/null || true
         systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
         echo 'BANNER SET on '\$(hostname)
     " >/dev/null 2>&1
