@@ -394,6 +394,7 @@ def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
     text = NL.join(lines)
 
     keyboard = {'inline_keyboard': [
+        [{'text': '💎 КУПИТЬ VIP-КЛЮЧ', 'callback_data': 'cab_buy_vip'}],
         [{'text': f'🔑 Мои ключи ({active_count})', 'callback_data': 'cab_keys'},
          {'text': '💰 Баланс', 'callback_data': 'cab_balance'},
          {'text': '🎫 Промокод', 'callback_data': 'cab_promo'}],
