@@ -391,8 +391,15 @@ def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
     ]
     text = NL.join(lines)
 
+    try:
+        _tariffs = _parse_vip_tariffs(cfg)
+        _parts = [f"{t['days']}д — {t['price']:g}$" for t in _tariffs]
+        _buy_text = "💎 VIP: " + " | ".join(_parts) if _parts else "💎 КУПИТЬ VIP-КЛЮЧ"
+    except Exception:
+        _buy_text = "💎 КУПИТЬ VIP-КЛЮЧ"
+
     keyboard = {'inline_keyboard': [
-        [{'text': '💎 КУПИТЬ VIP-КЛЮЧ', 'callback_data': 'cab_buy_vip'}],
+        [{'text': _buy_text, 'callback_data': 'cab_buy_vip'}],
         [{'text': f'🔑 Мои ключи ({active_count})', 'callback_data': 'cab_keys'},
          {'text': '💰 Баланс', 'callback_data': 'cab_balance'},
          {'text': '🎫 Промокод', 'callback_data': 'cab_promo'}],
