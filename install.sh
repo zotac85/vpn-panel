@@ -571,6 +571,8 @@ grep -q "vpn-nologin.sh" /etc/shells || echo "/usr/local/bin/vpn-nologin.sh" >> 
 mkdir -p /etc/ssh/sshd_config.d
 touch /etc/ssh/sshd_config.d/blocked-users.conf
 chmod 644 /etc/ssh/sshd_config.d/blocked-users.conf
+sed -i '/^Banner/d' /etc/ssh/sshd_config 2>/dev/null || true
+sed -i '/^Banner/d' /etc/ssh/sshd_config.d/*.conf 2>/dev/null || true
 # Удаляем все Include и добавляем в конец (чтобы Match User переопределял глобальный Banner)
 cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak_$(date +%F_%H%M)
 sed -i '/^Include \/etc\/ssh\/sshd_config.d/d' /etc/ssh/sshd_config
