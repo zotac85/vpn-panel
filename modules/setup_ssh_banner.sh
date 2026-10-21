@@ -16,8 +16,6 @@ if ! curl -sf -o "$TEMPLATE" "$REPO_URL/configs/ssh_banner.txt"; then
 fi
 
 # Включение Banner в sshd_config отключено (теперь показываем через PAM)
-        echo "DROPBEAR_BANNER=\"$BANNER_FILE\"" >> /etc/default/dropbear
-fi
 
 # Читаем локацию из bot.conf
 LOCATION="🌍 Сервер"
