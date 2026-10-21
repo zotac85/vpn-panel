@@ -2215,7 +2215,7 @@ def show_wd_resolvers(cfg, chat_id, user_id, msg_id=None):
     """Резолверы WhiteDNS — по 3 серверам."""
     token = cfg['BOT_TOKEN']
     NL = chr(10)
-    names = ['🇩🇪 Германия', '🇫🇮 Финляндия', '🇸🇪 Швеция']
+    names = ['🇩🇪 Германия', '🇫🇮 Финляндия', '🇫🇷 Франция']
     txt = ['🔢 <b>РЕЗОЛВЕРЫ WHITEDNS</b>', '━━━━━━━━━━━━━━━━━━━━', '']
     for i, name in enumerate(names):
         c = len(_wd_read_resolvers(i))
@@ -2230,7 +2230,7 @@ def show_wd_resolvers(cfg, chat_id, user_id, msg_id=None):
     kb = {'inline_keyboard': [
         [{'text': '🇩🇪 Германия', 'callback_data': 'wd_res_edit_0'},
          {'text': '🇫🇮 Финляндия', 'callback_data': 'wd_res_edit_1'},
-         {'text': '🇸🇪 Швеция', 'callback_data': 'wd_res_edit_2'}],
+         {'text': '🇫🇷 Франция', 'callback_data': 'wd_res_edit_2'}],
         [{'text': '⬅️ Назад', 'callback_data': 'adm_whitedns'}]
     ]}
     if msg_id:
@@ -2242,7 +2242,7 @@ def show_wd_resolver_edit(cfg, chat_id, user_id, idx, msg_id=None):
     """Экран редактирования резолверов одного сервера."""
     token = cfg['BOT_TOKEN']
     NL = chr(10)
-    names = ['🇩🇪 Германия', '🇫🇮 Финляндия', '🇸🇪 Швеция']
+    names = ['🇩🇪 Германия', '🇫🇮 Финляндия', '🇫🇷 Франция']
     res = _wd_read_resolvers(idx)
     if res:
         preview = chr(10).join(res[:5])
@@ -2294,7 +2294,7 @@ def show_wd_servers(cfg, chat_id, user_id, msg_id=None):
     token = cfg['BOT_TOKEN']
     NL = chr(10)
     servers = _wd_read_servers()
-    names = ['🇩🇪 Германия', '🇫🇮 Финляндия', '🇸🇪 Швеция']
+    names = ['🇩🇪 Германия', '🇫🇮 Финляндия', '🇫🇷 Франция']
     txt = ['🌐 <b>СЕРВЕРЫ WHITEDNS</b>', '━━━━━━━━━━━━━━━━━━━━', '']
     for i, name in enumerate(names):
         if servers[i]:
@@ -2308,7 +2308,7 @@ def show_wd_servers(cfg, chat_id, user_id, msg_id=None):
     kb = {'inline_keyboard': [
         [{'text': '🇩🇪 Германия', 'callback_data': 'wd_srv_edit_0'},
          {'text': '🇫🇮 Финляндия', 'callback_data': 'wd_srv_edit_1'},
-         {'text': '🇸🇪 Швеция', 'callback_data': 'wd_srv_edit_2'}],
+         {'text': '🇫🇷 Франция', 'callback_data': 'wd_srv_edit_2'}],
         [{'text': '⬅️ Назад', 'callback_data': 'adm_whitedns'}]
     ]}
     if msg_id:
@@ -2321,7 +2321,7 @@ def show_wd_server_edit(cfg, chat_id, user_id, idx, msg_id=None):
     token = cfg['BOT_TOKEN']
     NL = chr(10)
     servers = _wd_read_servers()
-    names = ['🇩🇪 Германия', '🇫🇮 Финляндия', '🇸🇪 Швеция']
+    names = ['🇩🇪 Германия', '🇫🇮 Финляндия', '🇫🇷 Франция']
     cur = servers[idx] if idx < len(servers) else ''
     if cur:
         _prev = cur[:500]
@@ -2357,7 +2357,7 @@ def show_adm_whitedns(cfg, chat_id, user_id, msg_id=None):
     NL = chr(10)
     issued = _wd_count_lines(WD_LOG)
     srv = _wd_read_servers()
-    srv_names = ['🇩🇪 Германия', '🇫🇮 Финляндия', '🇸🇪 Швеция']
+    srv_names = ['🇩🇪 Германия', '🇫🇮 Финляндия', '🇫🇷 Франция']
     srv_ready = sum(1 for s in srv if s)
     res_counts = [len(_wd_read_resolvers(i)) for i in range(3)]
     res_ready = sum(1 for c in res_counts if c)

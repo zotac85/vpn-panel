@@ -2655,7 +2655,7 @@ def show_whitedns_menu(cfg, chat_id, user_id, msg_id=None):
             "━━━━━━━━━━━━━━━━━━━━",
             "",
             "🌐 <b>3 сервера на выбор:</b>",
-            "   🇩🇪 Германия  ·  🇫🇮 Финляндия  ·  🇸🇪 Швеция",
+            "   🇩🇪 Германия  ·  🇫🇮 Финляндия  ·  🇫🇷 Франция",
             "",
             "⚙️ <b>3 профиля под твой интернет:</b>",
             "   📱 3G — мобильная сеть (LTE/4G/5G)",
@@ -2715,7 +2715,7 @@ def show_whitedns_menu(cfg, chat_id, user_id, msg_id=None):
         kb = {'inline_keyboard': [
             [{'text': '🇩🇪 Германия', 'callback_data': 'cab_wd_de'},
              {'text': '🇫🇮 Финляндия', 'callback_data': 'cab_wd_fi'}],
-            [{'text': '🇸🇪 Швеция', 'callback_data': 'cab_wd_se'}],
+            [{'text': '🇫🇷 Франция', 'callback_data': 'cab_wd_se'}],
             [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
         ]}
     if msg_id:
@@ -2727,7 +2727,7 @@ def show_whitedns_menu(cfg, chat_id, user_id, msg_id=None):
 # ──────────────────────────────────────────────────────────────
 # WHITEDNS — клиентские функции
 # ──────────────────────────────────────────────────────────────
-WD_SRV_NAMES = ['🇩🇪 Германия', '🇫🇮 Финляндия', '🇸🇪 Швеция']
+WD_SRV_NAMES = ['🇩🇪 Германия', '🇫🇮 Финляндия', '🇫🇷 Франция']
 WD_PROF_NAMES = ['📱 3G', '📶 WiFi', '🖥 ADSL']
 WD_RES_PATHS = [
     '/etc/UDPCustom/whitedns_resolvers_de.txt',
