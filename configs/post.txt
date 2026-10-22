@@ -1,21 +1,15 @@
-🎁 ПОЛУЧИ БЕСПЛАТНЫЙ VPN 🎁
-
+🎁 <b>ПОЛУЧИ БЕСПЛАТНЫЙ VPN</b> 🎁
 📍 Сервер: {location}
+⏰  {hours} часов | 📊 {gb} ГБ | 📱 {devices} устройство
 
-⏰ {hours} часов | 📊 {gb} ГБ | 📱 {devices} устройство
-
-📲 Скачай DarkTunnel
-
+📲 <a href="https://play.google.com/store/apps/details?id=net.darktunnel.app">Скачай APK DarkTunnel</a>
+🖥️ <a href="https://github.com/zotac85/ArsenVpn">Скачай EXE DarkTunnel</a>
 🔑 Готовый конфиг для DarkTunnel
-
 ━━━━━━━━━━━━━━━━━━━━
-
-⚠️ Для получения:
-
+⚠️ <b>Для получения:</b>
 1️⃣ Подпишись на спонсоров: {sponsors_list}
-2️⃣ Нажми кнопку ниже 👇
-
+2️⃣ Нажми кнопку
+👇ПОЛУЧИТЬ ТЕСТ👇
 ━━━━━━━━━━━━━━━━━━━━
-
 📍 Ты в: @{primary}
 💬 {support}
