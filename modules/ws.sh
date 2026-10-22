@@ -100,7 +100,30 @@ change_ws_port() {
         sed -i "s/listen_port[[:space:]]*=[[:space:]]*[0-9]*/listen_port = $new_port/" /usr/local/bin/ws-proxy.py
         ufw allow $new_port/tcp comment 'WebSocket Proxy Port' 2>/dev/null
         systemctl restart ws-proxy
-        echo -e "${GREEN}Порт успешно изменен на $new_port! Служба перезапущена.${NC}"
+        echo -e "${GREEN}✅ Локальный порт изменен на $new_port и служба перезапущена.${NC}"
+
+        # 1. Обновляем порт в базе данных
+        python3 -c "import sqlite3; db=sqlite3.connect('/etc/UDPCustom/vpn.db'); db.execute('UPDATE nodes SET ws_port=?', ('$new_port',)); db.commit()"
+        echo -e "${GREEN}✅ Порт в базе данных обновлен на $new_port.${NC}"
+
+        # 2. Обходим все ноды и меняем порт там
+        echo -e "${YELLOW}Обновление портов на нодах...${NC}"
+        NODES=$(python3 -c "import sqlite3; db=sqlite3.connect('/etc/UDPCustom/vpn.db'); print('\n'.join(f'{r[0]}|{r[1]}' for r in db.execute('SELECT ip, ssh_port FROM nodes WHERE is_master=0').fetchall()))")
+        
+        if [ -n "$NODES" ]; then
+            while IFS='|' read -r ip sport; do
+                [ -z "$ip" ] && continue
+                echo -n "  Нода $ip: "
+                ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no -p "$sport" root@"$ip"                     "sed -i 's/listen_port[[:space:]]*=[[:space:]]*[0-9]*/listen_port = $new_port/' /usr/local/bin/ws-proxy.py && ufw allow $new_port/tcp >/dev/null 2>&1 && systemctl restart ws-proxy" >/dev/null 2>&1
+                if [ $? -eq 0 ]; then
+                    echo -e "${GREEN}Успешно${NC}"
+                else
+                    echo -e "${RED}Ошибка SSH${NC}"
+                fi
+            done <<< "$NODES"
+        else
+            echo "  (нод не найдено)"
+        fi
     else
         echo -e "${RED}Неверный формат порта.${NC}"
     fi
