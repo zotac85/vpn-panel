@@ -1188,24 +1188,86 @@ def format_key_card(cfg, key_name):
     NL = chr(10)
     lines = [
         f"{icon} <b>{key_name}</b>",
-        f"⏰ {t_left}  ·  📊 {traffic}  ·  📱 {devices}",
+        f"⏰  {t_left}  ·  📊 {traffic}  ·  📱 {devices}",
         "",
         f"📡 Локации: {flags_str}",
         "",
-        "<b>Как импортировать:</b>",
-        "1️⃣ Нажми три точки ⋮ → Config → Import → File",
-        "2️⃣ Нажми на файл .dark → Открыть с помощью → DarkTunnel",
+        "<b>👇 Выбери конфиг для своего устройства:</b>",
+        "🤖 <b>Для Android:</b> Скачай файл <code>.dark</code> и импортируй в DarkTunnel.",
+        "🍏 <b>Для iPhone:</b> Скачай файл <code>.npvt</code> и открой в NPV Tunnel.",
+        "",
+        "<i>Нажми на кнопку ниже, чтобы получить нужный файл.</i>"
     ]
     text = NL.join(lines)
     kb = {'inline_keyboard': [
+        [{'text': '🤖 Ключ для Android', 'callback_data': f'cab_darkfile:{key_name}'},
+         {'text': '🍏 Ключ для iPhone', 'callback_data': f'cab_npvt:{key_name}'}],
         [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'},
          {'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
     ]}
     if is_vip:
         kb['inline_keyboard'].insert(0, [
-            {'text': '⏰ Продлить', 'callback_data': f'cab_key_extend:{key_name}'}
+            {'text': '⏰  Продлить', 'callback_data': f'cab_key_extend:{key_name}'}
         ])
     return text, kb
+
+
+def send_npvt_file(cfg, chat_id, user_id, key_name):
+    import base64, json
+    token = cfg['BOT_TOKEN']
+    key = db.get_test_key(key_name) or db.get_vip_key(key_name)
+    if not key or int(key['tg_id']) != int(user_id):
+        _send(token, chat_id, "❌ Ключ не найден")
+        return
+
+    def b64(s): return base64.b64encode(s.encode()).decode()
+    
+    host = "de.cdnstore.shop"
+    port = 80
+    proxy = "8.6.112.0:80"
+    payload = "CONNECT / HTTP/1.1[crlf]Host: ya.ru[crlf]User-Agent: Mozilla/5.0 (Linux; Android 13) Chrome/120[crlf][crlf]POST / HTTP/1.1[crlf]Host: [host][crlf]Connection: upgrade[crlf]Upgrade: websocket[crlf][crlf]"
+    
+    data = {
+        "sshConfigType": "npvs1:" + b64("SSH-Proxy-Payload"),
+        "remarks": "npvs1:" + b64("NpvTunnel"),
+        "sshHost": "npvs1:" + b64(host),
+        "sshPort": port,
+        "sshUsername": "npvs1:" + b64(key['login']),
+        "sshPassword": "npvs1:" + b64(key['password']),
+        "sshAuthMethod": "npvs1:" + b64("PASSWORD"),
+        "sshPrivateKey": "",
+        "sshPrivateKeyPassphrase": "",
+        "sni": "",
+        "tlsVersion": "npvs1:" + b64("DEFAULT"),
+        "httpProxy": "npvs1:" + b64(proxy),
+        "authenticateProxy": False,
+        "proxyUsername": "",
+        "proxyPassword": "",
+        "payload": "npvs1:" + b64(payload),
+        "dnsTTMode": "npvs1:" + b64("UDP"),
+        "dnsServer": "",
+        "nameserver": "",
+        "publicKey": "",
+        "udpgwPort": 7300,
+        "udpgwTransparentDNS": False
+    }
+    
+    json_str = json.dumps(data, separators=(',', ':'))
+    npvt_url = f"npvt-ssh://{base64.b64encode(json_str.encode()).decode()}"
+    
+    # Используем _send_new для автоудаления предыдущего сообщения
+    from bot_modules import cabinet as _cab
+    NL = chr(10)
+    text = NL.join([
+        '🍏 <b>Ключ для iPhone (NPV Tunnel)</b>',
+        '',
+        '1. Скопируй ссылку ниже (просто нажми на неё)',
+        '2. Открой NPV Tunnel',
+        '3. Нажми <b>Import config from Clipboard</b>',
+        '',
+        f'<code>{npvt_url}</code>'
+    ])
+    _cab._send_new(token, chat_id, text)
 
 def show_key_detail(cfg, chat_id, user_id, key_name, msg_id=None):
     """Детали ключа — использует единый format_key_card."""
@@ -1222,11 +1284,6 @@ def show_key_detail(cfg, chat_id, user_id, key_name, msg_id=None):
         _edit(token, chat_id, msg_id, text, keyboard)
     else:
         _send(token, chat_id, text, keyboard)
-    # Авто-отправка .dark
-    try:
-        send_dark_files_all_nodes(cfg, chat_id, user_id, key_name)
-    except Exception as _e:
-        cab_log.error(f"auto send_dark on key_detail: {_e}")
 
 def _build_dark_url_for_key(cfg, key_name, domain=None, ws_port=None, location_name=None):
     """Возвращает darktunnel:// или None."""
@@ -2633,6 +2690,10 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
     if cb_data.startswith('cab_darkfile:'):
         key_name = cb_data.split(':', 1)[1]
         send_dark_files_all_nodes(cfg, chat_id, user_id, key_name)
+        return True
+    if cb_data.startswith('cab_npvt:'):
+        key_name = cb_data.split(':', 1)[1]
+        send_npvt_file(cfg, chat_id, user_id, key_name)
         return True
     if cb_data.startswith('cab_dt:'):
         key_name = cb_data.split(':', 1)[1]
