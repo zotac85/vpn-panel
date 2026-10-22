@@ -316,26 +316,46 @@ def handle_message(cfg, msg, token, admin_id):
                 send(token, chat_id, "🚪 Вы вышли из режима ИИ. Если хотите оставить вопрос админу, просто напишите его.")
                 return
         else:
-            try:
-                import google.generativeai as genai
-                api_key = cfg.get('GEMINI_API_KEY', '')
-                if not api_key:
-                    raise ValueError("GEMINI_API_KEY не задан")
-                genai.configure(api_key=api_key)
-                
-                # Используем актуальную модель
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                prompt = f"Ты — ИИ-помощник техподдержки VPN сервиса ArsenVipKeys. Отвечай кратко, вежливо и по делу. Тарифы: 7д - 1$, 30д - 3$, 90д - 8$. Оплата: TMCELL или USDT. Если не знаешь ответа, попроси написать /cancel и связаться с админом. Вопрос клиента: {text[:500]}"
-                
-                resp = model.generate_content(prompt)
-                answer_text = resp.text.strip()
-                
-                send(token, chat_id, f"🧠 <b>ИИ-ответ:</b>\n{answer_text}\n\n<i>Если нужен человек, отправь</i> /cancel", parse_mode='HTML')
-                return
-            except Exception as e:
-                log.error(f"AI error: {e}")
-                send(token, chat_id, "❌ <b>Ошибка ИИ.</b> Передаю ваш вопрос администратору...", parse_mode='HTML')
+            # Проверяем, просит ли клиент реквизиты или человека (тогда пересылаем админу)
+            handover_words = ['номер', 'перевод', 'скинуть', 'карта', 'реквизит', 'человек', 'оператор', 'админ']
+            if any(w in text.lower() for w in handover_words):
                 AI_SESSIONS.discard(user_id)
+                send(token, chat_id, "👨‍💻 <b>Передаю ваш вопрос администратору.</b>\nПожалуйста, ожидайте ответа.", parse_mode='HTML')
+                # Не делаем return, чтобы код пошел дальше и создал тикет
+            else:
+                try:
+                    import google.generativeai as genai
+                    # Читаем ключ из bot.conf
+                    api_key = ''
+                    try:
+                        with open('/etc/UDPCustom/bot.conf') as _f:
+                            for _line in _f:
+                                if _line.startswith('GEMINI_API_KEY='):
+                                    api_key = _line.split('=', 1)[1].strip().strip('"')
+                                    break
+                    except: pass
+
+                    if not api_key:
+                        raise ValueError("GEMINI_API_KEY не задан")
+                    genai.configure(api_key=api_key)
+                    
+                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    prompt = f"""Ты — умный и вежливый ИИ-помощник техподдержки VPN сервиса.
+Ответь на вопрос клиента кратко и по делу.
+Твои знания: Тарифы: 7д - 1$, 30д - 3$, 90д - 8$. Оплата: TMCELL (перевод на номер) или CRYPTO USDT.
+Если вопрос касается конкретных реквизитов для оплаты, ответь: "Для получения номера напишите /cancel".
+Вопрос клиента: {text[:500]}"""
+                    
+                    resp = model.generate_content(prompt)
+                    answer_text = resp.text.strip()
+                    
+                    send(token, chat_id, f"🧠 <b>ИИ-ответ:</b>\n{answer_text}\n\n<i>Если нужен человек, отправь</i> /cancel", parse_mode='HTML')
+                    return
+                except Exception as e:
+                    log.error(f"AI error: {e}")
+                    send(token, chat_id, "❌ <b>Ошибка ИИ.</b> Передаю ваш вопрос администратору...", parse_mode='HTML')
+                    AI_SESSIONS.discard(user_id)
+                    # Проваливаемся дальше для создания тикета
                 # Пропускаем дальше, чтобы создался тикет
 
     # Пустое сообщение
