@@ -1,5 +1,5 @@
-<h6><font color='#ADFF2F'>📍 Локация: {location}</font></h6>
+<h6><font color='#ADFF2F'>📍 Локация: Германия 🇩🇪</font></h6>
 <h6><font color='#FF4444'>❌ DDOS · Взлом · Торренты · Спам</font></h6>
-<h6><b><a href='https://t.me/{support}'>💬 Поддержка: @{support}</a></b></h6>
-<h6><b><a href='https://t.me/{main_bot}'>🤖 Бот: @{main_bot}</a></b></h6>
-<h5><b><a href='https://t.me/{channel}'>📢 Канал: @{channel}</a></b></h5>
+<h6><b><a href='https://t.me/ArsenSupportBot'>💬 Поддержка: @ArsenSupportBot</a></b></h6>
+<h6><b><a href='https://t.me/ArsenVipKeysBot'>🤖 Бот: @ArsenVipKeysBot</a></b></h6>
+<h5><b><a href='https://t.me/ArsenVipKeys'>📢 Канал: @ArsenVipKeys</a></b></h5>
