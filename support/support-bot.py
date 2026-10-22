@@ -339,12 +339,11 @@ def handle_message(cfg, msg, token, admin_id):
                         raise ValueError("GEMINI_API_KEY не задан")
                     genai.configure(api_key=api_key)
                     
-                                        _model_names = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest']
+                    _model_names = ['gemini-2.5-flash', 'gemini-2.0-flash']
                     model = None
                     for _m in _model_names:
                         try:
                             model = genai.GenerativeModel(_m)
-                            # пробный вызов, чтобы проверить доступность модели
                             model.generate_content('ping', request_options={'timeout': 3})
                             break
                         except Exception:
