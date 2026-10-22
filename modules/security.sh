@@ -881,10 +881,23 @@ menu_icmp_block() {
 }
 
 
+
+optimize_ssh() {
+    clear
+    echo -e "${YELLOW}Ускоряем SSH...${NC}"
+    sed -i '/^UseDNS/d' /etc/ssh/sshd_config
+    sed -i '/^GSSAPIAuthentication/d' /etc/ssh/sshd_config
+    echo "UseDNS no" >> /etc/ssh/sshd_config
+    echo "GSSAPIAuthentication no" >> /etc/ssh/sshd_config
+    systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+    echo -e "${GREEN}✅ SSH ускорен (DNS и GSSAPI отключены)${NC}"
+    read -p "Нажмите Enter..."
+}
+
 run_full_optimize() {
     clear
     echo -e "${CYAN}══════════════════════════════════════════════${NC}"
-    echo -e "     ${YELLOW}⚡ ПОЛНАЯ ОПТИМИЗАЦИЯ СЕРВЕРА${NC}"
+    echo -e "     ${YELLOW}⚡  ПОЛНАЯ ОПТИМИЗАЦИЯ СЕРВЕРА${NC}"
     echo -e "${CYAN}══════════════════════════════════════════════${NC}"
     echo ""
     echo "Будет установлено/настроено:"
@@ -896,13 +909,18 @@ run_full_optimize() {
     echo "  ✓ TCP Brutal"
     echo "  ✓ Буферы ядра"
     echo "  ✓ Swap 1 GB"
+    echo -e "  ✓ Ускорен SSH (DNS/GSSAPI)"
     echo ""
     echo -e "${YELLOW}⚠️  apt upgrade может потребовать reboot${NC}"
     echo ""
     read -p "Продолжить? (y/n): " c
     [[ "$c" != "y" && "$c" != "Y" ]] && return
     echo ""
+    
+    # 1. Запускаем основной скрипт оптимизации
     bash /usr/local/bin/vpn-optimize.sh ""
+    
+    
     echo ""
     read -p "Нажмите Enter..."
 }
@@ -992,27 +1010,29 @@ fi
         echo -e " 12) ⚡ Оптимизировать буферы ядра"
         echo -e " 13) 💾 Создать / пересоздать swap"
         echo -e " 14) 🔥 Установить / Настроить TCP Brutal"
-        echo -e " 15) ⚡ Оптимизировать ВСЁ одной кнопкой"
+        echo -e " 15) 🚀 Ускорить SSH (DNS/GSSAPI)"
+        echo -e " 16) ⚡  Оптимизировать ВСЁ одной кнопкой"
         echo ""
         echo -e "${CYAN}─── 🔄 Управление ───${NC}"
-        echo -e " 16) 📊 Мониторинг (htop)"
-        echo -e " 17) 🔄 Перезагрузка сервера"
-        echo -e " 18) 🛑 Выключение сервера"
-        echo -e " 19) 🛡  Блокировка ICMP (анти-DPI)"
+        echo -e " 17) 📊 Мониторинг (htop)"
+        echo -e " 18) 🔄 Перезагрузка сервера"
+        echo -e " 19) 🛑 Выключение сервера"
+        echo -e " 20) 🛡  Блокировка ICMP (анти-DPI)"
         echo ""
         echo -e "${CYAN}─── 💾 Бэкап / Восстановление ───${NC}"
-        echo -e " 20) 💾 Создать бэкап сейчас"
-        echo -e " 21) 📂 Список бэкапов"
-        echo -e " 22) 📥 Восстановить из файла"
+        echo -e " 21) 💾 Создать бэкап сейчас"
+        echo -e " 22) 📂 Список бэкапов"
+        echo -e " 23) 📥 Восстановить из файла"
         echo ""
         echo -e " 0) ↩️  Назад в главное меню"
         echo ""
-        read -p "Выберите раздел [0-22]: " sec_choice
+        read -p "Выберите раздел [0-23]: " sec_choice
 
         case $sec_choice in
             1) system_update ;;
             14) manage_tcp_brutal ;;
-            15) run_full_optimize ;;
+            15) optimize_ssh ;;
+            16) run_full_optimize ;;
             2) change_timezone ;;
             3) change_dns ;;
             4) cleanup_system ;;
@@ -1025,13 +1045,13 @@ fi
             11) toggle_bbr ;;
             12) optimize_udp_tm ;;
             13) create_swap ;;
-            16) monitoring_htop ;;
-            17) server_reboot ;;
-            18) server_shutdown ;;
-            19) menu_icmp_block ;;
-            20) backup_create_now ;;
-            21) backup_list ;;
-            22) backup_restore_menu ;;
+            17) monitoring_htop ;;
+            18) server_reboot ;;
+            19) server_shutdown ;;
+            20) menu_icmp_block ;;
+            21) backup_create_now ;;
+            22) backup_list ;;
+            23) backup_restore_menu ;;
             0) break ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
         esac
