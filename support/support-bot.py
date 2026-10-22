@@ -446,14 +446,14 @@ def handle_message(cfg, msg, token, admin_id):
         forward_to_admin(cfg, ticket_id, user_id, first_name, username, text, is_followup=False)
         NL = chr(10)
         out = NL.join([
-            '🤖 К сожалению, я не знаю ответ на этот вопрос.',
+            '✅ <b>Ваш вопрос передан в поддержку!</b>',
             '',
-            '📨 Передал твоё сообщение в поддержку.',
-            'Обычно отвечаем в течение 1-2 часов.',
+            '⏳ Обычно отвечаем в течение 1-2 часов.',
+            'Вы можете написать еще, текст тоже уйдет админу.',
             '',
             f'🎫 Тикет: #{ticket_id}'
         ])
-        send(token, chat_id, out)
+        send(token, chat_id, out, parse_mode='HTML')
 
 
 def show_help(cfg, chat_id):
