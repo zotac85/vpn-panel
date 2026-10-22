@@ -1216,11 +1216,15 @@ def send_npvt_file(cfg, chat_id, user_id, key_name):
     token = cfg['BOT_TOKEN']
     key = db.get_test_key(key_name) or db.get_vip_key(key_name)
     if not key or int(key['tg_id']) != int(user_id):
-        _send(token, chat_id, "❌ Ключ не найден")
+        _send(token, chat_id, "❌  Ключ не найден")
+        return
+        
+    if not key_name.startswith('vip_'):
+        from bot_modules import cabinet as _cab
+        _cab._send_new(token, chat_id, "🍏 <b>Ключи для iPhone (NPV Tunnel)</b>" + chr(10) + chr(10) + "🔒 <i>Эти конфигурации доступны только VIP клиентам.</i>" + chr(10) + chr(10) + "Оформите VIP-подписку в разделе <b>💎 DarkTunnel</b>, чтобы получить доступ к данному формату.")
         return
 
-    sub_url = f"https://de.cdnstore.shop:8443/sub/{key_name}"
-    
+    sub_url = f"https://de.cdnstore.shop/sub/{key_name}"
     from bot_modules import cabinet as _cab
     NL = chr(10)
     text = NL.join([
@@ -2270,14 +2274,23 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         return True
     if cb_data == 'cab_udp_soon':
         _udp_text = (
-            "🍏 <b>Скоро: Ключи для iPhone (NPV Tunnel)</b>" + chr(10) + chr(10) +
-            "Приложение <b>NPV Tunnel</b> обеспечит максимальную скорость и стабильность на вашем iPhone или iPad." + chr(10) + chr(10) +
-            "<b>Преимущества наших ключей:</b>" + chr(10) +
-            "⚡️ <b>Высокая скорость</b> — технология UDP для стриминга и игр без лагов." + chr(10) +
-            "🔋 <b>Экономия батареи</b> — оптимизированный протокол не сажает аккумулятор." + chr(10) +
-            "🛡 <b>Надежность</b> — обход блокировок и полная защита данных." + chr(10) +
-            "🚀 <b>Простота</b> — импорт ключа в 1 клик, без сложных настроек." + chr(10) + chr(10) +
-            "🚧 <i>Раздел находится в финальной стадии разработки. Следите за обновлениями в нашем канале, чтобы получить ключ первыми!</i>"
+            "🍏 <b>Ключи для iPhone (NPV Tunnel)</b>" + chr(10) + chr(10) +
+            "Приложение <b>NPV Tunnel</b> обеспечивает максимальную скорость и стабильность на вашем iPhone или iPad." + chr(10) + chr(10) +
+            "<b>👇 Как получить ключ:</b>" + chr(10) +
+            "1️⃣ Перейди в раздел <b>🔑 Мои ключи</b>." + chr(10) +
+            "2️⃣ Нажми на свой <b>VIP-ключ</b>." + chr(10) +
+            "3️⃣ Нажми кнопку <b>🍏 Ключ для iPhone</b>." + chr(10) +
+            "4️⃣ Скопируй ссылку на подписку." + chr(10) + chr(10) +
+            "<b>📲 Как добавить в приложение:</b>" + chr(10) +
+            "1. Скачай <b>NPV Tunnel</b> из App Store." + chr(10) +
+            "2. Открой вкладку <b>Configs</b> в приложении." + chr(10) +
+            "3. Нажми <b>Add subscription</b> (Добавить подписку)." + chr(10) +
+            "4. Вставь ссылку и нажми OK. Все локации добавятся автоматически!" + chr(10) + chr(10) +
+            "<b>Преимущества:</b>" + chr(10) +
+            "⚡️ Высокая скорость (UDP) для игр и стриминга." + chr(10) +
+            "🔋 Экономия батареи." + chr(10) +
+            "🛡 Обход блокировок (DPI)." + chr(10) + chr(10) +
+            "<i>⚠️ Ключи NPV доступны только VIP клиентам.</i>"
         )
         _udp_kb = {'inline_keyboard': [
             [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
