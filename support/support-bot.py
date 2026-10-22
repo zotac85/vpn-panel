@@ -193,6 +193,32 @@ def handle_message(cfg, msg, token, admin_id):
         try:
             with open('/etc/UDPCustom/help_faq.txt', 'r') as f:
                 faq_text = f.read()
+            # Подставляем переменные
+            _sup = '@ArsenGuro'
+            try:
+                with open('/etc/UDPCustom/support.txt') as _f:
+                    _sup = _f.read().strip() or '@ArsenGuro'
+            except: pass
+            _hours = cfg.get('TEST_HOURS', '2')
+            _location = cfg.get('SERVER_LOCATION', '')
+            faq_text = faq_text.replace('{support}', _sup).replace('{hours}', str(_hours)).replace('{location}', _location)
+            # Подставляем тарифы
+            _tariffs_str = ''
+            try:
+                with open('/etc/UDPCustom/bot.conf') as _f:
+                    for _line in _f:
+                        if _line.startswith('VIP_TARIFFS='):
+                            _val = _line.split('=', 1)[1].strip().strip('"')
+                            for _t in _val.split(','):
+                                _p = _t.split('|')
+                                if len(_p) >= 2:
+                                    _tariffs_str += f'• {_p[0]} дней — {_p[1]} USDT\n'
+                            break
+            except: pass
+            if _tariffs_str:
+                faq_text = faq_text.replace('{tariffs}', _tariffs_str.strip())
+            else:
+                faq_text = faq_text.replace('{tariffs}', '• Актуальные цены в ЛК → Купить VIP')
             send(token, chat_id, faq_text, parse_mode='HTML')
         except Exception:
             send(token, chat_id, '❌ FAQ временно недоступен.')
