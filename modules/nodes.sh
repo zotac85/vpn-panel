@@ -79,6 +79,11 @@ _nodes_install_ws() {
     row=$(_nodes_py get "$nid")
     [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
     IFS='|' read -r name host ip sport wsport suser <<< "$row"
+    
+    # Защита от сброса порта в 0 или пустоту
+    if [ -z "$wsport" ] || [ "$wsport" = "0" ]; then
+        wsport=80
+    fi
     echo ""
     echo -e "${CYAN}Устанавливаю WS на $name ($ip)...${NC}"
     echo -e "${YELLOW}Будут использованы порты: WS=$wsport, SSH=$sport${NC}"
@@ -125,6 +130,11 @@ _nodes_install_banner() {
     row=$(_nodes_py get "$nid")
     [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
     IFS='|' read -r name host ip sport wsport suser <<< "$row"
+    
+    # Защита от сброса порта в 0 или пустоту
+    if [ -z "$wsport" ] || [ "$wsport" = "0" ]; then
+        wsport=80
+    fi
 
     # Генерируем баннер из шаблона мастера, подменяя локацию
     BANNER_SRC="/etc/UDPCustom/ssh_banner.txt"
@@ -242,6 +252,11 @@ _nodes_optimize() {
     row=$(_nodes_py get "$nid")
     [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
     IFS='|' read -r name host ip sport wsport suser <<< "$row"
+    
+    # Защита от сброса порта в 0 или пустоту
+    if [ -z "$wsport" ] || [ "$wsport" = "0" ]; then
+        wsport=80
+    fi
 
     # IP мастера для whitelist fail2ban
     MASTER_IP=$(hostname -I | awk '{print $1}')
@@ -279,6 +294,11 @@ _nodes_reboot() {
     row=$(_nodes_py get "$nid")
     [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
     IFS='|' read -r name host ip sport wsport suser <<< "$row"
+    
+    # Защита от сброса порта в 0 или пустоту
+    if [ -z "$wsport" ] || [ "$wsport" = "0" ]; then
+        wsport=80
+    fi
 
     echo ""
     read -p "Перезагрузить $name ($ip)? (y/n): " c
@@ -312,6 +332,11 @@ _nodes_change_domain() {
     row=$(_nodes_py get "$nid")
     [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
     IFS='|' read -r name host ip sport wsport suser <<< "$row"
+    
+    # Защита от сброса порта в 0 или пустоту
+    if [ -z "$wsport" ] || [ "$wsport" = "0" ]; then
+        wsport=80
+    fi
     echo ""
     echo -e "  Текущий домен: ${GREEN}$host${NC}"
     read -p "  Новый домен (без http://): " new_domain
@@ -357,6 +382,11 @@ _nodes_install_udpgw() {
     row=$(_nodes_py get "$nid")
     [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
     IFS='|' read -r name host ip sport wsport suser <<< "$row"
+    
+    # Защита от сброса порта в 0 или пустоту
+    if [ -z "$wsport" ] || [ "$wsport" = "0" ]; then
+        wsport=80
+    fi
 
     echo ""
     echo -e "${CYAN}Устанавливаю UDPGW на $name ($ip)...${NC}"
@@ -473,6 +503,11 @@ _nodes_update_scripts() {
         local row=$(_nodes_py get "$id")
         [ -z "$row" ] && { echo -e "${RED}Нода $id не найдена${NC}"; continue; }
         IFS='|' read -r name host ip sport wsport suser <<< "$row"
+    
+    # Защита от сброса порта в 0 или пустоту
+    if [ -z "$wsport" ] || [ "$wsport" = "0" ]; then
+        wsport=80
+    fi
 
         echo -e "${CYAN}→ Обновляю $name ($ip)...${NC}"
 
@@ -643,6 +678,11 @@ _nodes_key() {
     row=$(_nodes_py get "$nid")
     [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
     IFS='|' read -r name host ip sport wsport suser <<< "$row"
+    
+    # Защита от сброса порта в 0 или пустоту
+    if [ -z "$wsport" ] || [ "$wsport" = "0" ]; then
+        wsport=80
+    fi
     echo "Нода: $name ($ip:$sport)"
     _nodes_sync_key "$ip" "$sport"
     read -p "Нажмите Enter..."
