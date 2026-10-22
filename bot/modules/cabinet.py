@@ -409,7 +409,7 @@ def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
          {'text': '💰 Баланс', 'callback_data': 'cab_balance'},
          {'text': '🎫 Промокод', 'callback_data': 'cab_promo'}],
         [{'text': '💎 DarkTunnel', 'callback_data': 'cab_buy_vip'},
-         {'text': '💎 HttpCustom', 'callback_data': 'cab_udp_soon'},
+         {'text': '💎 NpvTunnel', 'callback_data': 'cab_udp_soon'},
          {'text': '💎 WhiteDns', 'callback_data': 'cab_whitedns'}],
         [{'text': '👥 Рефералы', 'callback_data': 'cab_refs'},
          {'text': '\U0001F6DF Помощь', 'callback_data': 'cab_help'},
