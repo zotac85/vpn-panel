@@ -590,7 +590,7 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
                 f"4️⃣ Вернись и нажми «Я подписался»\n\n"
                 f"<b>Ты не подписан на:</b>\n"
                 + "".join([f"👉 @{ch}\n" for ch in not_sub]) +
-                f"\n💎 Есть VIP-ключи — пиши {get_support()}"
+                f"\n💎 Есть VIP-ключи. Нужен VIP-ключ? Пиши в поддержку: {get_support()}"
             )
         keyboard = {'inline_keyboard': []}
         for ch in not_sub:
