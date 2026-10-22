@@ -388,6 +388,11 @@ def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
         f"🔑 Активных ключей: <b>{active_count}</b>",
         f"👥 Приглашено рефералов: <b>{db.get_ref_count(user_id)}</b>",
         "━━━━━━━━━━━━━━━━━━━━",
+        "",
+        "💡 <i>Подсказка:</i>",
+        "💎 <b>DarkTunnel</b> — здесь тарифы на вип ключи с ценами.",
+        "💰 <b>Баланс</b> — здесь пополнение tmcell, usdt и история.",
+        "🔑 <b>Мои ключи</b> — твои готовые ключи."
     ]
     text = NL.join(lines)
 
