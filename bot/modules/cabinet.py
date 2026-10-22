@@ -1213,59 +1213,25 @@ def format_key_card(cfg, key_name):
 
 
 def send_npvt_file(cfg, chat_id, user_id, key_name):
-    import base64, json
     token = cfg['BOT_TOKEN']
     key = db.get_test_key(key_name) or db.get_vip_key(key_name)
     if not key or int(key['tg_id']) != int(user_id):
         _send(token, chat_id, "❌ Ключ не найден")
         return
 
-    def b64(s): return base64.b64encode(s.encode()).decode()
+    sub_url = f"https://de.cdnstore.shop:8443/sub/{key_name}"
     
-    host = "de.cdnstore.shop"
-    port = 80
-    proxy = "8.6.112.0:80"
-    payload = "CONNECT / HTTP/1.1[crlf]Host: ya.ru[crlf]User-Agent: Mozilla/5.0 (Linux; Android 13) Chrome/120[crlf][crlf]POST / HTTP/1.1[crlf]Host: [host][crlf]Connection: upgrade[crlf]Upgrade: websocket[crlf][crlf]"
-    
-    data = {
-        "sshConfigType": "npvs1:" + b64("SSH-Proxy-Payload"),
-        "remarks": "npvs1:" + b64("NpvTunnel"),
-        "sshHost": "npvs1:" + b64(host),
-        "sshPort": port,
-        "sshUsername": "npvs1:" + b64(key['login']),
-        "sshPassword": "npvs1:" + b64(key['password']),
-        "sshAuthMethod": "npvs1:" + b64("PASSWORD"),
-        "sshPrivateKey": "",
-        "sshPrivateKeyPassphrase": "",
-        "sni": "",
-        "tlsVersion": "npvs1:" + b64("DEFAULT"),
-        "httpProxy": "npvs1:" + b64(proxy),
-        "authenticateProxy": False,
-        "proxyUsername": "",
-        "proxyPassword": "",
-        "payload": "npvs1:" + b64(payload),
-        "dnsTTMode": "npvs1:" + b64("UDP"),
-        "dnsServer": "",
-        "nameserver": "",
-        "publicKey": "",
-        "udpgwPort": 7300,
-        "udpgwTransparentDNS": False
-    }
-    
-    json_str = json.dumps(data, separators=(',', ':'))
-    npvt_url = f"npvt-ssh://{base64.b64encode(json_str.encode()).decode()}"
-    
-    # Используем _send_new для автоудаления предыдущего сообщения
     from bot_modules import cabinet as _cab
     NL = chr(10)
     text = NL.join([
-        '🍏 <b>Ключ для iPhone (NPV Tunnel)</b>',
+        '🍏 <b>Подписка для iPhone (NPV Tunnel)</b>',
         '',
-        '1. Скопируй ссылку ниже (просто нажми на неё)',
+        '1. Нажми на ссылку ниже (она скопируется)',
         '2. Открой NPV Tunnel',
-        '3. Нажми <b>Import config from Clipboard</b>',
+        '3. Вкладка <b>Configs</b> → <b>Add subscription</b>',
+        '4. Вставь ссылку и нажми OK',
         '',
-        f'<code>{npvt_url}</code>'
+        f'<code>{sub_url}</code>'
     ])
     _cab._send_new(token, chat_id, text)
 
