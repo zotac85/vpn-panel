@@ -1213,6 +1213,23 @@ def main():
     threading.Thread(target=auto_close_loop, args=(cfg,), daemon=True).start()
 
     offset = 0
+    # Автоматическая регистрация команд
+    try:
+        import urllib.request, json
+        _token = cfg.get("BOT_TOKEN", "")
+        if _token:
+            cmds = {"commands": [
+                {"command": "start", "description": "🏠 Главное меню"},
+                {"command": "faq", "description": "📖 Частые вопросы"},
+                {"command": "ai", "description": "🧠 Спросить у ИИ"}
+            ]}
+            req = urllib.request.Request(f"https://api.telegram.org/bot{_token}/setMyCommands", data=json.dumps(cmds).encode(), headers={"Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=5)
+            req2 = urllib.request.Request(f"https://api.telegram.org/bot{_token}/setChatMenuButton", data=json.dumps({"menu_button": {"type": "commands"}}).encode(), headers={"Content-Type": "application/json"})
+            urllib.request.urlopen(req2, timeout=5)
+    except Exception:
+        pass
+
     while True:
         try:
             updates = tg(token, 'getUpdates', {'offset': offset, 'timeout': 30,
