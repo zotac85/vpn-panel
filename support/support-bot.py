@@ -339,18 +339,17 @@ def handle_message(cfg, msg, token, admin_id):
                         raise ValueError("GEMINI_API_KEY не задан")
                     genai.configure(api_key=api_key)
                     
-                    _model_names = ['gemini-2.5-flash', 'gemini-2.0-flash']
+                    _model_names = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-pro']
                     model = None
                     for _m in _model_names:
                         try:
                             model = genai.GenerativeModel(_m)
-                            model.generate_content('ping', request_options={'timeout': 3})
                             break
                         except Exception:
                             model = None
                             continue
                     if model is None:
-                        model = genai.GenerativeModel('gemini-2.5-flash')
+                        model = genai.GenerativeModel('gemini-3.8-flash')
                     prompt = f"""Ты — умный и вежливый ИИ-помощник техподдержки VPN сервиса.
 Ответь на вопрос клиента кратко и по делу.
 Твои знания: Тарифы: 7д - 1$, 30д - 3$, 90д - 8$. Оплата: TMCELL (перевод на номер) или CRYPTO USDT.
