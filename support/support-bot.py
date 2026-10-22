@@ -132,9 +132,33 @@ def parse_keywords():
 
 
 def find_faq_answer(text):
-    """Ищет блок FAQ по ключевым словам. Возвращает (block_text, block_title) или (None, None)"""
+    """Ищет блок FAQ по ключевым словам (выбирает наиболее точное совпадение)."""
     if not text:
         return None, None
+    text_lower = text.lower()
+    blocks = parse_faq()
+    keywords = parse_keywords()
+    
+    best_title = None
+    best_score = 0
+    
+    # Ищем блок с наибольшим количеством совпавших слов
+    for words, title in keywords:
+        score = 0
+        for w in words:
+            if w in text_lower:
+                score += 1
+        if score > best_score:
+            best_score = score
+            best_title = title
+            
+    if best_title:
+        for btitle, btext in blocks.items():
+            if btitle.startswith(best_title[:20]) or best_title in btitle:
+                return btext, best_title
+        return f"<b>{best_title}</b>", best_title
+        
+    return None, None
     text_lower = text.lower()
     blocks = parse_faq()
     keywords = parse_keywords()
