@@ -228,6 +228,14 @@ def handle_message(cfg, msg, token, admin_id):
         main_bot = cfg.get('MAIN_BOT', 'ArsenVipKeysBot')
         send(token, chat_id, f'🤖 <b>Основной бот:</b> @{main_bot}\n👉 https://t.me/{main_bot}', parse_mode='HTML')
         return
+        
+    if text in ('🏠 Старт', '🏠 Главное меню'):
+        welcome_client(cfg, chat_id, first_name)
+        return
+        
+    if text in ('🧠 ИИ', '🧠 Спросить у ИИ', '/ai'):
+        send(token, chat_id, "🧠 <b>ИИ-помощник</b>\n\nЭта функция скоро появится! А пока можешь просто написать свой вопрос сюда, и я передам его администратору.", parse_mode='HTML')
+        return
 
     # === Проверка: админ редактирует FAQ? ===
     if str(user_id) == str(admin_id) and user_id in PENDING_FAQ_EDIT and text:
