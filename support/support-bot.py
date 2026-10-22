@@ -324,6 +324,14 @@ def handle_message(cfg, msg, token, admin_id):
                 # Не делаем return, чтобы код пошел дальше и создал тикет
             else:
                 try:
+                    # Показываем статус "Печатает..."
+                    import urllib.request, json
+                    _url = f"https://api.telegram.org/bot{token}/sendChatAction"
+                    _data = json.dumps({'chat_id': chat_id, 'action': 'typing'}).encode()
+                    _req = urllib.request.Request(_url, data=_data, headers={'Content-Type': 'application/json'})
+                    try: urllib.request.urlopen(_req, timeout=2)
+                    except: pass
+                    
                     import google.generativeai as genai
                     # Читаем ключ из bot.conf
                     api_key = ''
