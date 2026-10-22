@@ -26,6 +26,8 @@ log = logging.getLogger()
 # КОНФИГ
 # ═══════════════════════════════════════════════════════════════
 
+LAST_MENU_MSGS = {}
+
 def load_config():
     cfg = {
         'BOT_TOKEN': '',
@@ -277,6 +279,7 @@ def handle_message(cfg, msg, token, admin_id):
                     f'Тикет #{_tid} остаётся открытым.',
                     'Клиент может писать — сообщения придут тебе.'
                 ]))
+                show_admin_menu(cfg, chat_id)
             else:
                 send(token, chat_id, '🚪 Ты не в режиме ответа')
             show_admin_menu(cfg, chat_id)
@@ -301,11 +304,16 @@ def handle_message(cfg, msg, token, admin_id):
                     return
         # Если не reply — показываем статистику/меню админа
         if text.startswith('/start') or text.startswith('/admin'):
+            PENDING_TICKET_REPLY.pop(user_id, None)
+            try: tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg['message_id']})
+            except: pass
             show_admin_menu(cfg, chat_id)
         return
 
     # === КЛИЕНТ пишет ===
     if text.startswith('/start'):
+        try: tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg['message_id']})
+        except: pass
         welcome_client(cfg, chat_id, first_name)
         return
     if text.startswith('/help'):
@@ -521,7 +529,15 @@ def welcome_client(cfg, chat_id, first_name):
         'resize_keyboard': True,
         'is_persistent': True
     }
-    send(token, chat_id, text, reply_markup=reply_kb)
+    if chat_id in LAST_MENU_MSGS:
+        for mid in LAST_MENU_MSGS[chat_id]:
+            try: tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': mid})
+            except: pass
+        LAST_MENU_MSGS[chat_id] = []
+
+    rw = send(token, chat_id, text, reply_markup=reply_kb)
+    if rw and rw.get('ok'):
+        LAST_MENU_MSGS.setdefault(chat_id, []).append(rw['result']['message_id'])
 
 
 def forward_to_admin(cfg, ticket_id, user_id, first_name, username, text, is_followup=False):
@@ -563,14 +579,25 @@ def show_admin_menu(cfg, chat_id):
         '━━━━━━━━━━━━━━━━━━━━',
         'Выбери раздел:'
     ])
-    send(token, chat_id, out, reply_markup={'remove_keyboard': True})
+    if chat_id in LAST_MENU_MSGS:
+        for mid in LAST_MENU_MSGS[chat_id]:
+            try: tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': mid})
+            except: pass
+        LAST_MENU_MSGS[chat_id] = []
+
+    r1 = send(token, chat_id, out, reply_markup={'remove_keyboard': True})
+    if r1 and r1.get('ok'):
+        LAST_MENU_MSGS.setdefault(chat_id, []).append(r1['result']['message_id'])
+
     kb = {'inline_keyboard': [
         [{'text': f'📋 Тикеты ({stats["open_tickets"]})', 'callback_data': 'adm_tickets'},
          {'text': '⏱ Статистика', 'callback_data': 'adm_resp_stats'}],
         [{'text': '📝 Управление FAQ', 'callback_data': 'adm_faq_edit'},
          {'text': '🔄 Обновить', 'callback_data': 'adm_refresh'}]
     ]}
-    send(token, chat_id, '👇 <b>Управление:</b>', reply_markup=kb)
+    r2 = send(token, chat_id, '👇 <b>Управление:</b>', reply_markup=kb)
+    if r2 and r2.get('ok'):
+        LAST_MENU_MSGS.setdefault(chat_id, []).append(r2['result']['message_id'])
 
 def handle_callback(cfg, cb, token, admin_id):
     """Обработка callback_query"""
@@ -586,6 +613,14 @@ def handle_callback(cfg, cb, token, admin_id):
             _tid = int(parts[1])
             PENDING_TICKET_REPLY[user_id] = _tid
             tg(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': 'Режим ответа включен'})
+
+            # Удаляем старые панели админа, чтобы не мешали
+            if chat_id in LAST_MENU_MSGS:
+                for mid in LAST_MENU_MSGS[chat_id]:
+                    try: tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': mid})
+                    except: pass
+                LAST_MENU_MSGS[chat_id] = []
+
             send(token, chat_id, f'✍️ <b>Режим ответа (Тикет #{_tid})</b>\n\nНапиши текст ответа. Он сразу улетит клиенту.\nДля выхода напиши /cancel.', parse_mode='HTML')
         return
 
@@ -883,6 +918,12 @@ def start_ticket_reply(cfg, chat_id, user_id, ticket_id):
         send(token, chat_id, '❌ Тикет не найден')
         return
     PENDING_TICKET_REPLY[user_id] = ticket_id
+    # Удаляем старые панели админа, чтобы не мешали
+    if chat_id in LAST_MENU_MSGS:
+        for mid in LAST_MENU_MSGS[chat_id]:
+            try: tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': mid})
+            except: pass
+        LAST_MENU_MSGS[chat_id] = []
     NL = chr(10)
     out = NL.join([
         f'💬 <b>ОТВЕТ В ТИКЕТ #{ticket_id}</b>',
