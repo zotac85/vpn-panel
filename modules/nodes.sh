@@ -93,6 +93,14 @@ _nodes_install_ws() {
         read -p "Нажмите Enter..."
         return
     fi
+    # Автоматически заливаем токен на ноду, если его там нет
+    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" \
+        "[ -f /root/.vpn-panel.token ] || (echo '$(cat /root/.vpn-panel.token 2>/dev/null)' > /root/.vpn-panel.token && chmod 600 /root/.vpn-panel.token && echo '✅ Токен залит на ноду')" 2>/dev/null
+
+    # Автоматически заливаем токен на ноду, если его там нет
+    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" \
+        "[ -f /root/.vpn-panel.token ] || (echo '$(cat /root/.vpn-panel.token 2>/dev/null)' > /root/.vpn-panel.token && chmod 600 /root/.vpn-panel.token && echo '✅ Токен залит на ноду')" 2>/dev/null
+
     scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" \
         "$LOCAL_SCRIPT" root@"$ip":/tmp/inst.sh >/dev/null 2>&1
     ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" \

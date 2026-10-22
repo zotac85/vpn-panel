@@ -4,7 +4,7 @@
 # ==========================================
 
 # 1. Создание мастер-токена (если его нет)
-MASTER_TOKEN="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"
+MASTER_TOKEN=$(cat /root/.vpn-panel.token 2>/dev/null)
 if [ ! -f /root/.vpn-panel.token ]; then
     echo "$MASTER_TOKEN" > /root/.vpn-panel.token
     chmod 600 /root/.vpn-panel.token
