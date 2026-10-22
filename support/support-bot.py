@@ -234,7 +234,8 @@ def handle_message(cfg, msg, token, admin_id):
         return
         
     if text in ('🧠 ИИ', '🧠 Спросить у ИИ', '/ai'):
-        send(token, chat_id, "🧠 <b>ИИ-помощник</b>\n\nЭта функция скоро появится! А пока можешь просто написать свой вопрос сюда, и я передам его администратору.", parse_mode='HTML')
+        AI_SESSIONS.add(user_id)
+        send(token, chat_id, "🧠 <b>ИИ-помощник подключен!</b>\n\nЗадай свой вопрос текстом. Чтобы выйти и позвать человека, напиши /cancel.", parse_mode='HTML')
         return
 
     # === Проверка: админ редактирует FAQ? ===
@@ -306,6 +307,36 @@ def handle_message(cfg, msg, token, admin_id):
     if text.startswith('/help'):
         show_help(cfg, chat_id)
         return
+
+    # === РЕЖИМ ИИ ===
+    if user_id in AI_SESSIONS:
+        if text.startswith('/cancel') or text in ('🏠 Старт', '/start', '📖 FAQ', '📖 Частые вопросы', '🤖 Бот', '🤖 Основной бот'):
+            AI_SESSIONS.discard(user_id)
+            if text.startswith('/cancel'):
+                send(token, chat_id, "🚪 Вы вышли из режима ИИ. Если хотите оставить вопрос админу, просто напишите его.")
+                return
+        else:
+            try:
+                import google.generativeai as genai
+                api_key = cfg.get('GEMINI_API_KEY', '')
+                if not api_key:
+                    raise ValueError("GEMINI_API_KEY не задан")
+                genai.configure(api_key=api_key)
+                
+                # Используем актуальную модель
+                model = genai.GenerativeModel('gemini-1.5-flash')
+                prompt = f"Ты — ИИ-помощник техподдержки VPN сервиса ArsenVipKeys. Отвечай кратко, вежливо и по делу. Тарифы: 7д - 1$, 30д - 3$, 90д - 8$. Оплата: TMCELL или USDT. Если не знаешь ответа, попроси написать /cancel и связаться с админом. Вопрос клиента: {text[:500]}"
+                
+                resp = model.generate_content(prompt)
+                answer_text = resp.text.strip()
+                
+                send(token, chat_id, f"🧠 <b>ИИ-ответ:</b>\n{answer_text}\n\n<i>Если нужен человек, отправь</i> /cancel", parse_mode='HTML')
+                return
+            except Exception as e:
+                log.error(f"AI error: {e}")
+                send(token, chat_id, "❌ <b>Ошибка ИИ.</b> Передаю ваш вопрос администратору...", parse_mode='HTML')
+                AI_SESSIONS.discard(user_id)
+                # Пропускаем дальше, чтобы создался тикет
 
     # Пустое сообщение
     if not text:
@@ -1141,6 +1172,7 @@ def save_faq_block(cfg, chat_id, idx, new_text):
 
 # Pending редактирования FAQ (user_id -> block_idx)
 PENDING_FAQ_EDIT = {}
+AI_SESSIONS = set()
 
 
 def auto_close_loop(cfg):
