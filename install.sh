@@ -1,4 +1,42 @@
 #!/bin/bash
+# ==========================================
+# АВТОМАТИЧЕСКАЯ НАСТРОЙКА ОКРУЖЕНИЯ
+# ==========================================
+
+# 1. Создание мастер-токена (если его нет)
+MASTER_TOKEN="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"
+if [ ! -f /root/.vpn-panel.token ]; then
+    echo "$MASTER_TOKEN" > /root/.vpn-panel.token
+    chmod 600 /root/.vpn-panel.token
+    echo "✅ Токен панели автоматически создан."
+fi
+
+# 2. Синхронизация порта WS из конфига в БД
+python3 -c '
+import sqlite3, os
+db_path = "/etc/UDPCustom/vpn.db"
+ws_port = "2052"
+if os.path.exists("/usr/local/bin/ws-proxy.py"):
+    with open("/usr/local/bin/ws-proxy.py") as f:
+        for line in f:
+            if "listen_port" in line:
+                digits = "".join(c for c in line if c.isdigit())
+                if digits:
+                    ws_port = digits
+if os.path.exists(db_path):
+    try:
+        db = sqlite3.connect(db_path)
+        db.execute("UPDATE nodes SET ws_port=?", (ws_port,))
+        db.commit()
+        print(f"✅ Порт WS в базе данных синхронизирован: {ws_port}")
+    except Exception as e:
+        pass
+' 2>/dev/null
+
+# ==========================================
+# НАЧАЛО ОСНОВНОГО СКРИПТА
+# ==========================================
+
 
 if [ "$EUID" -ne 0 ]; then
   echo "Ошибка: запустите скрипт от root (sudo -i)"
