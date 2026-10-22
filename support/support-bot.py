@@ -189,7 +189,7 @@ def handle_message(cfg, msg, token, admin_id):
     text = msg.get('text', '')
 
     # Обработка постоянных кнопок
-    if text == '📖 Частые вопросы':
+    if text in ('📖 FAQ', '📖 Частые вопросы', '/faq'):
         try:
             with open('/etc/UDPCustom/help_faq.txt', 'r') as f:
                 faq_text = f.read()
@@ -224,7 +224,7 @@ def handle_message(cfg, msg, token, admin_id):
             send(token, chat_id, '❌ FAQ временно недоступен.')
         return
         
-    if text == '🤖 Основной бот':
+    if text in ('🤖 Бот', '🤖 Основной бот'):
         main_bot = cfg.get('MAIN_BOT', 'ArsenVipKeysBot')
         send(token, chat_id, f'🤖 <b>Основной бот:</b> @{main_bot}\n👉 https://t.me/{main_bot}', parse_mode='HTML')
         return
@@ -424,8 +424,7 @@ def welcome_client(cfg, chat_id, first_name):
     ])
     reply_kb = {
         'keyboard': [
-            [{'text': '🏠 Старт'}, {'text': '📖 Частые вопросы'}],
-            [{'text': '🧠 Спросить у ИИ'}, {'text': '🤖 Основной бот'}]
+            [{'text': '📖 FAQ'}, {'text': '🧠 ИИ'}, {'text': '🤖 Бот'}]
         ],
         'resize_keyboard': True,
         'is_persistent': True
