@@ -502,7 +502,7 @@ menu_common_settings() {
         echo -e " 1) 🔄  Вкл/выкл проверку подписки"
         echo -e " 2) ⏰  Кулдаун / срок / лимиты"
         echo -e " 3) 💎  Тарифы VIP"
-        echo -e " 4) 🧠  Gemini — ИИ-проверка чеков"
+        echo -e " 4) 🧠  Gemini — ИИ (Чеки + Чат)"
         echo ""
         echo -e " 5) 🚀  Переустановить сервис основного бота"
         echo -e " 6) 🚀  Переустановить сервис бота поддержки"
@@ -599,7 +599,7 @@ tg_test_gemini() {
 menu_ai_settings() {
     while true; do
         header
-        echo -e "${YELLOW}🧠 GEMINI — ИИ-ПРОВЕРКА ЧЕКОВ${NC}"
+        echo -e "${YELLOW}🧠 GEMINI — НАСТРОЙКА ИИ${NC}"
         echo ""
         local key=$(tg_get_config "GEMINI_API_KEY")
         if [ -n "$key" ]; then
