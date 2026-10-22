@@ -1956,7 +1956,18 @@ def _apply_placeholders(text, cfg):
     _devices = cfg.get('TEST_DEVICES', '')
     _location = cfg.get('SERVER_LOCATION', '')
     _bot_name = cfg.get('CONFIG_NAME', 'VPN')
+
+    # Формируем список тарифов
+    _tariffs_list = ''
+    try:
+        _t_list = _parse_vip_tariffs(cfg)
+        if _t_list:
+            _tariffs_list = "\n".join([f"• {t['days']} дней — {t['price']:g} USDT" for t in _t_list])
+    except Exception:
+        pass
+
     return (text
+        .replace('{tariffs}', _tariffs_list)
         .replace('{support}', _get_support())
         .replace('{primary}', _primary)
         .replace('{sponsors_list}', _sponsors_list)
