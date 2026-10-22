@@ -271,8 +271,8 @@ def handle_message(cfg, msg, token, admin_id):
         forward_to_admin(cfg, tk['id'], user_id, first_name, username, text, is_followup=True)
         return
 
-    # Ищем ответ в FAQ
-    answer, title = find_faq_answer(text)
+    # Автоответчик отключен: всегда создаем тикет
+    answer, title = None, None
     if answer:
         # Подставляем плейсхолдеры в найденный ответ
         _sup = ''
