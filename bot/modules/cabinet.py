@@ -2129,7 +2129,15 @@ def show_help_back(cfg, chat_id, user_id, msg_id=None):
     primary = channels[0].lstrip('@') if channels else 'ArsenVipKeys'
     _sup = _get_support() or ''
     support = _sup.lstrip('@') or 'support'
-    text = "\U0001F4D6 <b>ПОМОЩЬ</b>"
+    text = "📖 <b>ПОМОЩЬ</b>\n\n"
+    text += "📌 <b>Что делает каждая кнопка:</b>\n"
+    text += "⚙️ <b>DarkTunnel / HttpCustom / WhiteDns</b> — инструкции по настройке\n"
+    text += "❓ <b>Вопросы</b> — ответы на частые вопросы\n"
+    text += "🎬 <b>Видео</b> — видео-уроки\n"
+    text += "💬 <b>Поддержка</b> — написать в поддержку\n"
+    text += "👤 <b>Кабинет</b> — твои ключи и баланс\n"
+    text += "📢 <b>Канал</b> — новости и обновления\n"
+    text += "🏠 <b>Меню</b> — вернуться в главное меню"
     kb = {'inline_keyboard': [
         [{'text': '\u2699\uFE0F DarkTunnel', 'callback_data': 'cab_help_darktunnel'},
          {'text': '\u2699\uFE0F HttpCustom', 'callback_data': 'cab_help_httpcustom'},
