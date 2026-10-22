@@ -2518,7 +2518,8 @@ def post_to_channel(cfg, chat_id, user_id):
             'chat_id': target_channel,
             'text': personalized,
             'reply_markup': _keyboard_ch,
-            'parse_mode': 'HTML'
+            'parse_mode': 'HTML',
+            'disable_web_page_preview': True
         })
         if result and result.get('ok'):
             success_count += 1
