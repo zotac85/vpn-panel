@@ -409,7 +409,6 @@ def show_help(cfg, chat_id):
 def welcome_client(cfg, chat_id, first_name):
     """Приветствие клиента"""
     token = cfg['BOT_TOKEN']
-    main_bot = cfg.get('MAIN_BOT', 'ArsenVipKeysBot')
     NL = chr(10)
     text = NL.join([
         f'👋 Привет, <b>{first_name}</b>!',
@@ -432,16 +431,6 @@ def welcome_client(cfg, chat_id, first_name):
         'is_persistent': True
     }
     send(token, chat_id, text, reply_markup=reply_kb)
-    
-    # Отправляем инлайн-меню вторым сообщением
-    inline_kb = {
-        'inline_keyboard': [
-            [{'text': '📖 Частые вопросы', 'callback_data': 'sup_faq'}],
-            [{'text': f'🤖 Основной бот', 'url': f'https://t.me/{main_bot}'}],
-            [{'text': '🧠 Спросить у ИИ', 'callback_data': 'sup_ai'}]
-        ]
-    }
-    send(token, chat_id, "👇 <b>Быстрые действия:</b>", reply_markup=inline_kb)
 
 
 def forward_to_admin(cfg, ticket_id, user_id, first_name, username, text, is_followup=False):
