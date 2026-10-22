@@ -188,6 +188,21 @@ def handle_message(cfg, msg, token, admin_id):
     username = msg['from'].get('username', '') or ''
     text = msg.get('text', '')
 
+    # Обработка постоянных кнопок
+    if text == '📖 Частые вопросы':
+        try:
+            with open('/etc/UDPCustom/help_faq.txt', 'r') as f:
+                faq_text = f.read()
+            send(token, chat_id, faq_text, parse_mode='HTML')
+        except Exception:
+            send(token, chat_id, '❌ FAQ временно недоступен.')
+        return
+        
+    if text == '🤖 Основной бот':
+        main_bot = cfg.get('MAIN_BOT', 'ArsenVipKeysBot')
+        send(token, chat_id, f'🤖 <b>Основной бот:</b> @{main_bot}\n👉 https://t.me/{main_bot}', parse_mode='HTML')
+        return
+
     # === Проверка: админ редактирует FAQ? ===
     if str(user_id) == str(admin_id) and user_id in PENDING_FAQ_EDIT and text:
         _idx = PENDING_FAQ_EDIT.pop(user_id)
@@ -368,7 +383,6 @@ def show_help(cfg, chat_id):
 def welcome_client(cfg, chat_id, first_name):
     """Приветствие клиента"""
     token = cfg['BOT_TOKEN']
-    main_bot = cfg.get('MAIN_BOT', 'ArsenVipKeysBot')
     NL = chr(10)
     text = NL.join([
         f'👋 Привет, <b>{first_name}</b>!',
@@ -376,21 +390,22 @@ def welcome_client(cfg, chat_id, first_name):
         'Я бот поддержки. Помогу с вопросами по VPN.',
         '',
         '━━━━━━━━━━━━━━━━━━━━',
-        '💬 <b>Просто напиши свой вопрос</b>',
+        '💬 <b>Напиши свой вопрос прямо сюда</b>',
+        'и я передам его администратору.',
         '',
-        'Например:',
-        '• «Ключ не работает»',
-        '• «Забыл пароль»',
-        '• «Как получить VIP»',
+        '⏳ <i>Обычно отвечаем в течение 1-2 часов.</i>',
         '',
-        '🤖 Сначала поищу ответ в FAQ.',
-        'Если не найду — передам человеку.',
+        'А пока можешь посмотреть ответы на частые вопросы 👇',
         '━━━━━━━━━━━━━━━━━━━━'
     ])
-    kb = {'inline_keyboard': [
-        [{'text': '🤖 Основной бот', 'url': f'https://t.me/{main_bot}'}]
-    ]}
-    send(token, chat_id, text, reply_markup=kb)
+    reply_kb = {
+        'keyboard': [
+            [{'text': '📖 Частые вопросы'}, {'text': '🤖 Основной бот'}]
+        ],
+        'resize_keyboard': True,
+        'is_persistent': True
+    }
+    send(token, chat_id, text, reply_markup=reply_kb)
 
 
 def forward_to_admin(cfg, ticket_id, user_id, first_name, username, text, is_followup=False):
