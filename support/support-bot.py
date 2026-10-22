@@ -537,7 +537,8 @@ def forward_to_admin(cfg, ticket_id, user_id, first_name, username, text, is_fol
         '',
         text
     ])
-    send(token, admin_id, out)
+    kb = {'inline_keyboard': [[{'text': '💬 Ответить', 'callback_data': f'adm_reply:{ticket_id}:{user_id}'}]]}
+    send(token, admin_id, out, reply_markup=kb)
 
 
 def show_admin_menu(cfg, chat_id):
@@ -575,6 +576,16 @@ def handle_callback(cfg, cb, token, admin_id):
     chat_id = cb['message']['chat']['id']
     msg_id = cb['message']['message_id']
     cb_id = cb['id']
+
+    if data.startswith('adm_reply:'):
+        parts = data.split(':')
+        if len(parts) >= 3:
+            _tid = int(parts[1])
+            PENDING_TICKET_REPLY[user_id] = _tid
+            tg(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': 'Режим ответа включен'})
+            send(token, chat_id, f'✍️ <b>Режим ответа (Тикет #{_tid})</b>\n\nНапиши текст ответа. Он сразу улетит клиенту.\nДля выхода напиши /cancel.', parse_mode='HTML')
+        return
+
 
     if data == 'faq_ok':
         # Помогло
