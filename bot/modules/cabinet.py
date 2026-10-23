@@ -404,12 +404,12 @@ def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
         _buy_text = "💎 КУПИТЬ VIP-КЛЮЧ"
 
     keyboard = {'inline_keyboard': [
-        [{'text': _buy_text, 'callback_data': 'cab_buy_vip'}],
+        [{'text': '💎 Купить VIP ключ', 'callback_data': 'cab_buy_vip'}],
         [{'text': f'🔑 Мои ключи ({active_count})', 'callback_data': 'cab_keys'},
          {'text': '💰 Баланс', 'callback_data': 'cab_balance'},
          {'text': '🎫 Промокод', 'callback_data': 'cab_promo'}],
-        [{'text': '💎 VIP ключ', 'callback_data': 'cab_buy_vip'},
-         {'text': '💎 NpvTunnel', 'callback_data': 'cab_udp_soon'},
+        [{'text': '💻 Для ПК', 'callback_data': 'cab_pc_soon'},
+         {'text': '🍏 Для iPhone', 'callback_data': 'cab_udp_soon'},
          {'text': '💎 WhiteDns', 'callback_data': 'cab_whitedns'}],
         [{'text': '👥 Рефералы', 'callback_data': 'cab_refs'},
          {'text': '\U0001F6DF Помощь', 'callback_data': 'cab_help'},
@@ -2318,19 +2318,248 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
             show_whitedns_menu(cfg, chat_id, user_id, msg_id)
         else:
             _wd_text = (
-                "🌐 <b>WhiteDNS — БОНУС К VIP</b>" + chr(10) + chr(10) +
-                "🔒 <i>Раздел откроется автоматически после покупки VIP ключа.</i>" + chr(10) + chr(10) +
-                "🎁 <b>ЧТО ТЫ ПОЛУЧАЕШЬ:</b>" + chr(10) +
-                "💎 Купил 1 VIP ключ ➔ получаешь 2 входа:" + chr(10) +
-                "1️⃣ <b>VIP ключ</b> — основной VPN" + chr(10) +
-                "2️⃣ <b>WhiteDNS</b> — второй VPN 🎁 в подарок" + chr(10) + chr(10) +
-                "👇 <b>Оформи VIP ключ</b> — раздел откроется сам."
+                "🌐 <b>Ключ для WhiteDNS</b>" + chr(10) + chr(10) +
+                "🔒 <i>Раздел доступен только VIP клиентам.</i>" + chr(10) + chr(10) +
+                "Купите VIP ключ, чтобы получить доступ к резервному VPN для мобильного интернета и обхода жестких блокировок." + chr(10) + chr(10) +
+                "✅ 3 сервера на выбор: 🇩🇪 Германия · 🇫🇮 Финляндия · 🇫🇷 Франция" + chr(10) +
+                "✅ 3 профиля: 3G, WiFi, ADSL." + chr(10) + chr(10) +
+                "💾 <b>Скачать WhiteDNS:</b> https://github.com/WhiteDNS/WhiteDNS-Android/releases" + chr(10) + chr(10) +
+                "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
             )
             _wd_kb = {'inline_keyboard': [
-                [{'text': '💎 VIP ключ', 'callback_data': 'cab_buy_vip'}],
+                [{'text': '💎 Купить VIP ключ', 'callback_data': 'cab_buy_vip'}],
                 [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
             ]}
             _send_new(token, chat_id, _wd_text, _wd_kb)
+        return True
+
+    if cb_data == 'cab_balance':
+        show_balance(cfg, chat_id, user_id, msg_id)
+        return True
+    if cb_data == 'cab_promo':
+        show_promo(cfg, chat_id, user_id, msg_id)
+        return True
+    if cb_data == 'cab_promo_input':
+        NL = chr(10)
+        text = NL.join([
+            "✏️ <b>ВВОД ПРОМОКОДА</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "Отправь промокод следующим сообщением",
+            "(одним словом, без пробелов)",
+            "",
+            "Например: <code>NEWYEAR</code>"
+        ])
+        _edit(token, chat_id, msg_id, text, {'inline_keyboard': [
+            [{'text': '⬅️ Отмена', 'callback_data': 'cab_promo'}]
+        ]})
+        try:
+            from bot_modules import db as _db
+            _db.set_pending(user_id, 'promo_input')
+        except Exception as e:
+            cab_log.error(f"set_pending: {e}")
+        return True
+    if cb_data == 'cab_topup':
+        NL = chr(10)
+        balance = db.get_balance(user_id)
+        text = NL.join([
+            "💵 <b>ПОПОЛНЕНИЕ БАЛАНСА</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            f"💰 Текущий баланс: <b>{balance:.2f} USDT</b>",
+            "",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "Выбери способ пополнения:"
+        ])
+        kb = {'inline_keyboard': [
+            [{'text': '⭐ Telegram Stars', 'callback_data': 'cab_topup_stars'}],
+            [{'text': '💳 Ручное (TMCELL)', 'callback_data': 'cab_topup_manual'}],
+            [{'text': '🪙 CRYPTO USDT', 'callback_data': 'cab_topup_crypto'}],
+            [{'text': '⬅️ К балансу', 'callback_data': 'cab_balance'}]
+        ]}
+        _edit(token, chat_id, msg_id, text, kb)
+        return True
+    if cb_data == 'cab_topup_stars':
+        NL = chr(10)
+        _rate = 0.015  # будет читаться из конфига
+        _smin = 1
+        _smax = 100
+        try:
+            with open('/etc/UDPCustom/bot.conf') as _f:
+                for _l in _f:
+                    if _l.startswith('STAR_RATE='):
+                        _rate = float(_l.split('=',1)[1].strip().strip('"'))
+                    elif _l.startswith('STAR_MIN='):
+                        _smin = float(_l.split('=',1)[1].strip().strip('"'))
+                    elif _l.startswith('STAR_MAX='):
+                        _smax = float(_l.split('=',1)[1].strip().strip('"'))
+        except: pass
+        text = NL.join([
+            "⭐ <b>ПОПОЛНЕНИЕ ЧЕРЕЗ STARS</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            f"💡 Курс: <b>1 Star ≈ {_rate} USDT</b>",
+            "",
+            "Введи сумму в USDT для пополнения баланса.",
+            "",
+            f"📊 Мин: <b>{_smin:.0f}</b> · Макс: <b>{_smax:.0f}</b> USDT",
+            "",
+            "Например: <code>5</code>"
+        ])
+        kb = {'inline_keyboard': [
+            [{'text': '⬅️ Отмена', 'callback_data': 'cab_topup'}]
+        ]}
+        _edit(token, chat_id, msg_id, text, kb)
+        # Запоминаем что ждём сумму для Stars
+        db.set_pending(user_id, 'stars_amount')
+        return True
+    if cb_data == 'cab_topup_manual':
+        NL = chr(10)
+        rate = _get_rate()
+        text = NL.join([
+            "💳 <b>ПОПОЛНЕНИЕ ЧЕРЕЗ TMCELL</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "📋 <b>ИНСТРУКЦИЯ:</b>",
+            "",
+            f"1️⃣ Напиши админу {_get_support()}",
+            "   Уточни <b>АКТУАЛЬНЫЙ</b> номер TMCELL",
+            "   (номер может меняться)",
+            "",
+            "2️⃣ Переведи нужную сумму на этот номер",
+            "",
+            "3️⃣ Вернись сюда и нажми кнопку",
+            "   «📸 Отправить чек»",
+            "",
+            "━━━━━━━━━━━━━━━━━━━━",
+            f"💵 Курс: <b>1 USDT ≈ {rate:.0f} манат</b>",
+            "",
+            "⚠️ <b>Важно:</b> уточни номер у админа",
+            "ПЕРЕД переводом!"
+        ])
+        kb = {'inline_keyboard': [
+            [{'text': f'💬 Написать {_get_support()}', 'url': f'https://t.me/{_get_support().lstrip(chr(64))}'}],
+            [{'text': '📸 Отправить чек', 'callback_data': 'cab_topup_photo'}],
+            [{'text': '⬅️ Назад', 'callback_data': 'cab_topup'}]
+        ]}
+        _edit(token, chat_id, msg_id, text, kb)
+        return True
+    if cb_data == 'cab_topup_crypto':
+        NL = chr(10)
+        text = NL.join([
+            "🤖 <b>КРИПТО-БОТ</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "Выбери сеть для оплаты:",
+            "",
+            "🟢 <b>USDT BEP-20</b> (BSC) — мин 1 USDT",
+            "🔴 <b>USDT TRC-20</b> (Tron) — мин 5 USDT",
+            "💎 <b>TON</b> — мин 3.5 TON",
+        ])
+        kb = {'inline_keyboard': [
+            [{'text': '🟢 USDT BEP-20', 'callback_data': 'cab_crypto_USDT_BSC'}],
+            [{'text': '🔴 USDT TRC-20', 'callback_data': 'cab_crypto_USDT_TRX'}],
+            [{'text': '💎 TON', 'callback_data': 'cab_crypto_TON'}],
+            [{'text': '⬅️ Назад', 'callback_data': 'cab_topup'}],
+        ]}
+        _edit(token, chat_id, msg_id, text, kb)
+        return True
+    if cb_data.startswith('cab_crypto_'):
+        NL = chr(10)
+        _cur = cb_data.split('_', 2)[2]
+        _names = {'USDT_BSC': 'USDT BEP-20', 'USDT_TRX': 'USDT TRC-20', 'TON': 'TON'}
+        _mins = {'USDT_BSC': 1.0, 'USDT_TRX': 5.0, 'TON': 3.5}
+        _cur_name = _names.get(_cur, _cur)
+        _cur_min = _mins.get(_cur, 1.0)
+        text = NL.join([
+            "🤖 <b>ПОПОЛНЕНИЕ · " + _cur_name + "</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "Введи сумму в USD:",
+            "",
+            "📊 Минимум: <b>" + ("%.2f" % _cur_min) + "</b> USD",
+            "",
+            "Например: <code>5</code>",
+        ])
+        kb = {'inline_keyboard': [
+            [{'text': '⬅️ Отмена', 'callback_data': 'cab_topup_crypto'}],
+        ]}
+        _edit(token, chat_id, msg_id, text, kb)
+        db.set_pending(user_id, 'crypto_amount:' + _cur)
+        return True
+
+    if cb_data == 'cab_topup_photo':
+        NL = chr(10)
+        text = NL.join([
+            "📸 <b>ОТПРАВКА ЧЕКА (шаг 1/2)</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "Отправь скриншот из приложения",
+            "с <b>успешным переводом</b>.",
+            "",
+            "⚠️ На скрине должно быть видно:",
+            "• Сумма перевода",
+            "• Номер получателя",
+            "• Дата/время",
+            "",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "Просто отправь <b>фото</b> следующим",
+            "сообщением 👇"
+        ])
+        kb = {'inline_keyboard': [
+            [{'text': '⬅️ Отмена', 'callback_data': 'cab_topup_manual'}]
+        ]}
+        _edit(token, chat_id, msg_id, text, kb)
+        try:
+            db.set_pending(user_id, 'topup_check')
+        except Exception as e:
+            cab_log.error(f"set_pending topup_check: {e}")
+        return True
+    if cb_data.startswith('cab_hist:'):
+        try:
+            page = int(cb_data.split(':', 1)[1])
+        except:
+            page = 1
+        show_balance_history(cfg, chat_id, user_id, page, msg_id)
+        return True
+    if cb_data == 'cab_pc_soon':
+        _is_vip = False
+        try:
+            _vip_keys = db.get_vip_keys(user_id)
+            if _vip_keys:
+                _is_vip = True
+        except Exception as _e:
+            cab_log.error(f"VIP check error: {_e}")
+            
+        if _is_vip:
+            _pc_text = (
+                "💻 <b>Ключ для ПК (ArsenVPN)</b>" + chr(10) + chr(10) +
+                "🔒 <i>Раздел доступен только VIP клиентам.</i>" + chr(10) + chr(10) +
+                "Купите VIP ключ, чтобы получить доступ к быстрому и стабильному VPN для вашего компьютера (Windows, macOS, Linux)." + chr(10) + chr(10) +
+                "✅ Высокая скорость и стабильность." + chr(10) +
+                "✅ Поддержка всех ПК-платформ." + chr(10) + chr(10) +
+                "💾 <b>Скачать ArsenVPN:</b> https://github.com/zotac85/ArsenVpn" + chr(10) + chr(10) +
+                "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
+            )
+            _pc_kb = {'inline_keyboard': [
+                [{'text': '💎 Купить VIP ключ', 'callback_data': 'cab_buy_vip'}],
+                [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
+            ]}
+        else:
+            _pc_text = (
+                "💻 <b>Ключ для ПК (ArsenVPN)</b>" + chr(10) + chr(10) +
+                "🔒 <i>Раздел доступен только VIP клиентам.</i>" + chr(10) + chr(10) +
+                "Купите VIP ключ, чтобы получить доступ к быстрому и стабильному VPN для вашего компьютера (Windows, macOS, Linux)." + chr(10) + chr(10) +
+                "✅ Высокая скорость и стабильность." + chr(10) +
+                "✅ Поддержка всех ПК-платформ." + chr(10) + chr(10) +
+                "💾 <b>Скачать ArsenVPN:</b> https://github.com/zotac85/ArsenVpn" + chr(10) + chr(10) +
+                "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
+            )
+            _pc_kb = {'inline_keyboard': [
+                [{'text': '💎 Купить VIP ключ', 'callback_data': 'cab_buy_vip'}],
+                [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
+            ]}
+        _send_new(token, chat_id, _pc_text, _pc_kb)
         return True
 
     if cb_data == 'cab_udp_soon':
@@ -2344,31 +2573,30 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
             
         if _is_vip:
             _udp_text = (
-                "🍏 <b>NPV Tunnel (для iPhone)</b>" + chr(10) + chr(10) +
-                "Вы VIP клиент! Теперь вы можете получить ключи для iOS." + chr(10) + chr(10) +
-                "👇 <b>Как получить:</b>" + chr(10) +
-                "1️⃣ Перейди в раздел <b>🔑 Мои ключи</b>." + chr(10) +
-                "2️⃣ Нажми на свой <b>VIP-ключ</b>." + chr(10) +
-                "3️⃣ Выбери кнопку <b>🍏 Ключ для iPhone</b>." + chr(10) + chr(10) +
-                "📲 <i>Ссылка на подписку автоматически подтянет все ваши локации!</i>"
+                "🍏 <b>Ключ для iPhone (NPV Tunnel)</b>" + chr(10) + chr(10) +
+                "🔒 <i>Раздел доступен только VIP клиентам.</i>" + chr(10) + chr(10) +
+                "Купите VIP ключ, чтобы получить доступ к максимальной скорости и стабильности на вашем iPhone или iPad." + chr(10) + chr(10) +
+                "✅ Технология UDP для игр и стриминга без лагов." + chr(10) +
+                "✅ Экономия батареи и обход блокировок (DPI)." + chr(10) + chr(10) +
+                "💾 <b>Скачать NPV Tunnel:</b> https://apps.apple.com/us/app/npv-tunnel/id1629465476" + chr(10) + chr(10) +
+                "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
             )
             _udp_kb = {'inline_keyboard': [
-                [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'}],
+                [{'text': '💎 Купить VIP ключ', 'callback_data': 'cab_buy_vip'}],
                 [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
             ]}
         else:
             _udp_text = (
-                "🍏 <b>Ключи для iPhone (NPV Tunnel)</b>" + chr(10) + chr(10) +
-                "Приложение <b>NPV Tunnel</b> обеспечивает максимальную скорость и стабильность на вашем iPhone или iPad." + chr(10) + chr(10) +
+                "🍏 <b>Ключ для iPhone (NPV Tunnel)</b>" + chr(10) + chr(10) +
                 "🔒 <i>Раздел доступен только VIP клиентам.</i>" + chr(10) + chr(10) +
-                "<b>Преимущества:</b>" + chr(10) +
-                "⚡️ Высокая скорость (UDP) для игр и стриминга." + chr(10) +
-                "🔋 Экономия батареи." + chr(10) +
-                "🛡 Обход блокировок (DPI)." + chr(10) + chr(10) +
+                "Купите VIP ключ, чтобы получить доступ к максимальной скорости и стабильности на вашем iPhone или iPad." + chr(10) + chr(10) +
+                "✅ Технология UDP для игр и стриминга без лагов." + chr(10) +
+                "✅ Экономия батареи и обход блокировок (DPI)." + chr(10) + chr(10) +
+                "💾 <b>Скачать NPV Tunnel:</b> https://apps.apple.com/us/app/npv-tunnel/id1629465476" + chr(10) + chr(10) +
                 "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
             )
             _udp_kb = {'inline_keyboard': [
-                [{'text': '💎 VIP ключ', 'callback_data': 'cab_buy_vip'}],
+                [{'text': '💎 Купить VIP ключ', 'callback_data': 'cab_buy_vip'}],
                 [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
             ]}
             
