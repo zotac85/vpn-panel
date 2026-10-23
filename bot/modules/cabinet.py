@@ -2578,16 +2578,16 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
             
         if _is_vip:
             _pc_text = (
-                "💻 <b>Ключ для ПК (ArsenVPN)</b>" + chr(10) + chr(10) +
-                "🔒 <i>Раздел доступен только VIP клиентам.</i>" + chr(10) + chr(10) +
-                "Купите VIP ключ, чтобы получить доступ к быстрому и стабильному VPN для вашего компьютера (Windows, macOS, Linux)." + chr(10) + chr(10) +
-                "✅ Высокая скорость и стабильность." + chr(10) +
-                "✅ Поддержка всех ПК-платформ." + chr(10) + chr(10) +
-                "💾 <b>Скачать ArsenVPN:</b> https://github.com/zotac85/ArsenVpn" + chr(10) + chr(10) +
-                "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
+                "💻 <b>Приложение для ПК (ArsenVPN)</b>" + chr(10) + chr(10) +
+                "Вы VIP клиент! Теперь вы можете получить ключи для Windows, macOS и Linux." + chr(10) + chr(10) +
+                "👇 <b>Как получить:</b>" + chr(10) +
+                "1️⃣ Перейди в раздел <b>🔑 Мои ключи</b>." + chr(10) +
+                "2️⃣ Нажми на свой <b>VIP-ключ</b>." + chr(10) +
+                "3️⃣ Скачай файл <code>.dark</code> и импортируй в приложение." + chr(10) + chr(10) +
+                "💾 <b>Скачать приложение:</b> https://github.com/zotac85/ArsenVpn"
             )
             _pc_kb = {'inline_keyboard': [
-                [{'text': '💎 Купить VIP ключ (DarkTunnel)', 'callback_data': 'cab_buy_vip'}],
+                [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'}],
                 [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
             ]}
         else:
@@ -2618,16 +2618,16 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
             
         if _is_vip:
             _udp_text = (
-                "🍏 <b>Ключ для iPhone (NPV Tunnel)</b>" + chr(10) + chr(10) +
-                "🔒 <i>Раздел доступен только VIP клиентам.</i>" + chr(10) + chr(10) +
-                "Купите VIP ключ, чтобы получить доступ к максимальной скорости и стабильности на вашем iPhone или iPad." + chr(10) + chr(10) +
-                "✅ Технология UDP для игр и стриминга без лагов." + chr(10) +
-                "✅ Экономия батареи и обход блокировок (DPI)." + chr(10) + chr(10) +
-                "💾 <b>Скачать NPV Tunnel:</b> https://apps.apple.com/us/app/npv-tunnel/id1629465476" + chr(10) + chr(10) +
-                "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
+                "🍏 <b>NPV Tunnel (для iPhone)</b>" + chr(10) + chr(10) +
+                "Вы VIP клиент! Теперь вы можете получить ключи для iOS." + chr(10) + chr(10) +
+                "👇 <b>Как получить:</b>" + chr(10) +
+                "1️⃣ Перейди в раздел <b>🔑 Мои ключи</b>." + chr(10) +
+                "2️⃣ Нажми на свой <b>VIP-ключ</b>." + chr(10) +
+                "3️⃣ Выбери кнопку <b>🍏 Ключ для iPhone</b>." + chr(10) + chr(10) +
+                "📲 <i>Ссылка на подписку автоматически подтянет все ваши локации!</i>"
             )
             _udp_kb = {'inline_keyboard': [
-                [{'text': '💎 Купить VIP ключ (DarkTunnel)', 'callback_data': 'cab_buy_vip'}],
+                [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'}],
                 [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
             ]}
         else:
