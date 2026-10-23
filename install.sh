@@ -20,7 +20,7 @@ import re
 if os.path.exists("/usr/local/bin/ws-proxy.py"):
     with open("/usr/local/bin/ws-proxy.py") as f:
         for line in f:
-            match = re.search(r'listen_port[ ]*=[ ]*([0-9]+)', line)
+            match = re.search(r"listen_port\s*=\s*(\d+)", line)
             if match:
                 ws_port = match.group(1)
                 break
