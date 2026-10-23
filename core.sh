@@ -74,6 +74,8 @@ build_session_stats() {
     [[ "$ws_port" =~ ^[0-9]+$ ]] || ws_port=""
 
     local data
+    local my_ip
+    my_ip=$(hostname -I | awk '{print $1}')
     data=$(ss -H -tnp state established "$filter" 2>/dev/null)
 
     while IFS= read -r line; do
@@ -101,6 +103,8 @@ build_session_stats() {
         fi
         case "$peer" in
             127.0.0.1:*|\[::1\]:*) continue ;;
+            ${my_ip}:*) continue ;;
+            172.6[4-9].*|172.7[0-9].*|104.1[6-9].*|104.2[0-9].*|104.3[0-1].*|162.15[89].*|188.114.*|141.101.*|108.162.*|173.245.*|103.21.*|103.22.*|103.31.*|197.234.*|198.41.*|131.0.72.*) continue ;;
         esac
         SESS_SSH_BY_USER["${u:-root}"]=$(( ${SESS_SSH_BY_USER["${u:-root}"]:-0} + 1 ))
         ((SESS_SSH_TOTAL++))
