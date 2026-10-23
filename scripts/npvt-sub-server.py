@@ -9,8 +9,9 @@ import ssl
 
 sys.path.append('/usr/local/bin')
 from bot_modules import db as bdb
+from bot_modules import cabinet as cab
 
-PORT = 8443
+PORT = 443
 
 def b64(s): return base64.b64encode(s.encode()).decode()
 
@@ -48,6 +49,32 @@ def generate_npvt(username, password, host, remark):
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
+        if self.path.startswith('/sub_dark/'):
+            key_name = self.path.split('/sub_dark/')[1].split('?')[0]
+            key = bdb.get_test_key(key_name) or bdb.get_vip_key(key_name)
+            if not key:
+                self.send_response(404)
+                self.end_headers()
+                self.wfile.write(b"Key not found")
+                return
+            
+            conn = sqlite3.connect('/etc/UDPCustom/vpn.db')
+            nodes = conn.execute("SELECT name, host FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
+            conn.close()
+            
+            links = []
+            for name, host in nodes:
+                # Используем функцию из cabinet.py для генерации ссылки
+                url = cab._build_dark_url_for_key(None, key_name, domain=host)
+                if url:
+                    links.append(url)
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'text/plain; charset=utf-8')
+            self.end_headers()
+            self.wfile.write("\n".join(links).encode('utf-8'))
+            return
+            
         if self.path.startswith('/sub/'):
             key_name = self.path.split('/sub/')[1].split('?')[0]
             key = bdb.get_test_key(key_name) or bdb.get_vip_key(key_name)

@@ -2237,12 +2237,20 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         except: pass
         send_dark_files_all_nodes(cfg, chat_id, user_id, key_name)
         
-        # Отправляем кнопку для возврата
+        # Отправляем кнопку для возврата и ссылку для ПК
         _kb = {'inline_keyboard': [
             [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'},
              {'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
         ]}
-        _send_new(token, chat_id, "☝️ <b>Конфиги отправлены выше.</b>", _kb)
+        
+        _sub_url = f"https://de.cdnstore.shop/sub_dark/{key_name}"
+        _pc_text = (
+            "☝️ <b>Конфиги отправлены выше.</b>" + chr(10) + chr(10) +
+            "💻 <b>Ссылка для ПК (ArsenVPN):</b>" + chr(10) +
+            f"<code>{_sub_url}</code>" + chr(10) +
+            "<i>(Скоро вы сможете вставить её в приложение для ПК)</i>"
+        )
+        _send_new(token, chat_id, _pc_text, _kb)
         return True
     if cb_data.startswith('cab_npvt:'):
         key_name = cb_data.split(':', 1)[1]
