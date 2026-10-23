@@ -390,9 +390,11 @@ def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
         "━━━━━━━━━━━━━━━━━━━━",
         "",
         "💡 <i>Подсказка:</i>",
-        "💎 <b>VIP ключ</b> — здесь тарифы на вип ключи с ценами.",
-        "💰 <b>Баланс</b> — здесь пополнение tmcell, usdt и история.",
-        "🔑 <b>Мои ключи</b> — твои готовые ключи."
+        "💎 <b>Купить VIP ключ</b> — тарифы и покупка доступа.",
+        "💰 <b>Баланс</b> — пополнение Stars, tmcell, CRYPTO и история.",
+        "🔑 <b>Мои ключи</b> — твои ключи для Android, ПК и iOS.",
+        "",
+        "🔒 <i>Разделы для ПК, iPhone и WhiteDns доступны только после покупки VIP ключа.</i>"
     ]
     text = NL.join(lines)
 
@@ -404,7 +406,7 @@ def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
         _buy_text = "💎 КУПИТЬ VIP-КЛЮЧ"
 
     keyboard = {'inline_keyboard': [
-        [{'text': '💎 Купить VIP (DarkTunnel)', 'callback_data': 'cab_buy_vip'}],
+        [{'text': '💎 Купить VIP ключ (DarkTunnel)', 'callback_data': 'cab_buy_vip'}],
         [{'text': f'🔑 Мои ключи ({active_count})', 'callback_data': 'cab_keys'},
          {'text': '💰 Баланс', 'callback_data': 'cab_balance'},
          {'text': '🎫 Промокод', 'callback_data': 'cab_promo'}],
@@ -527,7 +529,7 @@ def show_my_keys(cfg, chat_id, user_id, kind='all', msg_id=None):
             {'text': '🎁 Получить тест', 'url': f'https://t.me/{bot_u}?start=go'}
         ])
         keyboard['inline_keyboard'].append([
-            {'text': '💎 Купить VIP', 'callback_data': 'cab_buy_vip'}
+            {'text': '💎 Купить VIP ключ', 'callback_data': 'cab_buy_vip'}
         ])
     else:
         keyboard['inline_keyboard'].append([
@@ -2327,7 +2329,7 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
                 "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
             )
             _wd_kb = {'inline_keyboard': [
-                [{'text': '💎 Купить VIP (DarkTunnel)', 'callback_data': 'cab_buy_vip'}],
+                [{'text': '💎 Купить VIP ключ (DarkTunnel)', 'callback_data': 'cab_buy_vip'}],
                 [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
             ]}
             _send_new(token, chat_id, _wd_text, _wd_kb)
@@ -2585,7 +2587,7 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
                 "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
             )
             _pc_kb = {'inline_keyboard': [
-                [{'text': '💎 Купить VIP (DarkTunnel)', 'callback_data': 'cab_buy_vip'}],
+                [{'text': '💎 Купить VIP ключ (DarkTunnel)', 'callback_data': 'cab_buy_vip'}],
                 [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
             ]}
         else:
@@ -2599,7 +2601,7 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
                 "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
             )
             _pc_kb = {'inline_keyboard': [
-                [{'text': '💎 Купить VIP (DarkTunnel)', 'callback_data': 'cab_buy_vip'}],
+                [{'text': '💎 Купить VIP ключ (DarkTunnel)', 'callback_data': 'cab_buy_vip'}],
                 [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
             ]}
         _send_new(token, chat_id, _pc_text, _pc_kb)
@@ -2625,7 +2627,7 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
                 "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
             )
             _udp_kb = {'inline_keyboard': [
-                [{'text': '💎 Купить VIP (DarkTunnel)', 'callback_data': 'cab_buy_vip'}],
+                [{'text': '💎 Купить VIP ключ (DarkTunnel)', 'callback_data': 'cab_buy_vip'}],
                 [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
             ]}
         else:
@@ -2639,7 +2641,7 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
                 "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
             )
             _udp_kb = {'inline_keyboard': [
-                [{'text': '💎 Купить VIP (DarkTunnel)', 'callback_data': 'cab_buy_vip'}],
+                [{'text': '💎 Купить VIP ключ (DarkTunnel)', 'callback_data': 'cab_buy_vip'}],
                 [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
             ]}
             
