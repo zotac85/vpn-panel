@@ -11,6 +11,18 @@ sys.path.append('/usr/local/bin')
 from bot_modules import db as bdb
 from bot_modules import cabinet as cab
 
+def load_cfg():
+    cfg = {}
+    try:
+        with open('/etc/UDPCustom/bot.conf') as f:
+            for line in f:
+                if '=' in line and not line.strip().startswith('#'):
+                    k, v = line.strip().split('=', 1)
+                    cfg[k.strip()] = v.strip().strip('"').strip("'")
+    except: pass
+    return cfg
+
+
 PORT = 443
 
 def b64(s): return base64.b64encode(s.encode()).decode()
@@ -59,15 +71,22 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return
             
             conn = sqlite3.connect('/etc/UDPCustom/vpn.db')
-            nodes = conn.execute("SELECT name, host FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
+            nodes = conn.execute("SELECT name, host, ws_port FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
             conn.close()
             
             links = []
-            for name, host in nodes:
-                # Используем функцию из cabinet.py для генерации ссылки
-                url = cab._build_dark_url_for_key(None, key_name, domain=host)
-                if url:
-                    links.append(url)
+            for name, host, ws_port in nodes:
+                try:
+                    dt_url, _cfg_name = cab._build_dark_url_for_key(
+                        load_cfg(), key_name, domain=host, ws_port=ws_port, location_name=name
+                    )
+                    if dt_url:
+                        links.append(dt_url)
+                except Exception as e:
+                    links.append(f"ERROR: {e}")
+            
+            if not links:
+                links.append("ERROR: No links generated.")
             
             self.send_response(200)
             self.send_header('Content-type', 'text/plain; charset=utf-8')
