@@ -2108,10 +2108,10 @@ def show_help_darktunnel(cfg, chat_id, user_id, msg_id=None):
         _send(token, chat_id, text, kb)
 
 
-def show_help_httpcustom(cfg, chat_id, user_id, msg_id=None):
+def show_help_npv(cfg, chat_id, user_id, msg_id=None):
     token = cfg['BOT_TOKEN']
-    text = _get_help_generic('/etc/UDPCustom/help_httpcustom.txt', cfg) or \
-        "\u2699\uFE0F <b>HttpCustom</b>\n\nОтредактируй /etc/UDPCustom/help_httpcustom.txt"
+    text = _get_help_generic('/etc/UDPCustom/help_npv.txt', cfg) or \
+        "🍏 <b>NPV Tunnel</b>\n\nИнструкция временно недоступна."
     kb = _help_back_kb()
     if msg_id:
         _edit(token, chat_id, msg_id, text, kb)
@@ -2177,7 +2177,7 @@ def show_help_back(cfg, chat_id, user_id, msg_id=None):
     support = _sup.lstrip('@') or 'support'
     text = "📖 <b>ПОМОЩЬ</b>\n\n"
     text += "📌 <b>Что делает каждая кнопка:</b>\n"
-    text += "⚙️ <b>DarkTunnel / HttpCustom / WhiteDns</b> — инструкции по настройке\n"
+    text += "⚙️ <b>DarkTunnel / NPV Tunnel / WhiteDns</b> — инструкции по настройке\n"
     text += "❓ <b>Вопросы</b> — ответы на частые вопросы\n"
     text += "🎬 <b>Видео</b> — видео-уроки\n"
     text += "💬 <b>Поддержка</b> — написать в поддержку\n"
@@ -2186,7 +2186,7 @@ def show_help_back(cfg, chat_id, user_id, msg_id=None):
     text += "🏠 <b>Меню</b> — вернуться в главное меню"
     kb = {'inline_keyboard': [
         [{'text': '\u2699\uFE0F DarkTunnel', 'callback_data': 'cab_help_darktunnel'},
-         {'text': '\u2699\uFE0F HttpCustom', 'callback_data': 'cab_help_httpcustom'},
+         {'text': '⚙️ NPV Tunnel', 'callback_data': 'cab_help_npv'},
          {'text': '\u2699\uFE0F WhiteDns', 'callback_data': 'cab_help_whitedns'}],
         [{'text': '\u2753 Вопросы', 'callback_data': 'cab_help_faq'},
          {'text': '\U0001F3AC Видео', 'callback_data': 'cab_help_video'},
@@ -2257,8 +2257,8 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
     if cb_data == 'cab_help_darktunnel':
         show_help_darktunnel(cfg, chat_id, user_id, msg_id)
         return True
-    if cb_data == 'cab_help_httpcustom':
-        show_help_httpcustom(cfg, chat_id, user_id, msg_id)
+    if cb_data == 'cab_help_npv':
+        show_help_npv(cfg, chat_id, user_id, msg_id)
         return True
     if cb_data == 'cab_help_whitedns':
         show_help_whitedns(cfg, chat_id, user_id, msg_id)
