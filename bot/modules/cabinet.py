@@ -2522,6 +2522,49 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
             page = 1
         show_balance_history(cfg, chat_id, user_id, page, msg_id)
         return True
+    if cb_data == 'cab_refs':
+        show_referrals(cfg, chat_id, user_id, msg_id)
+        return True
+    if cb_data == 'cab_ref_list':
+        show_ref_list(cfg, chat_id, user_id, msg_id)
+        return True
+
+    if cb_data == 'cab_share_ref':
+        # Отправляем сообщение с кнопкой — юзер должен forward-нуть
+        user = db.get_user(user_id)
+        ref_code = user['ref_code'] if user else ''
+        me = _tg(token, 'getMe')
+        bot_u = me['result'].get('username', 'ArsenVipKeysBot') if me and me.get('ok') else 'ArsenVipKeysBot'
+        ref_link = f"https://t.me/{bot_u}?start=ref_{ref_code}"
+        NL = chr(10)
+        share_msg = NL.join([
+            "📤 <b>ПОДЕЛИСЬ С ДРУЗЬЯМИ</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "👇 Перешли это сообщение друзьям",
+            "или в свой канал/группу",
+            "",
+            "🎁 За каждого друга — бонус 💰"
+        ])
+        _send(token, chat_id, share_msg)
+        # Само рекламное сообщение — из ref_post.txt
+        try:
+            with open('/etc/UDPCustom/ref_post.txt') as _rf:
+                ad_text = _rf.read().strip()
+            ad_text = _apply_placeholders(ad_text, cfg)
+        except Exception:
+            ad_text = '⚡  <b>' + cfg.get('CONFIG_NAME', 'VPN') + ' — VPN который работает!</b>'
+        ad_kb = {'inline_keyboard': [
+            [{'text': '🎁 Получить ключ', 'url': ref_link}]
+        ]}
+        _tg(token, 'sendMessage', {
+            'chat_id': chat_id,
+            'text': ad_text,
+            'parse_mode': 'HTML',
+            'reply_markup': ad_kb,
+            'disable_web_page_preview': True
+        })
+        return True
     if cb_data == 'cab_pc_soon':
         _is_vip = False
         try:
