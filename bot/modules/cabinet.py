@@ -390,7 +390,7 @@ def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
         "━━━━━━━━━━━━━━━━━━━━",
         "",
         "💡 <i>Подсказка:</i>",
-        "💎 <b>DarkTunnel</b> — здесь тарифы на вип ключи с ценами.",
+        "💎 <b>VIP ключ</b> — здесь тарифы на вип ключи с ценами.",
         "💰 <b>Баланс</b> — здесь пополнение tmcell, usdt и история.",
         "🔑 <b>Мои ключи</b> — твои готовые ключи."
     ]
@@ -408,7 +408,7 @@ def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
         [{'text': f'🔑 Мои ключи ({active_count})', 'callback_data': 'cab_keys'},
          {'text': '💰 Баланс', 'callback_data': 'cab_balance'},
          {'text': '🎫 Промокод', 'callback_data': 'cab_promo'}],
-        [{'text': '💎 DarkTunnel', 'callback_data': 'cab_buy_vip'},
+        [{'text': '💎 VIP ключ', 'callback_data': 'cab_buy_vip'},
          {'text': '💎 NpvTunnel', 'callback_data': 'cab_udp_soon'},
          {'text': '💎 WhiteDns', 'callback_data': 'cab_whitedns'}],
         [{'text': '👥 Рефералы', 'callback_data': 'cab_refs'},
@@ -2272,426 +2272,162 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         except: pass
         show_buy_vip(cfg, chat_id, user_id, msg_id)
         return True
-    if cb_data == 'cab_udp_soon':
-        _udp_text = (
-            "🍏 <b>Ключи для iPhone (NPV Tunnel)</b>" + chr(10) + chr(10) +
-            "Приложение <b>NPV Tunnel</b> обеспечивает максимальную скорость и стабильность на вашем iPhone или iPad." + chr(10) + chr(10) +
-            "<b>👇 Как получить ключ:</b>" + chr(10) +
-            "1️⃣ Перейди в раздел <b>🔑 Мои ключи</b>." + chr(10) +
-            "2️⃣ Нажми на свой <b>VIP-ключ</b>." + chr(10) +
-            "3️⃣ Нажми кнопку <b>🍏 Ключ для iPhone</b>." + chr(10) +
-            "4️⃣ Скопируй ссылку на подписку." + chr(10) + chr(10) +
-            "<b>📲 Как добавить в приложение:</b>" + chr(10) +
-            "1. Скачай <b>NPV Tunnel</b> из App Store." + chr(10) +
-            "2. Открой вкладку <b>Configs</b> в приложении." + chr(10) +
-            "3. Нажми <b>Add subscription</b> (Добавить подписку)." + chr(10) +
-            "4. Вставь ссылку и нажми OK. Все локации добавятся автоматически!" + chr(10) + chr(10) +
-            "<b>Преимущества:</b>" + chr(10) +
-            "⚡️ Высокая скорость (UDP) для игр и стриминга." + chr(10) +
-            "🔋 Экономия батареи." + chr(10) +
-            "🛡 Обход блокировок (DPI)." + chr(10) + chr(10) +
-            "<i>⚠️ Ключи NPV доступны только VIP клиентам.</i>"
-        )
-        _udp_kb = {'inline_keyboard': [
-            [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
-        ]}
-        if msg_id:
-            _edit(token, chat_id, msg_id, _udp_text, _udp_kb)
-        else:
-            _send(token, chat_id, _udp_text, _udp_kb)
-        return True
     if cb_data == 'cab_whitedns':
-        show_whitedns_menu(cfg, chat_id, user_id, msg_id)
-        return True
-    if cb_data == 'cab_wd_de':
-        show_whitedns_profiles(cfg, chat_id, user_id, 0, msg_id)
-        return True
-    if cb_data == 'cab_wd_fi':
-        show_whitedns_profiles(cfg, chat_id, user_id, 1, msg_id)
-        return True
-    if cb_data == 'cab_wd_se':
-        show_whitedns_profiles(cfg, chat_id, user_id, 2, msg_id)
-        return True
-    if cb_data.startswith('cab_wd_prof:'):
+        _is_vip = False
         try:
-            _parts = cb_data.split(':')
-            _prof = int(_parts[1])
-            _srv = int(_parts[2])
-        except:
-            _prof, _srv = 0, 0
-        show_whitedns_confirm(cfg, chat_id, user_id, _srv, _prof, msg_id)
-        return True
-    if cb_data.startswith('cab_wd_send:'):
-        try:
-            _parts = cb_data.split(':')
-            _srv = int(_parts[1])
-            _prof = int(_parts[2])
-        except:
-            _srv, _prof = 0, 0
-        send_whitedns_files(cfg, chat_id, user_id, _srv, _prof, first_name or '')
-        return True
-    if cb_data.startswith('cab_vip_buy:'):
-        try:
-            idx = int(cb_data.split(':', 1)[1])
-        except:
-            idx = 1
-        show_vip_confirm(cfg, chat_id, user_id, idx, msg_id)
-        return True
-    if cb_data == 'cab_balance':
-        show_balance(cfg, chat_id, user_id, msg_id)
-        return True
-    if cb_data == 'cab_topup_send':
-        # Спрашиваем сколько хочет пополнить
-        NL = chr(10)
-        ask = NL.join([
-            "💵 <b>СКОЛЬКО ХОЧЕШЬ ПОПОЛНИТЬ?</b>",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "",
-            "Отправь сумму в USDT (только цифры).",
-            "",
-            "Например: <code>10</code> или <code>5.5</code>",
-            "",
-            "<i>Минимум 1 USDT</i>"
-        ])
-        _edit(token, chat_id, msg_id, ask, {'inline_keyboard': [
-            [{'text': '⬅️ Отмена', 'callback_data': 'cab_topup'}]
-        ]})
-        # Запоминаем что ждём сумму
-        try:
-            db.set_pending(user_id, 'topup_amount')
-        except Exception as e:
-            cab_log.error(f"set_pending topup: {e}")
-        return True
-    if cb_data == 'cab_topup':
-        NL = chr(10)
-        balance = db.get_balance(user_id)
-        text = NL.join([
-            "💵 <b>ПОПОЛНЕНИЕ БАЛАНСА</b>",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "",
-            f"💰 Текущий баланс: <b>{balance:.2f} USDT</b>",
-            "",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "Выбери способ пополнения:"
-        ])
-        kb = {'inline_keyboard': [
-            [{'text': '⭐ Telegram Stars', 'callback_data': 'cab_topup_stars'}],
-            [{'text': '💳 Ручное (TMCELL)', 'callback_data': 'cab_topup_manual'}],
-            [{'text': '🪙 CRYPTO USDT', 'callback_data': 'cab_topup_crypto'}],
-            [{'text': '⬅️ К балансу', 'callback_data': 'cab_balance'}]
-        ]}
-        _edit(token, chat_id, msg_id, text, kb)
-        return True
-    if cb_data == 'cab_topup_stars':
-        NL = chr(10)
-        _rate = 0.015  # будет читаться из конфига
-        _smin = 1
-        _smax = 100
-        try:
-            with open('/etc/UDPCustom/bot.conf') as _f:
-                for _l in _f:
-                    if _l.startswith('STAR_RATE='):
-                        _rate = float(_l.split('=',1)[1].strip().strip('"'))
-                    elif _l.startswith('STAR_MIN='):
-                        _smin = float(_l.split('=',1)[1].strip().strip('"'))
-                    elif _l.startswith('STAR_MAX='):
-                        _smax = float(_l.split('=',1)[1].strip().strip('"'))
-        except: pass
-        text = NL.join([
-            "⭐ <b>ПОПОЛНЕНИЕ ЧЕРЕЗ STARS</b>",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "",
-            f"💡 Курс: <b>1 Star ≈ {_rate} USDT</b>",
-            "",
-            "Введи сумму в USDT для пополнения баланса.",
-            "",
-            f"📊 Мин: <b>{_smin:.0f}</b> · Макс: <b>{_smax:.0f}</b> USDT",
-            "",
-            "Например: <code>5</code>"
-        ])
-        kb = {'inline_keyboard': [
-            [{'text': '⬅️ Отмена', 'callback_data': 'cab_topup'}]
-        ]}
-        _edit(token, chat_id, msg_id, text, kb)
-        # Запоминаем что ждём сумму для Stars
-        db.set_pending(user_id, 'stars_amount')
-        return True
-    if cb_data == 'cab_topup_manual':
-        NL = chr(10)
-        rate = _get_rate()
-        text = NL.join([
-            "💳 <b>ПОПОЛНЕНИЕ ЧЕРЕЗ TMCELL</b>",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "",
-            "📋 <b>ИНСТРУКЦИЯ:</b>",
-            "",
-            f"1️⃣ Напиши админу {_get_support()}",
-            "   Уточни <b>АКТУАЛЬНЫЙ</b> номер TMCELL",
-            "   (номер может меняться)",
-            "",
-            "2️⃣ Переведи нужную сумму на этот номер",
-            "",
-            "3️⃣ Вернись сюда и нажми кнопку",
-            "   «📸 Отправить чек»",
-            "",
-            "━━━━━━━━━━━━━━━━━━━━",
-            f"💵 Курс: <b>1 USDT ≈ {rate:.0f} манат</b>",
-            "",
-            "⚠️ <b>Важно:</b> уточни номер у админа",
-            "ПЕРЕД переводом!"
-        ])
-        kb = {'inline_keyboard': [
-            [{'text': f'💬 Написать {_get_support()}', 'url': f'https://t.me/{_get_support().lstrip(chr(64))}'}],
-            [{'text': '📸 Отправить чек', 'callback_data': 'cab_topup_photo'}],
-            [{'text': '⬅️ Назад', 'callback_data': 'cab_topup'}]
-        ]}
-        _edit(token, chat_id, msg_id, text, kb)
-        return True
-    if cb_data == 'cab_topup_crypto':
-        NL = chr(10)
-        text = NL.join([
-            "🤖 <b>КРИПТО-БОТ</b>",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "",
-            "Выбери сеть для оплаты:",
-            "",
-            "🟢 <b>USDT BEP-20</b> (BSC) — мин 1 USDT",
-            "🔴 <b>USDT TRC-20</b> (Tron) — мин 5 USDT",
-            "💎 <b>TON</b> — мин 3.5 TON",
-        ])
-        kb = {'inline_keyboard': [
-            [{'text': '🟢 USDT BEP-20', 'callback_data': 'cab_crypto_USDT_BSC'}],
-            [{'text': '🔴 USDT TRC-20', 'callback_data': 'cab_crypto_USDT_TRX'}],
-            [{'text': '💎 TON', 'callback_data': 'cab_crypto_TON'}],
-            [{'text': '⬅️ Назад', 'callback_data': 'cab_topup'}],
-        ]}
-        _edit(token, chat_id, msg_id, text, kb)
-        return True
-    if cb_data.startswith('cab_crypto_'):
-        NL = chr(10)
-        _cur = cb_data.split('_', 2)[2]
-        _names = {'USDT_BSC': 'USDT BEP-20', 'USDT_TRX': 'USDT TRC-20', 'TON': 'TON'}
-        _mins = {'USDT_BSC': 1.0, 'USDT_TRX': 5.0, 'TON': 3.5}
-        _cur_name = _names.get(_cur, _cur)
-        _cur_min = _mins.get(_cur, 1.0)
-        text = NL.join([
-            "🤖 <b>ПОПОЛНЕНИЕ · " + _cur_name + "</b>",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "",
-            "Введи сумму в USD:",
-            "",
-            "📊 Минимум: <b>" + ("%.2f" % _cur_min) + "</b> USD",
-            "",
-            "Например: <code>5</code>",
-        ])
-        kb = {'inline_keyboard': [
-            [{'text': '⬅️ Отмена', 'callback_data': 'cab_topup_crypto'}],
-        ]}
-        _edit(token, chat_id, msg_id, text, kb)
-        db.set_pending(user_id, 'crypto_amount:' + _cur)
-        return True
-
-    if cb_data == 'cab_topup_photo':
-        NL = chr(10)
-        text = NL.join([
-            "📸 <b>ОТПРАВКА ЧЕКА (шаг 1/2)</b>",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "",
-            "Отправь скриншот из приложения",
-            "с <b>успешным переводом</b>.",
-            "",
-            "⚠️ На скрине должно быть видно:",
-            "• Сумма перевода",
-            "• Номер получателя",
-            "• Дата/время",
-            "",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "Просто отправь <b>фото</b> следующим",
-            "сообщением 👇"
-        ])
-        kb = {'inline_keyboard': [
-            [{'text': '⬅️ Отмена', 'callback_data': 'cab_topup_manual'}]
-        ]}
-        _edit(token, chat_id, msg_id, text, kb)
-        try:
-            db.set_pending(user_id, 'topup_check')
-        except Exception as e:
-            cab_log.error(f"set_pending topup_check: {e}")
-        return True
-    if cb_data.startswith('cab_hist:'):
-        try:
-            page = int(cb_data.split(':', 1)[1])
-        except:
-            page = 1
-        show_balance_history(cfg, chat_id, user_id, page, msg_id)
-        return True
-    if cb_data == 'cab_promo':
-        show_promo(cfg, chat_id, user_id, msg_id)
-        return True
-    if cb_data == 'cab_promo_input':
-        NL = chr(10)
-        text = NL.join([
-            "✏️ <b>ВВОД ПРОМОКОДА</b>",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "",
-            "Отправь промокод следующим сообщением",
-            "(одним словом, без пробелов)",
-            "",
-            "Например: <code>NEWYEAR</code>"
-        ])
-        _edit(token, chat_id, msg_id, text, {'inline_keyboard': [
-            [{'text': '⬅️ Отмена', 'callback_data': 'cab_promo'}]
-        ]})
-        try:
-            from bot_modules import db as _db
-            _db.set_pending(user_id, 'promo_input')
-        except Exception as e:
-            cab_log.error(f"set_pending: {e}")
-        return True
-    if cb_data == 'cab_refs':
-        show_referrals(cfg, chat_id, user_id, msg_id)
-        return True
-    if cb_data == 'cab_share_ref':
-        # Отправляем сообщение с кнопкой — юзер должен forward-нуть
-        user = db.get_user(user_id)
-        ref_code = user['ref_code'] if user else ''
-        me = _tg(token, 'getMe')
-        bot_u = me['result'].get('username', 'ArsenVipKeysBot') if me and me.get('ok') else 'ArsenVipKeysBot'
-        ref_link = f"https://t.me/{bot_u}?start=ref_{ref_code}"
-        NL = chr(10)
-        share_msg = NL.join([
-            "📤 <b>ПОДЕЛИСЬ С ДРУЗЬЯМИ</b>",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "",
-            "👇 Перешли это сообщение друзьям",
-            "или в свой канал/группу",
-            "",
-            "🎁 За каждого друга — бонус 💰"
-        ])
-        _send(token, chat_id, share_msg)
-        # Само рекламное сообщение — из ref_post.txt
-        try:
-            with open('/etc/UDPCustom/ref_post.txt') as _rf:
-                ad_text = _rf.read().strip()
-            ad_text = _apply_placeholders(ad_text, cfg)
-        except Exception:
-            ad_text = '⚡  <b>' + cfg.get('CONFIG_NAME', 'VPN') + ' — VPN который работает!</b>'
-        ad_kb = {'inline_keyboard': [
-            [{'text': '🎁 Получить ключ', 'url': ref_link}]
-        ]}
-        _tg(token, 'sendMessage', {
-            'chat_id': chat_id,
-            'text': ad_text,
-            'parse_mode': 'HTML',
-            'reply_markup': ad_kb,
-            'disable_web_page_preview': True
-        })
-        return True
-    if cb_data == 'cab_ref_list':
-        show_ref_list(cfg, chat_id, user_id, msg_id)
-        return True
-    if cb_data == 'cab_exit':
-        # Возврат в главное меню (/start)
-        _tg(token, 'answerCallbackQuery', {'callback_query_id': cb['id']})
-        try:
-            import sys as _sys
-            _main = _sys.modules.get('__main__')
-            if _main and hasattr(_main, 'handle_start'):
-                _main.handle_start(cfg, chat_id, user_id, first_name or '')
-            else:
-                _send_new(token, chat_id, 'Напиши /start для возврата', {'inline_keyboard': []})
+            _vip_keys = db.get_vip_keys(user_id)
+            if _vip_keys:
+                _is_vip = True
         except Exception as _e:
-            cab_log.error(f'cab_exit: {_e}')
-            _send_new(token, chat_id, 'Напиши /start для возврата', {'inline_keyboard': []})
+            cab_log.error(f"VIP check error: {_e}")
+            
+        if _is_vip:
+            show_whitedns_menu(cfg, chat_id, user_id, msg_id)
+        else:
+            _wd_text = (
+                "🌐 <b>WhiteDNS — БОНУС К VIP</b>" + chr(10) + chr(10) +
+                "🔒 <i>Раздел откроется автоматически после покупки VIP ключа.</i>" + chr(10) + chr(10) +
+                "🎁 <b>ЧТО ТЫ ПОЛУЧАЕШЬ:</b>" + chr(10) +
+                "💎 Купил 1 VIP ключ ➔ получаешь 2 входа:" + chr(10) +
+                "1️⃣ <b>VIP ключ</b> — основной VPN" + chr(10) +
+                "2️⃣ <b>WhiteDNS</b> — второй VPN 🎁 в подарок" + chr(10) + chr(10) +
+                "👇 <b>Оформи VIP ключ</b> — раздел откроется сам."
+            )
+            _wd_kb = {'inline_keyboard': [
+                [{'text': '💎 VIP ключ', 'callback_data': 'cab_buy_vip'}],
+                [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
+            ]}
+            _send_new(token, chat_id, _wd_text, _wd_kb)
         return True
 
-    if cb_data.startswith('cab_key_reset:'):
-        key_name = cb_data.split(':', 1)[1]
-        show_key_reset_confirm(cfg, chat_id, user_id, key_name, msg_id)
-        return True
-    if cb_data.startswith('cab_key_resethwid:'):
-        key_name = cb_data.split(':', 1)[1]
-        # Открытый VIP-ключ: не спрашиваем HWID, сразу ротируем пароль
-        _is_open_vip = False
-        if key_name.startswith('vip_'):
-            try:
-                _is_open_vip = not db.is_vip_hwid_locked(key_name)
-            except Exception:
-                _is_open_vip = False
-        if _is_open_vip:
-            try:
-                _k = db.get_vip_key(key_name) or {}
-                _dev = _k.get('devices', 1)
-            except Exception:
-                _dev = 1
-            _new_pw = rotate_key_password(key_name)
-            if _new_pw:
-                NL = chr(10)
-                _txt = NL.join([
-                    "\u2705  <b>ПАРОЛЬ ОБНОВЛЁН</b>",
-                    "\u2501"*20,
-                    "",
-                    f"\U0001F511 Логин: <code>{key_name}</code>",
-                    f"\U0001F513 Открытый конфиг (до {_dev} устр.)",
-                    "",
-                    "\u2501"*20,
-                    "\U0001F4F2 <b>Что делать:</b>",
-                    "1. Удали старый конфиг из DarkTunnel",
-                    "2. Нажми \u00ab\U0001F4F2 Получить конфиг\u00bb ниже",
-                    "3. Импортируй новый и подключись",
-                ])
-                _kb = {'inline_keyboard': [
-                    [{'text': '\U0001F4F2 Получить конфиг', 'callback_data': f'cab_dt:{key_name}'}],
-                    [{'text': '\u2B05\uFE0F К ключу', 'callback_data': f'cab_key:{key_name}'}]
-                ]}
-                if msg_id:
-                    _edit(token, chat_id, msg_id, _txt, _kb)
-                else:
-                    _send(token, chat_id, _txt, _kb)
-            else:
-                _send(token, chat_id, "\u274C  Не удалось обновить пароль")
-            return True
-        ask_key_hwid(cfg, chat_id, user_id, key_name, msg_id)
-        return True
-    if cb_data.startswith('cab_key_del:'):
-        key_name = cb_data.split(':', 1)[1]
-        show_key_delete_confirm(cfg, chat_id, user_id, key_name, msg_id)
-        return True
-    if cb_data.startswith('cab_key:'):
-        key_name = cb_data.split(':', 1)[1]
-        show_key_detail(cfg, chat_id, user_id, key_name, msg_id)
-        return True
-    if cb_data.startswith('cab_delmsg:'):
+    if cb_data == 'cab_udp_soon':
+        _is_vip = False
         try:
-            _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg_id})
-        except: pass
-        return True
-    if cb_data.startswith('cab_darkfile:'):
-        key_name = cb_data.split(':', 1)[1]
-        send_dark_files_all_nodes(cfg, chat_id, user_id, key_name)
-        return True
-    if cb_data.startswith('cab_npvt:'):
-        key_name = cb_data.split(':', 1)[1]
-        send_npvt_file(cfg, chat_id, user_id, key_name)
-        return True
-    if cb_data.startswith('cab_dt:'):
-        key_name = cb_data.split(':', 1)[1]
-        show_darktunnel_url(cfg, chat_id, user_id, key_name)
-        return True
-    if cb_data.startswith('cab_copy:'):
-        key_name = cb_data.split(':', 1)[1]
-        _tg(token, 'answerCallbackQuery', {
-            'callback_query_id': cb['id'],
-            'text': f'📋 Логин: {key_name}',
-            'show_alert': True
-        })
-        return True
+            _vip_keys = db.get_vip_keys(user_id)
+            if _vip_keys:
+                _is_vip = True
+        except Exception as _e:
+            cab_log.error(f"VIP check error: {_e}")
+            
+        if _is_vip:
+            _udp_text = (
+                "🍏 <b>NPV Tunnel (для iPhone)</b>" + chr(10) + chr(10) +
+                "Вы VIP клиент! Теперь вы можете получить ключи для iOS." + chr(10) + chr(10) +
+                "👇 <b>Как получить:</b>" + chr(10) +
+                "1️⃣ Перейди в раздел <b>🔑 Мои ключи</b>." + chr(10) +
+                "2️⃣ Нажми на свой <b>VIP-ключ</b>." + chr(10) +
+                "3️⃣ Выбери кнопку <b>🍏 Ключ для iPhone</b>." + chr(10) + chr(10) +
+                "📲 <i>Ссылка на подписку автоматически подтянет все ваши локации!</i>"
+            )
+            _udp_kb = {'inline_keyboard': [
+                [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'}],
+                [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
+            ]}
+        else:
+            _udp_text = (
+                "🍏 <b>Ключи для iPhone (NPV Tunnel)</b>" + chr(10) + chr(10) +
+                "Приложение <b>NPV Tunnel</b> обеспечивает максимальную скорость и стабильность на вашем iPhone или iPad." + chr(10) + chr(10) +
+                "🔒 <i>Раздел доступен только VIP клиентам.</i>" + chr(10) + chr(10) +
+                "<b>Преимущества:</b>" + chr(10) +
+                "⚡️ Высокая скорость (UDP) для игр и стриминга." + chr(10) +
+                "🔋 Экономия батареи." + chr(10) +
+                "🛡 Обход блокировок (DPI)." + chr(10) + chr(10) +
+                "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
+            )
+            _udp_kb = {'inline_keyboard': [
+                [{'text': '💎 VIP ключ', 'callback_data': 'cab_buy_vip'}],
+                [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
+            ]}
+            
+        _send_new(token, chat_id, _udp_text, _udp_kb)
+        return
+    if not settings_data:
+        _send(token, chat_id, '❌ <b>Профиль не настроен.</b>' + NL + 'Выбери другой профиль.', {'inline_keyboard': [[{'text': '⬅️ Назад', 'callback_data': 'cab_whitedns'}]]})
+        return
+    if not resolvers_data:
+        _send(token, chat_id, '❌ <b>Резолверы не настроены.</b>' + NL + 'Попробуй другой сервер.', {'inline_keyboard': [[{'text': '⬅️ Назад', 'callback_data': 'cab_whitedns'}]]})
+        return
+    intro = NL.join([
+        '📡 <b>WHITEDNS — ГОТОВО!</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        'Сейчас придут <b>3 файла в .txt</b>.',
+        '📂 Открой их через X-Plore',
+        '   или любой файловый менеджер.',
+        '',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        '⚠️ <b>КАЖДЫЙ В СВОЙ РАЗДЕЛ:</b>',
+        '',
+        '🔗 conection.txt → «Connection»',
+        '⚙️ setings.txt → «Setting»',
+        '🔢 resolvers.txt → «Resolver»',
+        '',
+        '❌  Перепутаешь — не заработает!',
+        '',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '📂 X-Plore (Google Play):',
+        'https://play.google.com/store/apps/details?id=com.lonelycatgames.Xplore',
+        '',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '📱 Сервер: ' + srv_name,
+        '⚙️ Профиль: ' + prof_name,
+    ])
+    _send(token, chat_id, intro)
+    flag = srv_name.split(' ')[0]
+    _wd_send_txt_file(token, chat_id, flag + ' conection.txt', conn_data,
+        '🔗 <b>conection.txt</b> — ' + srv_name + chr(10) + '➡️ Импортируй в раздел «Connection»')
+    _wd_send_txt_file(token, chat_id, 'setings.txt', settings_data,
+        '⚙️ <b>setings.txt</b> — ' + prof_name + chr(10) + '➡️ Импортируй в раздел «Setting»')
+    _wd_send_txt_file(token, chat_id, flag + ' resolvers.txt', resolvers_data,
+        '🔢 <b>resolvers.txt</b> — ' + srv_name + chr(10) + '➡️ Импортируй в раздел «Resolver»')
+    _wd_c_log(user_id, username or '', server_idx, prof_idx)
+    try:
+        admin_id = cfg.get('ADMIN_ID', '')
+        if admin_id:
+            from datetime import datetime as _dt
+            # @username клиента через getChat
+            try:
+                _chat = _tg(token, 'getChat', {'chat_id': user_id})
+                _tg_uname = (_chat or {}).get('result', {}).get('username', '') or ''
+                _tg_uname = ('@' + _tg_uname) if _tg_uname else '—'
+            except Exception:
+                _tg_uname = '—'
+            # Логин ключа клиента (первый активный VIP)
+            try:
+                _vk = db.get_vip_keys(user_id, active_only=True)
+                _key_login = _vk[0]['login'] if _vk else '—'
+            except Exception:
+                _key_login = '—'
+            adm_msg = NL.join([
+                '📡 <b>WHITEDNS — НОВАЯ ВЫДАЧА</b>',
+                '━━━━━━━━━━━━━━━━━━━━',
+                '👤 Юзер: ' + (username or '—'),
+                '📧 TG: ' + _tg_uname,
+                '🆔 ID: <code>' + str(user_id) + '</code>',
+                '🔑 Ключ: <code>' + _key_login + '</code>',
+                '🌐 Сервер: ' + srv_name,
+                '⚙️ Профиль: ' + prof_name,
+                '⏰ ' + _dt.now().strftime('%F %H:%M'),
+            ])
+            # Лог через LOG-бота (support), не в основной чат
+            _log_tok = cfg.get('LOG_BOT_TOKEN', '')
+            _log_chat = cfg.get('LOG_CHAT_ID', '')
+            if _log_tok and _log_chat:
+                _tg(_log_tok, 'sendMessage', {
+                    'chat_id': _log_chat,
+                    'text': adm_msg,
+                    'parse_mode': 'HTML',
+                })
+            else:
+                _send(token, str(admin_id), adm_msg)
+    except: pass
 
-    return False
 
-# ──────────────────────────────────────────────────────────────
-# WHITEDNS — меню (заготовка, логика будет добавлена)
-# ──────────────────────────────────────────────────────────────
+# === ВОССТАНОВЛЕННЫЕ ФУНКЦИИ WHITEDNS ===
+
+
+# === ФУНКЦИИ WHITEDNS (ВОССТАНОВЛЕНО) ===
 def show_whitedns_menu(cfg, chat_id, user_id, msg_id=None):
     """Меню WhiteDNS. Проверка VIP + выбор сервера."""
     token = cfg['BOT_TOKEN']
@@ -2899,128 +2635,3 @@ def show_whitedns_confirm(cfg, chat_id, user_id, server_idx, prof_idx, msg_id=No
         _edit(token, chat_id, msg_id, text, kb)
     else:
         _send(token, chat_id, text, kb)
-
-def _wd_send_txt_file(token, chat_id, filename, content, caption=''):
-    """Отправляет текстовый файл через Telegram sendDocument."""
-    import tempfile
-    import subprocess
-    import os as _os
-    tmp_path = None
-    try:
-        fd, tmp_path = tempfile.mkstemp(suffix='.txt')
-        with _os.fdopen(fd, 'w', encoding='utf-8') as f:
-            f.write(content)
-        cmd = [
-            'curl', '-s', '-X', 'POST',
-            'https://api.telegram.org/bot' + token + '/sendDocument',
-            '-F', 'chat_id=' + str(chat_id),
-            '-F', 'document=@' + tmp_path + ';filename=' + filename,
-        ]
-        if caption:
-            cmd += ['-F', 'caption=' + caption, '-F', 'parse_mode=HTML']
-        subprocess.run(cmd, capture_output=True, timeout=30)
-    except Exception as e:
-        pass
-    finally:
-        if tmp_path and _os.path.exists(tmp_path):
-            try:
-                _os.remove(tmp_path)
-            except: pass
-
-def send_whitedns_files(cfg, chat_id, user_id, server_idx, prof_idx, username=''):
-    token = cfg['BOT_TOKEN']
-    NL = chr(10)
-    if server_idx < 0 or server_idx > 2:
-        server_idx = 0
-    if prof_idx < 0 or prof_idx > 2:
-        prof_idx = 0
-    servers = _wd_c_read_servers()
-    conn_data = servers[server_idx] if servers[server_idx] else ''
-    settings_data = _wd_c_read_file(WD_SET_PATHS[prof_idx])
-    resolvers_data = _wd_c_read_file(WD_RES_PATHS[server_idx])
-    srv_name = WD_SRV_NAMES[server_idx]
-    prof_name = WD_PROF_NAMES[prof_idx]
-    if not conn_data:
-        _send(token, chat_id, '❌ <b>Сервер не настроен.</b>' + NL + 'Попробуй другой сервер.', {'inline_keyboard': [[{'text': '⬅️ Назад', 'callback_data': 'cab_whitedns'}]]})
-        return
-    if not settings_data:
-        _send(token, chat_id, '❌ <b>Профиль не настроен.</b>' + NL + 'Выбери другой профиль.', {'inline_keyboard': [[{'text': '⬅️ Назад', 'callback_data': 'cab_whitedns'}]]})
-        return
-    if not resolvers_data:
-        _send(token, chat_id, '❌ <b>Резолверы не настроены.</b>' + NL + 'Попробуй другой сервер.', {'inline_keyboard': [[{'text': '⬅️ Назад', 'callback_data': 'cab_whitedns'}]]})
-        return
-    intro = NL.join([
-        '📡 <b>WHITEDNS — ГОТОВО!</b>',
-        '━━━━━━━━━━━━━━━━━━━━',
-        '',
-        'Сейчас придут <b>3 файла в .txt</b>.',
-        '📂 Открой их через X-Plore',
-        '   или любой файловый менеджер.',
-        '',
-        '━━━━━━━━━━━━━━━━━━━━',
-        '',
-        '⚠️ <b>КАЖДЫЙ В СВОЙ РАЗДЕЛ:</b>',
-        '',
-        '🔗 conection.txt → «Connection»',
-        '⚙️ setings.txt → «Setting»',
-        '🔢 resolvers.txt → «Resolver»',
-        '',
-        '❌  Перепутаешь — не заработает!',
-        '',
-        '━━━━━━━━━━━━━━━━━━━━',
-        '📂 X-Plore (Google Play):',
-        'https://play.google.com/store/apps/details?id=com.lonelycatgames.Xplore',
-        '',
-        '━━━━━━━━━━━━━━━━━━━━',
-        '📱 Сервер: ' + srv_name,
-        '⚙️ Профиль: ' + prof_name,
-    ])
-    _send(token, chat_id, intro)
-    flag = srv_name.split(' ')[0]
-    _wd_send_txt_file(token, chat_id, flag + ' conection.txt', conn_data,
-        '🔗 <b>conection.txt</b> — ' + srv_name + chr(10) + '➡️ Импортируй в раздел «Connection»')
-    _wd_send_txt_file(token, chat_id, 'setings.txt', settings_data,
-        '⚙️ <b>setings.txt</b> — ' + prof_name + chr(10) + '➡️ Импортируй в раздел «Setting»')
-    _wd_send_txt_file(token, chat_id, flag + ' resolvers.txt', resolvers_data,
-        '🔢 <b>resolvers.txt</b> — ' + srv_name + chr(10) + '➡️ Импортируй в раздел «Resolver»')
-    _wd_c_log(user_id, username or '', server_idx, prof_idx)
-    try:
-        admin_id = cfg.get('ADMIN_ID', '')
-        if admin_id:
-            from datetime import datetime as _dt
-            # @username клиента через getChat
-            try:
-                _chat = _tg(token, 'getChat', {'chat_id': user_id})
-                _tg_uname = (_chat or {}).get('result', {}).get('username', '') or ''
-                _tg_uname = ('@' + _tg_uname) if _tg_uname else '—'
-            except Exception:
-                _tg_uname = '—'
-            # Логин ключа клиента (первый активный VIP)
-            try:
-                _vk = db.get_vip_keys(user_id, active_only=True)
-                _key_login = _vk[0]['login'] if _vk else '—'
-            except Exception:
-                _key_login = '—'
-            adm_msg = NL.join([
-                '📡 <b>WHITEDNS — НОВАЯ ВЫДАЧА</b>',
-                '━━━━━━━━━━━━━━━━━━━━',
-                '👤 Юзер: ' + (username or '—'),
-                '📧 TG: ' + _tg_uname,
-                '🆔 ID: <code>' + str(user_id) + '</code>',
-                '🔑 Ключ: <code>' + _key_login + '</code>',
-                '🌐 Сервер: ' + srv_name,
-                '⚙️ Профиль: ' + prof_name,
-                '⏰ ' + _dt.now().strftime('%F %H:%M'),
-            ])
-            # Лог через LOG-бота (support), не в основной чат
-            _log_tok = cfg.get('LOG_BOT_TOKEN', '')
-            _log_chat = cfg.get('LOG_CHAT_ID', '')
-            if _log_tok and _log_chat:
-                _tg(_log_tok, 'sendMessage', {
-                    'chat_id': _log_chat,
-                    'text': adm_msg,
-                    'parse_mode': 'HTML',
-                })
-            else:
-                _send(token, str(admin_id), adm_msg)
-    except: pass
