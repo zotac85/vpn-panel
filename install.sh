@@ -16,13 +16,14 @@ python3 -c '
 import sqlite3, os
 db_path = "/etc/UDPCustom/vpn.db"
 ws_port = "2052"
+import re
 if os.path.exists("/usr/local/bin/ws-proxy.py"):
     with open("/usr/local/bin/ws-proxy.py") as f:
         for line in f:
-            if "listen_port" in line:
-                digits = "".join(c for c in line if c.isdigit())
-                if digits:
-                    ws_port = digits
+            match = re.search(r'listen_port[ ]*=[ ]*([0-9]+)', line)
+            if match:
+                ws_port = match.group(1)
+                break
 if os.path.exists(db_path):
     try:
         db = sqlite3.connect(db_path)
