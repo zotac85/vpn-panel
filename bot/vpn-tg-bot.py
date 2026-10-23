@@ -47,6 +47,9 @@ def load_config():
     return cfg
 
 def tg_request(token, method, params=None, timeout=35):
+    # ГЛУШИЛКА: Блокируем установку команд, чтобы они не лезли в группы
+    if method == 'setMyCommands':
+        return {'ok': True, 'result': True}
     url = f"https://api.telegram.org/bot{token}/{method}"
     try:
         if params:
@@ -4491,6 +4494,17 @@ def main():
             if not updates or not updates.get('ok'): time.sleep(3); continue
             for upd in updates.get('result', []):
                 offset = upd['update_id'] + 1
+                
+                # === ЗАЩИТА ОТ ГРУПП И КАНАЛОВ ===
+                _chat_type = None
+                if 'message' in upd and 'chat' in upd['message']:
+                    _chat_type = upd['message']['chat'].get('type')
+                elif 'callback_query' in upd and 'message' in upd['callback_query'] and 'chat' in upd['callback_query']['message']:
+                    _chat_type = upd['callback_query']['message']['chat'].get('type')
+                
+                if _chat_type and _chat_type != 'private':
+                    continue
+                # =================================
 
                 # === Telegram Stars: pre_checkout ===
                 if 'pre_checkout_query' in upd:
