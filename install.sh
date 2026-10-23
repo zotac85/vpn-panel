@@ -318,7 +318,7 @@ if [ -d "$PANEL_DIR" ] || [ -f "/usr/local/bin/vpn" ]; then
                 exit 0
             fi
             BK_TS=$(date +%F_%H%M)
-            TEXT_FILES="welcome.txt start.txt test_ready.txt test_issued.txt help.txt help_instruction.txt help_faq.txt help_darktunnel.txt help_httpcustom.txt help_whitedns.txt help_video.txt ad.txt vip_buy.txt post.txt faq_keywords.txt ref_post.txt"
+            TEXT_FILES="welcome.txt start.txt test_ready.txt test_issued.txt help.txt help_instruction.txt help_faq.txt help_darktunnel.txt help_npv.txt help_whitedns.txt help_video.txt ad.txt vip_buy.txt post.txt faq_keywords.txt ref_post.txt"
             OK=0
             SKIP=0
             for f in $TEXT_FILES; do

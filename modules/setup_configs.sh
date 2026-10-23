@@ -56,9 +56,9 @@ fi
 if [ ! -f /etc/UDPCustom/help_darktunnel.txt ]; then
     curl -sf -o /etc/UDPCustom/help_darktunnel.txt "$REPO_URL/configs/help_darktunnel.txt"
 fi
-# help_httpcustom.txt — инструкция HttpCustom
-if [ ! -f /etc/UDPCustom/help_httpcustom.txt ]; then
-    curl -sf -o /etc/UDPCustom/help_httpcustom.txt "$REPO_URL/configs/help_httpcustom.txt"
+# help_npv.txt — инструкция NPV Tunnel
+if [ ! -f /etc/UDPCustom/help_npv.txt ]; then
+    curl -sf -o /etc/UDPCustom/help_npv.txt "$REPO_URL/configs/help_npv.txt"
 fi
 # help_whitedns.txt — инструкция WhiteDNS
 if [ ! -f /etc/UDPCustom/help_whitedns.txt ]; then
