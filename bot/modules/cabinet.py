@@ -1195,10 +1195,10 @@ def format_key_card(cfg, key_name):
         f"📡 Локации: {flags_str}",
         "",
         "<b>👇 Выбери конфиг для своего устройства:</b>",
-        "🤖 <b>Для Android:</b> Скачай файл <code>.dark</code> и импортируй в DarkTunnel.",
-        "🍏 <b>Для iPhone:</b> Скачай файл <code>.npvt</code> и открой в NPV Tunnel.",
+        "🤖 <b>Для Android:</b> Скачай файл <code>.dark</code> и импортируй в <a href='https://play.google.com/store/apps/details?id=net.darktunnel.app'>DarkTunnel</a>.",
+        "🍏 <b>Для iPhone:</b> Нажми кнопку ниже, скопируй ссылку и добавь в <a href='https://apps.apple.com/us/app/npv-tunnel/id1629465476'>NPV Tunnel</a> как подписку.",
         "",
-        "<i>Нажми на кнопку ниже, чтобы получить нужный файл.</i>"
+        "<i>Нажми на кнопку ниже, чтобы получить конфиг для своего устройства.</i>"
     ]
     text = NL.join(lines)
     kb = {'inline_keyboard': [
@@ -1223,7 +1223,12 @@ def send_npvt_file(cfg, chat_id, user_id, key_name):
         
     if not key_name.startswith('vip_'):
         from bot_modules import cabinet as _cab
-        _cab._send_new(token, chat_id, "🍏 <b>Ключи для iPhone (NPV Tunnel)</b>" + chr(10) + chr(10) + "🔒 <i>Эти конфигурации доступны только VIP клиентам.</i>" + chr(10) + chr(10) + "Оформите VIP-подписку в разделе <b>💎 DarkTunnel</b>, чтобы получить доступ к данному формату.")
+        _kb = {'inline_keyboard': [
+            [{'text': '💎 Купить VIP ключ', 'callback_data': 'cab_buy_vip'}],
+            [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'},
+             {'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
+        ]}
+        _cab._send_new(token, chat_id, "🍏 <b>Ключи для iPhone (NPV Tunnel)</b>" + chr(10) + chr(10) + "🔒 <i>Эти конфигурации доступны только VIP клиентам.</i>" + chr(10) + chr(10) + "Оформите VIP-подписку в разделе <b>💎 Купить VIP ключ</b>, чтобы получить доступ к данному формату.", _kb)
         return
 
     sub_url = f"https://de.cdnstore.shop/sub/{key_name}"
@@ -1265,7 +1270,8 @@ def show_key_detail(cfg, chat_id, user_id, key_name, msg_id=None):
             'chat_id': chat_id,
             'text': text,
             'reply_markup': keyboard,
-            'parse_mode': 'HTML'
+            'parse_mode': 'HTML',
+            'disable_web_page_preview': True
         })
     except Exception as e:
         import traceback
@@ -1518,15 +1524,15 @@ def show_balance(cfg, chat_id, user_id, msg_id=None):
     NL = chr(10)
     lines = [
         "💰 <b>БАЛАНС</b>",
-        "━━━━━━━━━━━━━━━━━━━━",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
         "",
         f"💵 Текущий баланс: <b>{balance:.2f} USDT</b>",
     ]
     if payments:
         lines.append("")
-        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         lines.append("📊 <b>Последние операции</b>")
-        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         lines.append("")
         for p in payments:
             amt = float(p['amount'])
@@ -1568,7 +1574,8 @@ def show_balance(cfg, chat_id, user_id, msg_id=None):
     kb = {'inline_keyboard': [
         [{'text': '💵 Пополнить', 'callback_data': 'cab_topup'},
          {'text': '📜 Вся история', 'callback_data': 'cab_hist:1'}],
-        [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
+        [{'text': '💎 Купить VIP ключ', 'callback_data': 'cab_buy_vip'},
+         {'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
     ]}
     if msg_id:
         _edit(token, chat_id, msg_id, text, kb)
@@ -2220,10 +2227,25 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
 
     if cb_data.startswith('cab_darkfile:'):
         key_name = cb_data.split(':', 1)[1]
+        try: _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg_id})
+        except: pass
+        try: _smart_files_clear(token, chat_id)
+        except: pass
         send_dark_files_all_nodes(cfg, chat_id, user_id, key_name)
+        
+        # Отправляем кнопку для возврата
+        _kb = {'inline_keyboard': [
+            [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'},
+             {'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
+        ]}
+        _send_new(token, chat_id, "☝️ <b>Конфиги отправлены выше.</b>", _kb)
         return True
     if cb_data.startswith('cab_npvt:'):
         key_name = cb_data.split(':', 1)[1]
+        try: _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg_id})
+        except: pass
+        try: _smart_files_clear(token, chat_id)
+        except: pass
         send_npvt_file(cfg, chat_id, user_id, key_name)
         return True
 
