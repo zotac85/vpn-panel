@@ -1240,20 +1240,39 @@ def send_npvt_file(cfg, chat_id, user_id, key_name):
     _cab._send_new(token, chat_id, text)
 
 def show_key_detail(cfg, chat_id, user_id, key_name, msg_id=None):
-    """Детали ключа — использует единый format_key_card."""
-    token = cfg['BOT_TOKEN']
-    key = db.get_test_key(key_name) or db.get_vip_key(key_name)
-    if not key or int(key['tg_id']) != int(user_id):
-        _send(token, chat_id, "❌  Ключ не найден")
-        return
-    text, keyboard = format_key_card(cfg, key_name)
-    if not text:
-        _send(token, chat_id, "❌  Ошибка")
-        return
-    if msg_id:
-        _edit(token, chat_id, msg_id, text, keyboard)
-    else:
-        _send(token, chat_id, text, keyboard)
+    try:
+        token = cfg['BOT_TOKEN']
+        key = db.get_test_key(key_name) or db.get_vip_key(key_name)
+        if not key or int(key['tg_id']) != int(user_id):
+            _send(token, chat_id, "❌   Ключ не найден")
+            return
+        text, keyboard = format_key_card(cfg, key_name)
+        if not text:
+            _send(token, chat_id, "❌   Ошибка генерации карточки")
+            return
+        
+        # Удаляем старое сообщение (чтобы обойти ошибку edit)
+        if msg_id:
+            try:
+                _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg_id})
+            except:
+                pass
+        
+        # Шлем новое сообщение напрямую
+        _tg(token, 'sendMessage', {
+            'chat_id': chat_id,
+            'text': text,
+            'reply_markup': keyboard,
+            'parse_mode': 'HTML'
+        })
+    except Exception as e:
+        import traceback
+        err = traceback.format_exc()
+        cab_log.error(f"show_key_detail error: {err}")
+        try:
+            _send(token, chat_id, f"🚨 <b>ОШИБКА КЛЮЧА:</b>\n<code>{err}</code>")
+        except:
+            pass
 
 def _build_dark_url_for_key(cfg, key_name, domain=None, ws_port=None, location_name=None):
     """Возвращает darktunnel:// или None."""
@@ -2192,6 +2211,20 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
 
     # Тосты для разных callback'ов
     _toast = None
+    if cb_data.startswith('cab_key:'):
+        key_name = cb_data.split(':', 1)[1]
+        show_key_detail(cfg, chat_id, user_id, key_name, msg_id)
+        return True
+
+    if cb_data.startswith('cab_darkfile:'):
+        key_name = cb_data.split(':', 1)[1]
+        send_dark_files_all_nodes(cfg, chat_id, user_id, key_name)
+        return True
+    if cb_data.startswith('cab_npvt:'):
+        key_name = cb_data.split(':', 1)[1]
+        send_npvt_file(cfg, chat_id, user_id, key_name)
+        return True
+
     if cb_data.startswith('cab_key_resethwid:'):
         _toast = '🔄 Пароль обновлён'
     elif cb_data.startswith('cab_key_reset:'):
@@ -2341,89 +2374,6 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
             
         _send_new(token, chat_id, _udp_text, _udp_kb)
         return
-    if not settings_data:
-        _send(token, chat_id, '❌ <b>Профиль не настроен.</b>' + NL + 'Выбери другой профиль.', {'inline_keyboard': [[{'text': '⬅️ Назад', 'callback_data': 'cab_whitedns'}]]})
-        return
-    if not resolvers_data:
-        _send(token, chat_id, '❌ <b>Резолверы не настроены.</b>' + NL + 'Попробуй другой сервер.', {'inline_keyboard': [[{'text': '⬅️ Назад', 'callback_data': 'cab_whitedns'}]]})
-        return
-    intro = NL.join([
-        '📡 <b>WHITEDNS — ГОТОВО!</b>',
-        '━━━━━━━━━━━━━━━━━━━━',
-        '',
-        'Сейчас придут <b>3 файла в .txt</b>.',
-        '📂 Открой их через X-Plore',
-        '   или любой файловый менеджер.',
-        '',
-        '━━━━━━━━━━━━━━━━━━━━',
-        '',
-        '⚠️ <b>КАЖДЫЙ В СВОЙ РАЗДЕЛ:</b>',
-        '',
-        '🔗 conection.txt → «Connection»',
-        '⚙️ setings.txt → «Setting»',
-        '🔢 resolvers.txt → «Resolver»',
-        '',
-        '❌  Перепутаешь — не заработает!',
-        '',
-        '━━━━━━━━━━━━━━━━━━━━',
-        '📂 X-Plore (Google Play):',
-        'https://play.google.com/store/apps/details?id=com.lonelycatgames.Xplore',
-        '',
-        '━━━━━━━━━━━━━━━━━━━━',
-        '📱 Сервер: ' + srv_name,
-        '⚙️ Профиль: ' + prof_name,
-    ])
-    _send(token, chat_id, intro)
-    flag = srv_name.split(' ')[0]
-    _wd_send_txt_file(token, chat_id, flag + ' conection.txt', conn_data,
-        '🔗 <b>conection.txt</b> — ' + srv_name + chr(10) + '➡️ Импортируй в раздел «Connection»')
-    _wd_send_txt_file(token, chat_id, 'setings.txt', settings_data,
-        '⚙️ <b>setings.txt</b> — ' + prof_name + chr(10) + '➡️ Импортируй в раздел «Setting»')
-    _wd_send_txt_file(token, chat_id, flag + ' resolvers.txt', resolvers_data,
-        '🔢 <b>resolvers.txt</b> — ' + srv_name + chr(10) + '➡️ Импортируй в раздел «Resolver»')
-    _wd_c_log(user_id, username or '', server_idx, prof_idx)
-    try:
-        admin_id = cfg.get('ADMIN_ID', '')
-        if admin_id:
-            from datetime import datetime as _dt
-            # @username клиента через getChat
-            try:
-                _chat = _tg(token, 'getChat', {'chat_id': user_id})
-                _tg_uname = (_chat or {}).get('result', {}).get('username', '') or ''
-                _tg_uname = ('@' + _tg_uname) if _tg_uname else '—'
-            except Exception:
-                _tg_uname = '—'
-            # Логин ключа клиента (первый активный VIP)
-            try:
-                _vk = db.get_vip_keys(user_id, active_only=True)
-                _key_login = _vk[0]['login'] if _vk else '—'
-            except Exception:
-                _key_login = '—'
-            adm_msg = NL.join([
-                '📡 <b>WHITEDNS — НОВАЯ ВЫДАЧА</b>',
-                '━━━━━━━━━━━━━━━━━━━━',
-                '👤 Юзер: ' + (username or '—'),
-                '📧 TG: ' + _tg_uname,
-                '🆔 ID: <code>' + str(user_id) + '</code>',
-                '🔑 Ключ: <code>' + _key_login + '</code>',
-                '🌐 Сервер: ' + srv_name,
-                '⚙️ Профиль: ' + prof_name,
-                '⏰ ' + _dt.now().strftime('%F %H:%M'),
-            ])
-            # Лог через LOG-бота (support), не в основной чат
-            _log_tok = cfg.get('LOG_BOT_TOKEN', '')
-            _log_chat = cfg.get('LOG_CHAT_ID', '')
-            if _log_tok and _log_chat:
-                _tg(_log_tok, 'sendMessage', {
-                    'chat_id': _log_chat,
-                    'text': adm_msg,
-                    'parse_mode': 'HTML',
-                })
-            else:
-                _send(token, str(admin_id), adm_msg)
-    except: pass
-
-
 # === ВОССТАНОВЛЕННЫЕ ФУНКЦИИ WHITEDNS ===
 
 
