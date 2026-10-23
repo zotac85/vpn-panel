@@ -1,22 +1,31 @@
-🍏 <b>Инструкция: NPV Tunnel (iOS)</b>
+🍏 <b>Инструкция: NPV Tunnel (iOS / Android)</b>
 ━━━━━━━━━━━━━━━━━━━━
 
 <b>1. Скачай приложение:</b>
-Скачай <b>NPV Tunnel</b> из App Store:
-https://apps.apple.com/us/app/npv-tunnel/id1629465476
+📱 <b>iOS (iPhone/iPad):</b> <a href="https://apps.apple.com/us/app/npv-tunnel/id1629465476">Скачать из App Store</a>
+📱 <b>Android:</b> <a href="https://play.google.com/store/apps/details?id=com.napsternetlabs.napsternetv">Скачать из Google Play</a>
+💻 <b>ПК:</b> <a href="https://github.com/zotac85/ArsenVpn">Скачать ArsenVPN</a>
 
 <b>2. Получи ключ в боте:</b>
 • Зайди в <b>🔑 Мои ключи</b>
 • Нажми на свой <b>VIP-ключ</b>
 • Нажми кнопку <b>🍏 Ключ для iPhone</b>
-• Скопируй ссылку на подписку
+• Скопируй ссылку на подписку (начинается с https://...)
 
 <b>3. Добавь в приложение:</b>
 • Открой NPV Tunnel
 • Перейди во вкладку <b>Configs</b>
-• Нажми <b>Add subscription</b>
+• Нажми <b>Add subscription</b> (или "+" в углу)
 • Вставь скопированную ссылку и нажми OK
+• Все локации добавятся автоматически!
 
-✅ <i>Все локации добавятся автоматически!</i>
+<b>4. Подключение:</b>
+• Выбери понравившийся сервер из списка
+• Нажми на большую кнопку <b>CONNECT</b> 🔌
+
+🛠 <b>Частые ошибки:</b>
+❌ <b>«Unknown config format»</b> — скопирована не та ссылка. Нужна именно ссылка на подписку (https://...), а не сырой текст ключа.
+❌ <b>«Connection failed»</b> — сервер перегружен или заблокирован провайдером. Попробуй выбрать другую локацию.
+❌ <b>Не обновляется подписка</b> — отключи VPN перед нажатием кнопки обновления.
 
 💬 Если нужна помощь: {support}
