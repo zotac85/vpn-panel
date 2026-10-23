@@ -1244,7 +1244,11 @@ def send_npvt_file(cfg, chat_id, user_id, key_name):
         '',
         f'<code>{sub_url}</code>'
     ])
-    _cab._send_new(token, chat_id, text)
+    _kb = {'inline_keyboard': [
+        [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'},
+         {'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
+    ]}
+    _cab._send_new(token, chat_id, text, _kb)
 
 def show_key_detail(cfg, chat_id, user_id, key_name, msg_id=None):
     try:
