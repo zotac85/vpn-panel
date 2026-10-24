@@ -1238,8 +1238,9 @@ def send_npvt_file(cfg, chat_id, user_id, key_name):
         "🍏 <b>Подписка для iPhone (NPV Tunnel)</b>",
         "",
         "1. Скачай приложение: <a href='https://apps.apple.com/us/app/npv-tunnel/id1629465476'>App Store</a>",
-        "2. Открой вкладку <b>Configs</b> → <b>Add subscription</b>",
-        "3. Вставь ссылку ниже и нажми OK",
+        "2. Перейди во вкладку <b>Configs</b> (внизу по центру)",
+        "3. Нажми на кнопку <b>➕</b> в правом нижнем углу",
+        "4. Выбери <b>Add subscription</b> и вставь ссылку ниже",
         "",
         f"<code>{sub_url}</code>"
     ])
@@ -2244,10 +2245,6 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
 
     if cb_data.startswith('cab_pcsub:'):
         key_name = cb_data.split(':', 1)[1]
-        if not key_name.startswith('vip_'):
-            _kb = {'inline_keyboard': [[{'text': '⬅️ Назад', 'callback_data': f'cab_key:{key_name}'}]]}
-            _send_instr(token, chat_id, "💻 <b>Ключ для ПК (ArsenVPN)</b>" + chr(10) + chr(10) + "🔒 <i>Для тестовых ключей доступен только Android.</i>" + chr(10) + chr(10) + "Оформите VIP ключ, чтобы получить доступ к приложению для ПК.", _kb)
-            return True
             
         _dom = "de.cdnstore.shop"
         try:
@@ -2256,7 +2253,12 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         except: pass
         
         _sub_url = f"https://{_dom}/sub_dark/{key_name}"
-        _text = "💻 <b>Подписка для ПК (ArsenVPN)</b>" + chr(10) + chr(10) + "1. Скачай приложение: <a href='https://github.com/zotac85/ArsenVpn'>GitHub</a>" + chr(10) + "2. Открой приложение и нажми «Добавить подписку»" + chr(10) + "3. Вставь ссылку ниже и нажми OK" + chr(10) + chr(10) + f"<code>{_sub_url}</code>"
+        _text = "💻 <b>Подписка для ПК (ArsenVPN)</b>" + chr(10) + chr(10) + \
+                "1. Скачай приложение: <a href='https://github.com/zotac85/ArsenVpn'>GitHub</a>" + chr(10) + \
+                "2. Открой приложение и нажми кнопку <b>«Подписка»</b> (внизу)." + chr(10) + \
+                "3. Вставь ссылку ниже в поле и нажми <b>«Загрузить»</b>." + chr(10) + \
+                "4. Закрой окно, выбери сервер и нажми <b>CONNECT</b>." + chr(10) + chr(10) + \
+                f"<code>{_sub_url}</code>"
         _kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
         
         _send_instr(token, chat_id, _text, _kb)
