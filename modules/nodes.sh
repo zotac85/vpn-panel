@@ -258,43 +258,73 @@ _nodes_optimize() {
         wsport=80
     fi
 
-    # IP мастера для whitelist fail2ban
-    MASTER_IP=$(hostname -I | awk '{print $1}')
+    echo ""
+    echo -e "${CYAN}Выберите тип оптимизации для $name ($ip):${NC}"
+    echo -e " 1) ⚡ Полная оптимизация (BBR, UFW, Fail2ban, буферы)"
+    echo -e " 2) 🚦 Установить лимит скорости (TC)"
+    echo -e " 0) Назад"
+    read -p "Действие [0-2]: " opt_type
 
-    echo ""
-    echo -e "${CYAN}Оптимизирую ноду $name ($ip)...${NC}"
-    echo -e "${YELLOW}Master IP (whitelist): $MASTER_IP${NC}"
-    echo ""
-    read -p "Введите лимит TCP (SSH/WS) в Мбит/с (0 - снять): " speed_tcp
-    read -p "Введите лимит DNS (MasterDnsVPN) в Мбит/с (0 - снять): " speed_dns
-    echo ""
-    
-    if [[ -n "$speed_tcp" || -n "$speed_dns" ]]; then
-        echo -e "${CYAN}Применяю лимиты на ноде...${NC}"
+    if [ "$opt_type" = "1" ]; then
+        echo -e "${YELLOW}Применяю полную оптимизацию (может занять 10-20 секунд)...${NC}"
         
-        TC_CMD="IFACE=\$(ip -o -4 route show to default | awk '{print \$5}'); "
-        TC_CMD+="tc qdisc del dev \$IFACE root 2>/dev/null; "
+        # Формируем команду для удаленного выполнения
+        REMOTE_CMD="export DEBIAN_FRONTEND=noninteractive; "
+        # 1. Установка пакетов
+        REMOTE_CMD+="apt update -y >/dev/null 2>&1; apt install -y ufw fail2ban >/dev/null 2>&1; "
+        # 2. Настройка BBR и буферов
+        REMOTE_CMD+="sysctl -w net.core.default_qdisc=fq >/dev/null 2>&1; "
+        REMOTE_CMD+="sysctl -w net.ipv4.tcp_congestion_control=bbr >/dev/null 2>&1; "
+        REMOTE_CMD+="sysctl -w net.core.rmem_max=16777216 >/dev/null 2>&1; "
+        REMOTE_CMD+="sysctl -w net.core.wmem_max=16777216 >/dev/null 2>&1; "
+        REMOTE_CMD+="sysctl -w net.ipv4.tcp_rmem='4096 87380 16777216' >/dev/null 2>&1; "
+        REMOTE_CMD+="sysctl -w net.ipv4.tcp_wmem='4096 65536 16777216' >/dev/null 2>&1; "
+        REMOTE_CMD+="grep -q 'net.ipv4.tcp_congestion_control=bbr' /etc/sysctl.conf || echo 'net.ipv4.tcp_congestion_control=bbr' >> /etc/sysctl.conf; "
+        REMOTE_CMD+="grep -q 'net.core.default_qdisc=fq' /etc/sysctl.conf || echo 'net.core.default_qdisc=fq' >> /etc/sysctl.conf; "
+        # 3. Отключение IPv6 (опционально, чтобы не было утечек)
+        REMOTE_CMD+="sysctl -w net.ipv6.conf.all.disable_ipv6=1 >/dev/null 2>&1; "
+        REMOTE_CMD+="sysctl -w net.ipv6.conf.default.disable_ipv6=1 >/dev/null 2>&1; "
+        # 4. Настройка UFW
+        REMOTE_CMD+="ufw default deny incoming >/dev/null 2>&1; "
+        REMOTE_CMD+="ufw default allow outgoing >/dev/null 2>&1; "
+        REMOTE_CMD+="ufw allow $sport/tcp >/dev/null 2>&1; "
+        REMOTE_CMD+="ufw allow $wsport/tcp >/dev/null 2>&1; "
+        REMOTE_CMD+="ufw --force enable >/dev/null 2>&1; "
+        # 5. Включение Fail2ban
+        REMOTE_CMD+="systemctl enable fail2ban >/dev/null 2>&1; systemctl restart fail2ban >/dev/null 2>&1; "
         
-        if [[ "$speed_tcp" != "0" || "$speed_dns" != "0" ]]; then
-            TC_CMD+="tc qdisc add dev \$IFACE root handle 1: htb default 30; "
-            TC_CMD+="tc class add dev \$IFACE parent 1: classid 1:1 htb rate 1000mbit ceil 1000mbit quantum 1500; "
-            
-            if [[ "$speed_tcp" != "0" && -n "$speed_tcp" ]]; then
-                TC_CMD+="tc class add dev \$IFACE parent 1:1 classid 1:20 htb rate ${speed_tcp}mbit ceil ${speed_tcp}mbit; "
-                TC_CMD+="tc qdisc replace dev \$IFACE parent 1:20 handle 20: sfq perturb 10; "
-                TC_CMD+="tc filter add dev \$IFACE parent 1: protocol ip prio 2 u32 match ip protocol 6 0xff flowid 1:20; "
+        # Отправляем на ноду
+        ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "$REMOTE_CMD"
+        
+        echo -e "${GREEN}✅ Полная оптимизация (BBR, UFW, Fail2ban) применена!${NC}"
+
+    elif [ "$opt_type" = "2" ]; then
+        echo ""
+        read -p "Введите лимит TCP (SSH/WS) в Мбит/с (0 - снять): " speed_tcp
+        read -p "Введите лимит DNS (MasterDnsVPN) в Мбит/с (0 - снять): " speed_dns
+        echo ""
+        if [[ -n "$speed_tcp" || -n "$speed_dns" ]]; then
+            echo -e "${CYAN}Применяю лимиты на ноде...${NC}"
+            TC_CMD="IFACE=\$(ip -o -4 route show to default | awk '{print \$5}'); "
+            TC_CMD+="tc qdisc del dev \$IFACE root 2>/dev/null; "
+            if [[ "$speed_tcp" != "0" || "$speed_dns" != "0" ]]; then
+                TC_CMD+="tc qdisc add dev \$IFACE root handle 1: htb default 30; "
+                TC_CMD+="tc class add dev \$IFACE parent 1: classid 1:1 htb rate 1000mbit ceil 1000mbit quantum 1500; "
+                if [[ "$speed_tcp" != "0" && -n "$speed_tcp" ]]; then
+                    TC_CMD+="tc class add dev \$IFACE parent 1:1 classid 1:20 htb rate ${speed_tcp}mbit ceil ${speed_tcp}mbit; "
+                    TC_CMD+="tc qdisc replace dev \$IFACE parent 1:20 handle 20: sfq perturb 10; "
+                    TC_CMD+="tc filter add dev \$IFACE parent 1: protocol ip prio 2 u32 match ip protocol 6 0xff flowid 1:20; "
+                fi
+                if [[ "$speed_dns" != "0" && -n "$speed_dns" ]]; then
+                    TC_CMD+="tc class add dev \$IFACE parent 1:1 classid 1:10 htb rate ${speed_dns}mbit ceil ${speed_dns}mbit; "
+                    TC_CMD+="tc qdisc replace dev \$IFACE parent 1:10 handle 10: sfq perturb 10; "
+                    TC_CMD+="tc filter add dev \$IFACE parent 1: protocol ip prio 1 u32 match ip dport 53 0xffff flowid 1:10; "
+                    TC_CMD+="tc filter add dev \$IFACE parent 1: protocol ip prio 1 u32 match ip protocol 17 0xff match ip dport 53 0xffff flowid 1:10; "
+                fi
             fi
-            
-            if [[ "$speed_dns" != "0" && -n "$speed_dns" ]]; then
-                TC_CMD+="tc class add dev \$IFACE parent 1:1 classid 1:10 htb rate ${speed_dns}mbit ceil ${speed_dns}mbit; "
-                TC_CMD+="tc qdisc replace dev \$IFACE parent 1:10 handle 10: sfq perturb 10; "
-                TC_CMD+="tc filter add dev \$IFACE parent 1: protocol ip prio 1 u32 match ip dport 53 0xffff flowid 1:10; "
-                TC_CMD+="tc filter add dev \$IFACE parent 1: protocol ip prio 1 u32 match ip protocol 17 0xff match ip dport 53 0xffff flowid 1:10; "
-            fi
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "$TC_CMD"
+            echo -e "${GREEN}✅ Лимиты на ноде обновлены!${NC}"
         fi
-        
-        ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "$TC_CMD"
-        echo -e "${GREEN}Лимиты на ноде обновлены!${NC}"
     fi
     read -p "Нажмите Enter..."
 }
