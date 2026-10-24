@@ -224,14 +224,26 @@ menu_subscriptions() {
                 ;;
             3)
                 read -p "Введите логин ключа (например, vip_arsen): " key_name
-                echo -e "\nВаша ссылка для DarkTunnel (ПК/Android):"
-                echo -e "${GREEN}https://$DOMAIN/sub_dark/$key_name${NC}"
+                # Проверяем наличие ключа в базе через Python
+                check=$(cd /usr/local/bin && python3 -c "from bot_modules import db; print('OK' if (db.get_test_key('$key_name') or db.get_vip_key('$key_name')) else 'NO')" 2>/dev/null)
+                if [ "$check" == "OK" ]; then
+                    echo -e "\nВаша ссылка для DarkTunnel (ПК/Android):"
+                    echo -e "${GREEN}https://$DOMAIN/sub_dark/$key_name${NC}"
+                else
+                    echo -e "\n${RED}❌ Ключ '$key_name' не найден в базе!${NC}"
+                fi
                 read -p "Нажмите Enter..."
                 ;;
             4)
                 read -p "Введите логин ключа (например, vip_arsen): " key_name
-                echo -e "\nВаша ссылка для NPV Tunnel (iPhone):"
-                echo -e "${GREEN}https://$DOMAIN/sub/$key_name${NC}"
+                # Проверяем наличие ключа в базе
+                check=$(cd /usr/local/bin && python3 -c "from bot_modules import db; print('OK' if (db.get_test_key('$key_name') or db.get_vip_key('$key_name')) else 'NO')" 2>/dev/null)
+                if [ "$check" == "OK" ]; then
+                    echo -e "\nВаша ссылка для NPV Tunnel (iPhone):"
+                    echo -e "${GREEN}https://$DOMAIN/sub/$key_name${NC}"
+                else
+                    echo -e "\n${RED}❌ Ключ '$key_name' не найден в базе!${NC}"
+                fi
                 read -p "Нажмите Enter..."
                 ;;
             5)
