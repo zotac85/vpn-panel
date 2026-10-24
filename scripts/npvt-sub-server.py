@@ -29,7 +29,7 @@ def b64(s): return base64.b64encode(s.encode()).decode()
 
 def generate_npvt(username, password, host, remark):
     port = 80
-    proxy = "8.6.112.0:80"
+    proxy = cab.get_random_proxy() or "8.6.112.0:80"
     payload = "CONNECT / HTTP/1.1[crlf]Host: ya.ru[crlf]User-Agent: Mozilla/5.0 (Linux; Android 13) Chrome/120[crlf][crlf]POST / HTTP/1.1[crlf]Host: [host][crlf]Connection: upgrade[crlf]Upgrade: websocket[crlf][crlf]"
 
     data = {

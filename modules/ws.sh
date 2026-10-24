@@ -207,6 +207,7 @@ menu_subscriptions() {
                 read -p "Введите новый домен (например, de.cdnstore.shop): " new_dom
                 if [ -n "$new_dom" ]; then
                     echo "DOMAIN=\"$new_dom\"" > /etc/UDPCustom/domain.conf
+                    python3 -c "import sqlite3; db=sqlite3.connect('/etc/UDPCustom/vpn.db'); db.execute('UPDATE nodes SET host=? WHERE is_master=1', ('$new_dom',)); db.commit()"
                     echo -e "${GREEN}✅ Домен изменен на $new_dom${NC}"
                     echo -e "${YELLOW}⚠️ Не забудьте выпустить новый SSL сертификат (пункт 2)!${NC}"
                     read -p "Нажмите Enter..."
