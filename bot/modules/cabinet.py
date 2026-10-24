@@ -2374,6 +2374,13 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         except Exception: pass
         show_my_keys(cfg, chat_id, user_id, 'vip')
         return True
+    if cb_data.startswith('cab_vip_buy:'):
+        try:
+            _t_idx = int(cb_data.split(':', 1)[1])
+            show_vip_confirm(cfg, chat_id, user_id, _t_idx, msg_id)
+        except Exception as _e:
+            cab_log.error(f"VIP buy error: {_e}")
+        return True
     if cb_data == 'cab_buy_vip':
         try:
             db.clear_pending(user_id)
