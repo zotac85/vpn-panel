@@ -148,9 +148,10 @@ menu_ws() {
         echo -e " 6) 📦 Управление payload"
         echo -e " 7) 📡 Управление UDPGW (порт 7300)"
         echo -e " 8) 🗑️  Удалить с сервера"
+        echo -e " 9) 📦 Управление подписками (Домен, SSL)"
         echo -e " 0) ↩️  Назад в главное меню"
         echo ""
-        read -p "Выберите действие [0-8]: " ws_choice
+        read -p "Выберите действие [0-9]: " ws_choice
         case $ws_choice in
             1) install_ws ;;
             2) systemctl restart ws-proxy; echo -e "${GREEN}Перезапущено.${NC}"; sleep 1 ;;
@@ -166,8 +167,80 @@ menu_ws() {
                 [[ "$dp" != "Не установлен" ]] && ufw delete allow $dp/tcp 2>/dev/null
                 rm -f /etc/systemd/system/ws-proxy.service /usr/local/bin/ws-proxy.py
                 echo -e "${GREEN}Удалено.${NC}"; sleep 1 ;;
+            9) menu_subscriptions ;;
             0) break ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
+        esac
+    done
+}
+
+
+menu_subscriptions() {
+    while true; do
+        clear
+        source /etc/UDPCustom/domain.conf 2>/dev/null || DOMAIN="не задан"
+        
+        echo -e "${CYAN}══════════════════════════════════════════════${NC}"
+        echo -e "     ${YELLOW}УПРАВЛЕНИЕ ПОДПИСКАМИ И ДОМЕНОМ${NC}"
+        echo -e "${CYAN}══════════════════════════════════════════════${NC}"
+        echo -e " Текущий домен: ${GREEN}${DOMAIN}${NC}"
+        
+        # Проверка сертификата
+        if [ -d "/etc/letsencrypt/live/$DOMAIN" ]; then
+            EXP=$(openssl x509 -enddate -noout -in "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" | cut -d= -f2)
+            echo -e " SSL Сертификат: ${GREEN}Активен (до $EXP)${NC}"
+        else
+            echo -e " SSL Сертификат: ${RED}Отсутствует${NC}"
+        fi
+        echo -e "${CYAN}──────────────────────────────────────────────${NC}"
+        echo -e " 1) 🌐 Изменить домен"
+        echo -e " 2) 🔒 Выпустить/Обновить SSL сертификат"
+        echo -e " 3) 🕸️ Ссылка для DarkTunnel"
+        echo -e " 4) 🍏 Ссылка для NPV Tunnel"
+        echo -e " 5) 🔄 Перезапустить сервис подписок"
+        echo -e " 0) ⬅️ Назад"
+        echo -e "${CYAN}──────────────────────────────────────────────${NC}"
+        read -p "Выберите пункт [0-5]: " sub_choice
+        
+        case $sub_choice in
+            1)
+                read -p "Введите новый домен (например, de.cdnstore.shop): " new_dom
+                if [ -n "$new_dom" ]; then
+                    echo "DOMAIN=\"$new_dom\"" > /etc/UDPCustom/domain.conf
+                    echo -e "${GREEN}✅ Домен изменен на $new_dom${NC}"
+                    echo -e "${YELLOW}⚠️ Не забудьте выпустить новый SSL сертификат (пункт 2)!${NC}"
+                    read -p "Нажмите Enter..."
+                fi
+                ;;
+            2)
+                if [ "$DOMAIN" = "не задан" ]; then echo "Сначала задайте домен!"; sleep 2; continue; fi
+                echo -e "${YELLOW}Выпуск сертификата для $DOMAIN...${NC}"
+                echo -e "Останавливаю WS Proxy на 10 секунд для проверки домена..."
+                systemctl stop ws-proxy
+                certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos -m admin@$DOMAIN
+                systemctl start ws-proxy
+                echo -e "${GREEN}✅ Сертификат обновлен!${NC}"
+                read -p "Нажмите Enter..."
+                ;;
+            3)
+                read -p "Введите логин ключа (например, vip_arsen): " key_name
+                echo -e "\nВаша ссылка для DarkTunnel (ПК/Android):"
+                echo -e "${GREEN}https://$DOMAIN/sub_dark/$key_name${NC}"
+                read -p "Нажмите Enter..."
+                ;;
+            4)
+                read -p "Введите логин ключа (например, vip_arsen): " key_name
+                echo -e "\nВаша ссылка для NPV Tunnel (iPhone):"
+                echo -e "${GREEN}https://$DOMAIN/sub/$key_name${NC}"
+                read -p "Нажмите Enter..."
+                ;;
+            5)
+                systemctl restart npvt-sub.service
+                echo -e "${GREEN}✅ Сервис подписок перезапущен!${NC}"
+                sleep 1
+                ;;
+            0) return ;;
+            *) echo "Неверный выбор"; sleep 1 ;;
         esac
     done
 }

@@ -22,7 +22,8 @@ TEMPLATE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                         'assets', 'blank.dark')
 
 # Данные немецкого сервера
-DEF_HOST      = 'de.cdnstore.shop'
+import re
+DEF_HOST      = re.search(r'DOMAIN="([^"]+)"', open('/etc/UDPCustom/domain.conf').read()).group(1)
 DEF_PORT      = '2052'
 DEF_USER      = 'vip_rrrttrrrr'
 DEF_PASS      = 'G4PY1McMVote'

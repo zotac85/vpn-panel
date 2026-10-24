@@ -1231,7 +1231,9 @@ def send_npvt_file(cfg, chat_id, user_id, key_name):
         _cab._send_new(token, chat_id, "🍏 <b>Ключи для iPhone (NPV Tunnel)</b>" + chr(10) + chr(10) + "🔒 <i>Эти конфигурации доступны только VIP клиентам.</i>" + chr(10) + chr(10) + "Оформите VIP-подписку в разделе <b>💎 Купить VIP ключ</b>, чтобы получить доступ к данному формату.", _kb)
         return
 
-    sub_url = f"https://de.cdnstore.shop/sub/{key_name}"
+    import re
+    _dom = re.search(r'DOMAIN="([^"]+)"', open("/etc/UDPCustom/domain.conf").read()).group(1)
+    sub_url = f"https://{_dom}/sub/{key_name}"
     from bot_modules import cabinet as _cab
     NL = chr(10)
     text = NL.join([
@@ -2243,7 +2245,9 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
              {'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
         ]}
         
-        _sub_url = f"https://de.cdnstore.shop/sub_dark/{key_name}"
+        import re
+        _dom = re.search(r'DOMAIN="([^"]+)"', open("/etc/UDPCustom/domain.conf").read()).group(1)
+        _sub_url = f"https://{_dom}/sub_dark/{key_name}"
         _pc_text = (
             "☝️ <b>Конфиги отправлены выше.</b>" + chr(10) + chr(10) +
             "💻 <b>Ссылка для ПК (ArsenVPN):</b>" + chr(10) +

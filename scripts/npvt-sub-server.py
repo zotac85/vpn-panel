@@ -120,6 +120,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 socketserver.TCPServer.allow_reuse_address = True
 with socketserver.TCPServer(("", PORT), Handler) as httpd:
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    context.load_cert_chain('/etc/letsencrypt/live/de.cdnstore.shop/fullchain.pem', '/etc/letsencrypt/live/de.cdnstore.shop/privkey.pem')
+    import re
+    _dom = re.search(r'DOMAIN="([^"]+)"', open('/etc/UDPCustom/domain.conf').read()).group(1)
+    context.load_cert_chain(f'/etc/letsencrypt/live/{_dom}/fullchain.pem', f'/etc/letsencrypt/live/{_dom}/privkey.pem')
     httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
     httpd.serve_forever()
