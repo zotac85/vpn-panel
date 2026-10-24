@@ -965,6 +965,16 @@ menu_sec() {
             fi
         else
             echo -e " TCP Brutal         : ${RED}🔴 Не установлен${NC}"
+        
+        # Проверка лимита скорости
+        IFACE=$(ip -o -4 route show to default | awk "{print \$5}")
+        RAW_LIMIT=$(tc class show dev $IFACE 2>/dev/null | grep "htb" | grep -o "rate [0-9]*Mbit")
+        if [ -n "$RAW_LIMIT" ]; then
+            SPEED_VAL=$(echo "$RAW_LIMIT" | awk "{print \$2}" | sed "s/Mbit//")
+            echo -e " Лимит скорости     : \033[0;32m🟢 ${SPEED_VAL} Мбит/с\033[0m"
+        else
+            echo -e " Лимит скорости     : \033[0;31m🔴 Не установлен\033[0m"
+        fi
         fi
 
         if grep -q "net.core.rmem_max" /etc/sysctl.conf 2>/dev/null; then
@@ -1014,8 +1024,8 @@ fi
         echo -e " 16) ⚡  Оптимизировать ВСЁ одной кнопкой"
         echo ""
         echo -e "${CYAN}─── 🔄 Управление ───${NC}"
-        echo -e " 17) 🚦 Ограничить скорость (Bandwidth Limit)"
-        echo -e " 17) 📊 Мониторинг (htop)"
+        echo -e " 17) 🚦 Лимит скорости"
+        echo -e " 18) 📊 Мониторинг (htop)"
         echo -e " 19) 🔄 Перезагрузка сервера"
         echo -e " 20) 🛑 Выключение сервера"
         echo -e " 21) 🛡  Блокировка ICMP (анти-DPI)"
@@ -1062,30 +1072,47 @@ fi
 
 bandwidth_limit_menu() {
     clear
-    if ! command -v wondershaper &> /dev/null; then
-        echo "Установка wondershaper..."
-        apt-get update && apt-get install -y wondershaper
-    fi
-    echo -e "${CYAN}─── 🚦 УПРАВЛЕНИЕ ОГРАНИЧЕНИЕМ СКОРОСТИ ───${NC}"
-    echo "1) Установить лимит 5 Мбит/с"
+    echo -e "\033[0;36m─── 🚦 УПРАВЛЕНИЕ ОГРАНИЧЕНИЕМ СКОРОСТИ ───\033[0m"
+    echo "1) Установить/Изменить лимит (Мбит/с)"
     echo "2) Снять ограничение (Unlimited)"
     echo "3) Показать текущий статус"
     echo "0) Назад"
     read -p "Выберите действие [0-3]: " lim_choice
-    IFACE=$(ip route get 8.8.8.8 | grep -oP 'dev \K\S+')
+    
+    IFACE=$(ip -o -4 route show to default | awk '{print $5}')
+    if [ -z "$IFACE" ]; then
+        echo -e "\033[0;31mОшибка: не удалось определить сетевой интерфейс.\033[0m"
+        read -p "Нажмите Enter..."
+        return
+    fi
+    
     case $lim_choice in
         1)
-            wondershaper -a $IFACE -d 5120 -u 5120
-            echo -e "${GREEN}Лимит 5 Мбит/с успешно установлен!${NC}"
+            read -p "Введите скорость в Мбит/с (например, 5): " speed
+            if [[ "$speed" =~ ^[0-9]+$ ]] && [ "$speed" -gt 0 ]; then
+                tc qdisc del dev $IFACE root 2>/dev/null
+                tc qdisc add dev $IFACE root handle 1: htb default 30
+                tc class add dev $IFACE parent 1: classid 1:1 htb rate ${speed}mbit ceil ${speed}mbit
+                echo -e "\033[0;32mЛимит ${speed} Мбит/с успешно установлен на интерфейс $IFACE!\033[0m"
+            else
+                echo -e "\033[0;31mОшибка: введите корректное число.\033[0m"
+            fi
             read -p "Нажмите Enter..."
             ;;
         2)
-            wondershaper -c -a $IFACE
-            echo -e "${GREEN}Ограничение снято.${NC}"
+            tc qdisc del dev $IFACE root 2>/dev/null
+            echo -e "\033[0;32mОграничение снято. Скорость не ограничена.\033[0m"
             read -p "Нажмите Enter..."
             ;;
         3)
-            wondershaper -s -a $IFACE
+            echo -e "\033[0;36m─── ТЕКУЩИЙ СТАТУС ───\033[0m"
+            RAW_LIMIT=$(tc class show dev $IFACE 2>/dev/null | grep "htb" | grep -o "rate [0-9]*Mbit")
+            if [ -n "$RAW_LIMIT" ]; then
+                SPEED_VAL=$(echo "$RAW_LIMIT" | awk "{print \$2}" | sed "s/Mbit//")
+                echo -e "Текущий лимит: \033[0;32m${SPEED_VAL} Мбит/с\033[0m"
+            else
+                echo -e "Текущий лимит: \033[0;33mНЕ УСТАНОВЛЕН (Unlimited)\033[0m"
+            fi
             read -p "Нажмите Enter..."
             ;;
         0) return ;;
