@@ -543,8 +543,6 @@ def show_my_keys(cfg, chat_id, user_id, kind='all', msg_id=None):
                 {'text': f"{icon} {k['login']}", 'callback_data': f"cab_key:{k['login']}"},
                 {'text': '🔄', 'callback_data': f"cab_key_reset:{k['login']}"}
             ]
-            if kk == 'vip':
-                row.append({'text': '⏰', 'callback_data': f"cab_key_extend:{k['login']}"})
             row.append({'text': '🗑', 'callback_data': f"cab_key_del:{k['login']}"})
             keyboard['inline_keyboard'].append(row)
     keyboard['inline_keyboard'].append([
@@ -1213,6 +1211,9 @@ def format_key_card(cfg, key_name):
         {'text': '💻 ПК', 'callback_data': f'cab_pcsub:{key_name}'}
     ])
     
+    kb['inline_keyboard'].append([
+        {'text': '🗑 Удалить', 'callback_data': f'cab_key_del:{key_name}'}
+    ])
     kb['inline_keyboard'].append([
         {'text': '🔑 Ключи', 'callback_data': 'cab_keys'},
         {'text': '👤 Кабинет', 'callback_data': 'cab_main'}
@@ -2313,6 +2314,14 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         _tg(token, 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': _toast})
     else:
         _tg(token, 'answerCallbackQuery', {'callback_query_id': cb['id']})
+        
+    # Восстановленная логика
+    if cb_data.startswith('cab_key_reset:'):
+        show_key_reset_confirm(cfg, chat_id, user_id, cb_data.split(':', 1)[1], msg_id)
+        return True
+    if cb_data.startswith('cab_key_del:'):
+        show_key_delete_confirm(cfg, chat_id, user_id, cb_data.split(':', 1)[1], msg_id)
+        return True
 
     if cb_data == 'cab_help_instruction':
         show_help_instruction(cfg, chat_id, user_id, msg_id)
