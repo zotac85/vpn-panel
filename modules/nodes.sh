@@ -268,35 +268,34 @@ _nodes_optimize() {
     if [ "$opt_type" = "1" ]; then
         echo -e "${YELLOW}Применяю полную оптимизацию (может занять 10-20 секунд)...${NC}"
         
-        # Формируем команду для удаленного выполнения
         REMOTE_CMD="export DEBIAN_FRONTEND=noninteractive; "
-        # 1. Установка пакетов
-        REMOTE_CMD+="apt update -y >/dev/null 2>&1; apt install -y ufw fail2ban >/dev/null 2>&1; "
-        # 2. Настройка BBR и буферов
-        REMOTE_CMD+="sysctl -w net.core.default_qdisc=fq >/dev/null 2>&1; "
-        REMOTE_CMD+="sysctl -w net.ipv4.tcp_congestion_control=bbr >/dev/null 2>&1; "
-        REMOTE_CMD+="sysctl -w net.core.rmem_max=16777216 >/dev/null 2>&1; "
-        REMOTE_CMD+="sysctl -w net.core.wmem_max=16777216 >/dev/null 2>&1; "
-        REMOTE_CMD+="sysctl -w net.ipv4.tcp_rmem='4096 87380 16777216' >/dev/null 2>&1; "
-        REMOTE_CMD+="sysctl -w net.ipv4.tcp_wmem='4096 65536 16777216' >/dev/null 2>&1; "
+        REMOTE_CMD+="echo '-> 1/4 Обновление пакетов и установка UFW/Fail2ban...'; "
+        REMOTE_CMD+="apt update -y > /dev/null 2>&1 && apt install -y ufw fail2ban > /dev/null 2>&1 || echo 'ОШИБКА ПРИ УСТАНОВКЕ ПАКЕТОВ'; "
+        
+        REMOTE_CMD+="echo '-> 2/4 Включение BBR и настройка буферов...'; "
+        REMOTE_CMD+="sysctl -w net.core.default_qdisc=fq; "
+        REMOTE_CMD+="sysctl -w net.ipv4.tcp_congestion_control=bbr; "
+        REMOTE_CMD+="sysctl -w net.core.rmem_max=16777216; "
+        REMOTE_CMD+="sysctl -w net.core.wmem_max=16777216; "
+        REMOTE_CMD+="sysctl -w net.ipv4.tcp_rmem='4096 87380 16777216'; "
+        REMOTE_CMD+="sysctl -w net.ipv4.tcp_wmem='4096 65536 16777216'; "
         REMOTE_CMD+="grep -q 'net.ipv4.tcp_congestion_control=bbr' /etc/sysctl.conf || echo 'net.ipv4.tcp_congestion_control=bbr' >> /etc/sysctl.conf; "
         REMOTE_CMD+="grep -q 'net.core.default_qdisc=fq' /etc/sysctl.conf || echo 'net.core.default_qdisc=fq' >> /etc/sysctl.conf; "
-        # 3. Отключение IPv6 (опционально, чтобы не было утечек)
-        REMOTE_CMD+="sysctl -w net.ipv6.conf.all.disable_ipv6=1 >/dev/null 2>&1; "
-        REMOTE_CMD+="sysctl -w net.ipv6.conf.default.disable_ipv6=1 >/dev/null 2>&1; "
-        # 4. Настройка UFW
-        REMOTE_CMD+="ufw default deny incoming >/dev/null 2>&1; "
-        REMOTE_CMD+="ufw default allow outgoing >/dev/null 2>&1; "
-        REMOTE_CMD+="ufw allow $sport/tcp >/dev/null 2>&1; "
-        REMOTE_CMD+="ufw allow $wsport/tcp >/dev/null 2>&1; "
-        REMOTE_CMD+="ufw --force enable >/dev/null 2>&1; "
-        # 5. Включение Fail2ban
-        REMOTE_CMD+="systemctl enable fail2ban >/dev/null 2>&1; systemctl restart fail2ban >/dev/null 2>&1; "
         
-        # Отправляем на ноду
+        REMOTE_CMD+="echo '-> 3/4 Настройка UFW...'; "
+        REMOTE_CMD+="ufw default deny incoming > /dev/null 2>&1; "
+        REMOTE_CMD+="ufw default allow outgoing > /dev/null 2>&1; "
+        REMOTE_CMD+="ufw allow $sport/tcp > /dev/null 2>&1; "
+        REMOTE_CMD+="ufw allow $wsport/tcp > /dev/null 2>&1; "
+        REMOTE_CMD+="ufw --force enable; "
+        
+        REMOTE_CMD+="echo '-> 4/4 Запуск Fail2ban...'; "
+        REMOTE_CMD+="systemctl enable fail2ban > /dev/null 2>&1; systemctl restart fail2ban; "
+        REMOTE_CMD+="echo '=== ВСЕ ГОТОВО ==='; "
+        
         ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "$REMOTE_CMD"
         
-        echo -e "${GREEN}✅ Полная оптимизация (BBR, UFW, Fail2ban) применена!${NC}"
+        echo -e "${GREEN}✅ Процесс завершен. Если выше нет красных ошибок — все установилось.${NC}"
 
     elif [ "$opt_type" = "2" ]; then
         echo ""
