@@ -4475,7 +4475,7 @@ def main():
                 {'command': 'start', 'description': '👋 Начать'},
                 {'command': 'admin', 'description': '⚙️ Админ-панель'},
                 {'command': 'cabinet', 'description': '👤 Личный кабинет'},
-                {'command': 'help', 'description': '📖 Справка'}
+                {'command': 'help', 'description': '🛟 Помощь'}
             ],
             'scope': {'type': 'chat', 'chat_id': int(admin_id)}
         })

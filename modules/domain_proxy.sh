@@ -173,6 +173,8 @@ manage_proxy() {
             *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
         esac
     done
+
+    systemctl restart npvt-sub.service >/dev/null 2>&1
 }
 
 # ─── PAYLOAD ───
