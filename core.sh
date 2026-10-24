@@ -85,6 +85,11 @@ build_session_stats() {
         peer=$(echo "$head" | awk '{print $NF}')
         sport=$(echo "$head" | awk '{print $3}' | awk -F: '{print $NF}')
         [[ "$peer" == *:* ]] || continue
+        case "$peer" in
+            127.0.0.1:*|\[::1\]:*) continue ;;
+            ${my_ip}:*) continue ;;
+            172.6[4-9].*|172.7[0-9].*|104.1[6-9].*|104.2[0-9].*|104.3[0-1].*|162.15[89].*|188.114.*|141.101.*|108.162.*|173.245.*|103.21.*|103.22.*|103.31.*|197.234.*|198.41.*|131.0.72.*) continue ;;
+        esac
 
         local pids p owner u
         pids=$(echo "$line" | grep -oP 'pid=\K[0-9]+')
@@ -101,11 +106,6 @@ build_session_stats() {
             ((SESS_WS_TOTAL++))
             continue
         fi
-        case "$peer" in
-            127.0.0.1:*|\[::1\]:*) continue ;;
-            ${my_ip}:*) continue ;;
-            172.6[4-9].*|172.7[0-9].*|104.1[6-9].*|104.2[0-9].*|104.3[0-1].*|162.15[89].*|188.114.*|141.101.*|108.162.*|173.245.*|103.21.*|103.22.*|103.31.*|197.234.*|198.41.*|131.0.72.*) continue ;;
-        esac
         SESS_SSH_BY_USER["${u:-root}"]=$(( ${SESS_SSH_BY_USER["${u:-root}"]:-0} + 1 ))
         ((SESS_SSH_TOTAL++))
     done <<< "$data"
@@ -134,6 +134,14 @@ get_user_connections() {
 }
 
 header() {
+    SESS_BUILT=1
+    local _wsp=$(get_ws_port)
+    if [ -n "$_wsp" ]; then
+        SESS_WS_TOTAL=$(ss -H -tn state established "( sport = :$_wsp )" 2>/dev/null | awk '{print $4}' | sed 's/:[0-9]*$//' | grep -vE "^(127\.0\.0\.1|172\.6[4-9]\.|172\.7[0-9]\.|104\.1[6-9]\.|104\.2[0-9]\.|104\.3[0-1]\.|162\.15[89]\.|188\.114\.|141\.101\.|108\.162\.|173\.245\.|103\.21\.|103\.22\.|103\.31\.|197\.234\.|198\.41\.|131\.0\.72\.)" | wc -l)
+    else
+        SESS_WS_TOTAL=0
+    fi
+    SESS_SSH_TOTAL=$(ss -H -tn state established "( sport = :22 )" 2>/dev/null | wc -l)
     clear
     local CPU=$(cat /proc/loadavg | awk '{print $1}')
     local RAM=$(free -m | awk 'NR==2{printf "%s/%sMB (%s%%)", $3,$2,int($3*100/$2)}')
