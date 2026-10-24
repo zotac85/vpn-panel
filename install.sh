@@ -5,6 +5,13 @@
 
 # 1. Создание мастер-токена (если его нет)
 MASTER_TOKEN=$(cat /root/.vpn-panel.token 2>/dev/null)
+
+# Создание дефолтного конфига домена, если его нет
+if [ ! -f /etc/UDPCustom/domain.conf ]; then
+    echo 'DOMAIN="de.cdnstore.shop"' > /etc/UDPCustom/domain.conf
+    echo "✅ Создан конфиг домена по умолчанию (/etc/UDPCustom/domain.conf)"
+fi
+
 if [ ! -f /root/.vpn-panel.token ]; then
     echo "$MASTER_TOKEN" > /root/.vpn-panel.token
     chmod 600 /root/.vpn-panel.token
@@ -897,3 +904,34 @@ fi
 [ -d "$SRC_DIR" ] && rm -rf "$SRC_DIR" 2>/dev/null || true
 echo -e "\n\033[0;32m🟢 Операция успешно завершена, Хозяин!\033[0m"
 echo -e "Запуск панели: \033[1;33mvpn\033[0m"
+
+# ==========================================
+# АВТОМАТИЧЕСКАЯ УСТАНОВКА СЕРВИСА ПОДПИСОК (NPVT)
+# ==========================================
+if [ -f /root/vpn-panel-sync/scripts/npvt-sub-server.py ]; then
+    cp /root/vpn-panel-sync/scripts/npvt-sub-server.py /usr/local/bin/npvt-sub-server.py
+    chmod +x /usr/local/bin/npvt-sub-server.py
+    
+    cat << 'EOF_SVC' > /etc/systemd/system/npvt-sub.service
+[Unit]
+Description=NPVT Subscription Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/usr/local/bin
+ExecStart=/usr/bin/python3 /usr/local/bin/npvt-sub-server.py
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF_SVC
+    systemctl daemon-reload
+    systemctl enable npvt-sub.service >/dev/null 2>&1
+    systemctl restart npvt-sub.service >/dev/null 2>&1
+    echo "✅ Сервис подписок (npvt-sub) установлен и запущен."
+fi
