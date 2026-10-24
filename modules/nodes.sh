@@ -265,6 +265,9 @@ _nodes_optimize() {
     echo -e "${CYAN}Оптимизирую ноду $name ($ip)...${NC}"
     echo -e "${YELLOW}Master IP (whitelist): $MASTER_IP${NC}"
     echo ""
+    read -p "Введите лимит скорости TCP в Мбит/с (0 - снять): " speed_limit
+    echo ""
+
 
     # Копируем скрипт на ноду
     scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" \
@@ -274,6 +277,26 @@ _nodes_optimize() {
     ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" \
         "chmod +x /usr/local/bin/vpn-optimize.sh && bash /usr/local/bin/vpn-optimize.sh '$MASTER_IP'"
 
+
+    if [[ -n "$speed_limit" ]]; then
+        if [[ "$speed_limit" == "0" ]]; then
+            echo -e "${CYAN}Снимаю лимит TCP на ноде...${NC}"
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" \
+                "IFACE=\$(ip -o -4 route show to default | awk '{print \$5}'); \
+                tc qdisc del dev \$IFACE root 2>/dev/null"
+            echo -e "${GREEN}Лимит снят!${NC}"
+        else
+            echo -e "${CYAN}Применяю лимит TCP ${speed_limit} Мбит/с на ноде...${NC}"
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" \
+                "IFACE=\$(ip -o -4 route show to default | awk '{print \$5}'); \
+                tc qdisc del dev \$IFACE root 2>/dev/null; \
+                tc qdisc add dev \$IFACE root handle 1: htb default 30; \
+                tc class add dev \$IFACE parent 1: classid 1:1 htb rate 1000mbit ceil 1000mbit quantum 1500; \
+                tc class add dev \$IFACE parent 1:1 classid 1:20 htb rate ${speed_limit}mbit ceil ${speed_limit}mbit; \
+                tc filter add dev \$IFACE parent 1: protocol ip prio 2 u32 match ip protocol 6 0xff flowid 1:20"
+            echo -e "${GREEN}Лимит TCP установлен!${NC}"
+        fi
+    fi
     echo ""
     read -p "Нажмите Enter..."
 }
