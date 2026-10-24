@@ -1212,9 +1212,6 @@ def format_key_card(cfg, key_name):
     ])
     
     kb['inline_keyboard'].append([
-        {'text': '🗑 Удалить', 'callback_data': f'cab_key_del:{key_name}'}
-    ])
-    kb['inline_keyboard'].append([
         {'text': '🔑 Ключи', 'callback_data': 'cab_keys'},
         {'text': '👤 Кабинет', 'callback_data': 'cab_main'}
     ])
@@ -1268,6 +1265,9 @@ def _send_instr(token, chat_id, text, kb=None):
 def show_key_detail(cfg, chat_id, user_id, key_name, msg_id=None):
     try:
         token = cfg['BOT_TOKEN']
+        # Очищаем старые .dark файлы перед показом карточки
+        try: _smart_files_clear(token, chat_id)
+        except: pass
         key = db.get_test_key(key_name) or db.get_vip_key(key_name)
         if not key or int(key['tg_id']) != int(user_id):
             _send(token, chat_id, "❌   Ключ не найден")
@@ -2657,6 +2657,11 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         })
         return True
     if cb_data == 'cab_pc_soon':
+        # Удаляем сообщение кабинета, чтобы не засорять чат
+        if msg_id:
+            try: _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg_id})
+            except: pass
+            
         _is_vip = False
         try:
             _vip_keys = db.get_vip_keys(user_id)
@@ -2672,8 +2677,8 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
                 "👇 <b>Как получить:</b>" + chr(10) +
                 "1️⃣ Перейди в раздел <b>🔑 Мои ключи</b>." + chr(10) +
                 "2️⃣ Нажми на свой <b>VIP-ключ</b>." + chr(10) +
-                "3️⃣ Нажми <b>🤖 Ключ для Android</b>." + chr(10) +
-                "4️⃣ Скопируй <b>ссылку для ПК</b> и вставь её в приложение." + chr(10) + chr(10) +
+                "3️⃣ Нажми кнопку <b>💻 ПК</b>." + chr(10) +
+                "4️⃣ Скопируй ссылку и вставь её в приложение." + chr(10) + chr(10) +
                 "💾 <b>Скачать приложение:</b> https://github.com/zotac85/ArsenVpn"
             )
             _pc_kb = {'inline_keyboard': [
