@@ -966,14 +966,25 @@ menu_sec() {
         else
             echo -e " TCP Brutal         : ${RED}🔴 Не установлен${NC}"
         
-        # Проверка лимита скорости
-        IFACE=$(ip -o -4 route show to default | awk "{print \$5}")
-        RAW_LIMIT=$(tc class show dev $IFACE 2>/dev/null | grep "htb" | grep -o "rate [0-9]*Mbit")
-        if [ -n "$RAW_LIMIT" ]; then
-            SPEED_VAL=$(echo "$RAW_LIMIT" | awk "{print \$2}" | sed "s/Mbit//")
-            echo -e " Лимит скорости     : \033[0;32m🟢 ${SPEED_VAL} Мбит/с\033[0m"
+        # Проверка лимитов скорости
+        IFACE=$(ip -o -4 route show to default | awk '{print $5}')
+        
+        # TCP Лимит
+        TCP_LIMIT=$(tc class show dev $IFACE 2>/dev/null | grep "1:20" | grep -o "rate [0-9]*Mbit")
+        if [ -n "$TCP_LIMIT" ]; then
+            TCP_VAL=$(echo "$TCP_LIMIT" | awk '{print $2}' | sed 's/Mbit//')
+            echo -e " TCP Лимит          : \033[0;32m🟢 ${TCP_VAL} Мбит/с\033[0m"
         else
-            echo -e " Лимит скорости     : \033[0;31m🔴 Не установлен\033[0m"
+            echo -e " TCP Лимит          : \033[0;31m🔴 Не установлен\033[0m"
+        fi
+        
+        # DNS Лимит
+        DNS_LIMIT=$(tc class show dev $IFACE 2>/dev/null | grep "1:10" | grep -o "rate [0-9]*Mbit")
+        if [ -n "$DNS_LIMIT" ]; then
+            DNS_VAL=$(echo "$DNS_LIMIT" | awk '{print $2}' | sed 's/Mbit//')
+            echo -e " DNS Лимит          : \033[0;32m🟢 ${DNS_VAL} Мбит/с\033[0m"
+        else
+            echo -e " DNS Лимит          : \033[0;31m🔴 Не установлен\033[0m"
         fi
         fi
 
@@ -1072,46 +1083,78 @@ fi
 
 bandwidth_limit_menu() {
     clear
-    echo -e "\033[0;36m─── 🚦 УПРАВЛЕНИЕ ОГРАНИЧЕНИЕМ СКОРОСТИ ───\033[0m"
-    echo "1) Установить/Изменить лимит (Мбит/с)"
-    echo "2) Снять ограничение (Unlimited)"
-    echo "3) Показать текущий статус"
-    echo "0) Назад"
-    read -p "Выберите действие [0-3]: " lim_choice
-    
     IFACE=$(ip -o -4 route show to default | awk '{print $5}')
     if [ -z "$IFACE" ]; then
-        echo -e "\033[0;31mОшибка: не удалось определить сетевой интерфейс.\033[0m"
+        echo -e "\033[0;31mОшибка: не удалось определить интерфейс.\033[0m"
         read -p "Нажмите Enter..."
         return
     fi
-    
+    echo -e "\033[0;36m─── 🚦 УПРАВЛЕНИЕ ОГРАНИЧЕНИЕМ СКОРОСТИ ───\033[0m"
+    echo "1) Ограничить TCP (SSH/WS)"
+    echo "2) Ограничить DNS (MasterDnsVPN)"
+    echo "3) Снять ВСЕ ограничения"
+    echo "4) Показать текущий статус"
+    echo "0) Назад"
+    read -p "Выберите действие [0-4]: " lim_choice
     case $lim_choice in
         1)
-            read -p "Введите скорость в Мбит/с (например, 5): " speed
+            read -p "Введите скорость TCP в Мбит/с: " speed
             if [[ "$speed" =~ ^[0-9]+$ ]] && [ "$speed" -gt 0 ]; then
-                tc qdisc del dev $IFACE root 2>/dev/null
-                tc qdisc add dev $IFACE root handle 1: htb default 30
-                tc class add dev $IFACE parent 1: classid 1:1 htb rate ${speed}mbit ceil ${speed}mbit
-                echo -e "\033[0;32mЛимит ${speed} Мбит/с успешно установлен на интерфейс $IFACE!\033[0m"
+                if ! tc qdisc show dev $IFACE | grep -q "htb 1:"; then
+                    tc qdisc add dev $IFACE root handle 1: htb default 30
+                    tc class add dev $IFACE parent 1: classid 1:1 htb rate 1000mbit ceil 1000mbit quantum 1500
+                fi
+                tc filter del dev $IFACE parent 1: protocol ip prio 2 2>/dev/null
+                tc class del dev $IFACE classid 1:20 2>/dev/null
+                tc class add dev $IFACE parent 1:1 classid 1:20 htb rate ${speed}mbit ceil ${speed}mbit
+                tc filter add dev $IFACE parent 1: protocol ip prio 2 u32 match ip protocol 6 0xff flowid 1:20
+                echo -e "\033[0;32mЛимит TCP ${speed} Мбит/с установлен!\033[0m"
             else
-                echo -e "\033[0;31mОшибка: введите корректное число.\033[0m"
+                echo -e "\033[0;31mОшибка ввода.\033[0m"
             fi
             read -p "Нажмите Enter..."
             ;;
         2)
-            tc qdisc del dev $IFACE root 2>/dev/null
-            echo -e "\033[0;32mОграничение снято. Скорость не ограничена.\033[0m"
+            read -p "Введите скорость DNS в Мбит/с: " speed
+            if [[ "$speed" =~ ^[0-9]+$ ]] && [ "$speed" -gt 0 ]; then
+                if ! tc qdisc show dev $IFACE | grep -q "htb 1:"; then
+                    tc qdisc add dev $IFACE root handle 1: htb default 30
+                    tc class add dev $IFACE parent 1: classid 1:1 htb rate 1000mbit ceil 1000mbit quantum 1500
+                fi
+                tc filter del dev $IFACE parent 1: protocol ip prio 1 2>/dev/null
+                tc class del dev $IFACE classid 1:10 2>/dev/null
+                tc class add dev $IFACE parent 1:1 classid 1:10 htb rate ${speed}mbit ceil ${speed}mbit
+                tc filter add dev $IFACE parent 1: protocol ip prio 1 u32 match ip dport 53 0xffff flowid 1:10
+                tc filter add dev $IFACE parent 1: protocol ip prio 1 u32 match ip protocol 17 0xff match ip dport 53 0xffff flowid 1:10
+                echo -e "\033[0;32mЛимит DNS ${speed} Мбит/с установлен!\033[0m"
+            else
+                echo -e "\033[0;31mОшибка ввода.\033[0m"
+            fi
             read -p "Нажмите Enter..."
             ;;
         3)
-            echo -e "\033[0;36m─── ТЕКУЩИЙ СТАТУС ───\033[0m"
-            RAW_LIMIT=$(tc class show dev $IFACE 2>/dev/null | grep "htb" | grep -o "rate [0-9]*Mbit")
-            if [ -n "$RAW_LIMIT" ]; then
-                SPEED_VAL=$(echo "$RAW_LIMIT" | awk "{print \$2}" | sed "s/Mbit//")
-                echo -e "Текущий лимит: \033[0;32m${SPEED_VAL} Мбит/с\033[0m"
+            tc qdisc del dev $IFACE root 2>/dev/null
+            echo -e "\033[0;32mВсе ограничения сняты.\033[0m"
+            read -p "Нажмите Enter..."
+            ;;
+        4)
+            echo -e "\033[0;33m─── ТЕКУЩИЙ СТАТУС ───\033[0m"
+            if tc qdisc show dev $IFACE | grep -q "htb"; then
+                TCP_LIMIT=$(tc class show dev $IFACE 2>/dev/null | grep "1:20" | grep -o "rate [0-9]*Mbit")
+                if [ -n "$TCP_LIMIT" ]; then
+                    echo -e "TCP лимит: \033[0;32m$(echo $TCP_LIMIT | cut -d' ' -f2)\033[0m"
+                else
+                    echo -e "TCP лимит: \033[0;33mНе установлен\033[0m"
+                fi
+                
+                DNS_LIMIT=$(tc class show dev $IFACE 2>/dev/null | grep "1:10" | grep -o "rate [0-9]*Mbit")
+                if [ -n "$DNS_LIMIT" ]; then
+                    echo -e "DNS лимит: \033[0;32m$(echo $DNS_LIMIT | cut -d' ' -f2)\033[0m"
+                else
+                    echo -e "DNS лимит: \033[0;33mНе установлен\033[0m"
+                fi
             else
-                echo -e "Текущий лимит: \033[0;33mНЕ УСТАНОВЛЕН (Unlimited)\033[0m"
+                echo -e "Все лимиты: \033[0;33mНе установлены\033[0m"
             fi
             read -p "Нажмите Enter..."
             ;;
