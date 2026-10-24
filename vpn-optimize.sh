@@ -249,7 +249,7 @@ main() {
     do_ufw
     do_fail2ban
     do_bbr
-    do_brutal
+    # do_brutal  # Отключено: забивает канал
     do_persource_penalties
     do_buffers
     do_swap

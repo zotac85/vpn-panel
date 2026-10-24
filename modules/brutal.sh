@@ -102,9 +102,10 @@ manage_tcp_brutal() {
         echo "2) Добавить/Изменить правило (в автозагрузку)"
         echo "3) Удалить правило (из автозагрузки)"
         echo "4) Обновить TCP Brutal (переустановить)"
+        echo "5) Отключить TCP Brutal (выгрузить модуль)"
         echo "0) Назад"
         echo "--------------------------------------------------"
-        read -p "Выберите пункт [0-4]: " b_choice
+        read -p "Выберите пункт [0-5]: " b_choice
         
         case $b_choice in
             1)
@@ -149,6 +150,17 @@ manage_tcp_brutal() {
                 ;;
             4)
                 install_tcp_brutal
+                ;;
+            5)
+                echo -e "[0;33mОтключаю TCP Brutal...[0m"
+                systemctl stop tcp-brutal.service 2>/dev/null
+                systemctl disable tcp-brutal.service 2>/dev/null
+                modprobe -r tcp_brutal 2>/dev/null
+                sysctl -w net.ipv4.tcp_congestion_control=bbr 2>/dev/null
+                rm -f /etc/cron.d/vpn-brutal
+                rm -f /usr/local/bin/brutalctl /usr/bin/brutalctl 2>/dev/null
+                echo -e "[0;32mTCP Brutal отключён. Включен алгоритм BBR.[0m"
+                read -p "Нажмите Enter..."
                 ;;
             0) return ;;
         esac

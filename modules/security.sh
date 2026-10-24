@@ -906,7 +906,7 @@ run_full_optimize() {
     echo "  ✓ UFW (SSH, WS, UDPGW)"
     echo "  ✓ Fail2ban (whitelist: 127.0.0.1)"
     echo "  ✓ TCP BBR"
-    echo "  ✓ TCP Brutal"
+    # echo "  ✓ TCP Brutal"  # Отключено по требованию
     echo "  ✓ Буферы ядра"
     echo "  ✓ Swap 1 GB"
     echo -e "  ✓ Ускорен SSH (DNS/GSSAPI)"
@@ -1014,19 +1014,20 @@ fi
         echo -e " 16) ⚡  Оптимизировать ВСЁ одной кнопкой"
         echo ""
         echo -e "${CYAN}─── 🔄 Управление ───${NC}"
+        echo -e " 17) 🚦 Ограничить скорость (Bandwidth Limit)"
         echo -e " 17) 📊 Мониторинг (htop)"
-        echo -e " 18) 🔄 Перезагрузка сервера"
-        echo -e " 19) 🛑 Выключение сервера"
-        echo -e " 20) 🛡  Блокировка ICMP (анти-DPI)"
+        echo -e " 19) 🔄 Перезагрузка сервера"
+        echo -e " 20) 🛑 Выключение сервера"
+        echo -e " 21) 🛡  Блокировка ICMP (анти-DPI)"
         echo ""
         echo -e "${CYAN}─── 💾 Бэкап / Восстановление ───${NC}"
-        echo -e " 21) 💾 Создать бэкап сейчас"
-        echo -e " 22) 📂 Список бэкапов"
-        echo -e " 23) 📥 Восстановить из файла"
+        echo -e " 22) 💾 Создать бэкап сейчас"
+        echo -e " 23) 📂 Список бэкапов"
+        echo -e " 24) 📥 Восстановить из файла"
         echo ""
         echo -e " 0) ↩️  Назад в главное меню"
         echo ""
-        read -p "Выберите раздел [0-23]: " sec_choice
+        read -p "Выберите раздел [0-24]: " sec_choice
 
         case $sec_choice in
             1) system_update ;;
@@ -1045,15 +1046,49 @@ fi
             11) toggle_bbr ;;
             12) optimize_udp_tm ;;
             13) create_swap ;;
-            17) monitoring_htop ;;
-            18) server_reboot ;;
-            19) server_shutdown ;;
-            20) menu_icmp_block ;;
-            21) backup_create_now ;;
-            22) backup_list ;;
-            23) backup_restore_menu ;;
+            17) bandwidth_limit_menu ;;
+            18) monitoring_htop ;;
+            19) server_reboot ;;
+            20) server_shutdown ;;
+            21) menu_icmp_block ;;
+            22) backup_create_now ;;
+            23) backup_list ;;
+            24) backup_restore_menu ;;
             0) break ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
         esac
     done
+}
+
+bandwidth_limit_menu() {
+    clear
+    if ! command -v wondershaper &> /dev/null; then
+        echo "Установка wondershaper..."
+        apt-get update && apt-get install -y wondershaper
+    fi
+    echo -e "${CYAN}─── 🚦 УПРАВЛЕНИЕ ОГРАНИЧЕНИЕМ СКОРОСТИ ───${NC}"
+    echo "1) Установить лимит 5 Мбит/с"
+    echo "2) Снять ограничение (Unlimited)"
+    echo "3) Показать текущий статус"
+    echo "0) Назад"
+    read -p "Выберите действие [0-3]: " lim_choice
+    IFACE=$(ip route get 8.8.8.8 | grep -oP 'dev \K\S+')
+    case $lim_choice in
+        1)
+            wondershaper -a $IFACE -d 5120 -u 5120
+            echo -e "${GREEN}Лимит 5 Мбит/с успешно установлен!${NC}"
+            read -p "Нажмите Enter..."
+            ;;
+        2)
+            wondershaper -c -a $IFACE
+            echo -e "${GREEN}Ограничение снято.${NC}"
+            read -p "Нажмите Enter..."
+            ;;
+        3)
+            wondershaper -s -a $IFACE
+            read -p "Нажмите Enter..."
+            ;;
+        0) return ;;
+        *) echo "Неверный выбор"; sleep 1 ;;
+    esac
 }
