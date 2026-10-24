@@ -117,6 +117,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
+socketserver.TCPServer.allow_reuse_address = True
 with socketserver.TCPServer(("", PORT), Handler) as httpd:
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain('/etc/letsencrypt/live/de.cdnstore.shop/fullchain.pem', '/etc/letsencrypt/live/de.cdnstore.shop/privkey.pem')
