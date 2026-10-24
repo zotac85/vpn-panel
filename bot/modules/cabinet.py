@@ -1138,8 +1138,7 @@ def do_key_extend(cfg, chat_id, user_id, key_name, tariff_idx, msg_id=None):
     cab_log.info(f"VIP extended {key_name} by user {user_id}: +{t['days']}d/{t['gb']}GB/{t['devices']}dev")
 
 def format_key_card(cfg, key_name):
-    """Единый формат карточки ключа. Возвращает (text, keyboard).
-    Используется в show_key_detail, handle_test, handle_channel_test."""
+    """Единый формат карточки ключа. Возвращает (text, keyboard)."""
     key = db.get_test_key(key_name) or db.get_vip_key(key_name)
     if not key:
         return None, None
@@ -1152,7 +1151,7 @@ def format_key_card(cfg, key_name):
     elif exp_ts > now:
         t_left = _human_time(exp_ts - now)
     else:
-        t_left = "❌ истёк"
+        t_left = "❌  истёк"
     used = key.get('traffic_used') or 0
     limit = key.get('traffic_limit') or 0
     def _gb(b):
@@ -1166,19 +1165,17 @@ def format_key_card(cfg, key_name):
         return f"{b}B"
     traffic = f"{_gb(used)}/{_gb(limit)} GB" if limit else f"{_gb(used)}/∞"
     devices = key.get('devices', 1)
-    # Активные локации
+    
     _locs = []
     try:
         import sqlite3 as _sq
         _con = _sq.connect("/etc/UDPCustom/vpn.db")
-        _rows = _con.execute(
-            "SELECT name FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id"
-        ).fetchall()
+        _rows = _con.execute("SELECT name FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
         _con.close()
         _locs = [r[0] for r in _rows]
     except Exception as _e:
         cab_log.error(f"format_key_card locs: {_e}")
-    # Извлекаем флаги (эмодзи-страны) из имён нод
+        
     _flags = []
     for _l in _locs:
         _em = ''
@@ -1187,70 +1184,84 @@ def format_key_card(cfg, key_name):
                 _em += _ch
         _flags.append(_em if _em else _l[:2].upper())
     flags_str = ' '.join(_flags) if _flags else '🇩🇪'
+    
     NL = chr(10)
     lines = [
         f"{icon} <b>{key_name}</b>",
-        f"⏰  {t_left}  ·  📊 {traffic}  ·  📱 {devices}",
+        f"⏰   {t_left}  ·  📊 {traffic}  ·  📱 {devices}",
         "",
         f"📡 Локации: {flags_str}",
         "",
-        "<b>👇 Выбери конфиг для своего устройства:</b>",
-        "🤖 <b>Для Android:</b> Скачай файл <code>.dark</code> и импортируй в <a href='https://play.google.com/store/apps/details?id=net.darktunnel.app'>DarkTunnel</a>.",
-        "🍏 <b>Для iPhone:</b> Нажми кнопку ниже, скопируй ссылку и добавь в <a href='https://apps.apple.com/us/app/npv-tunnel/id1629465476'>NPV Tunnel</a> как подписку.",
+        "<b>👇 Выбери конфиг для устройства:</b>",
+        "📱 <b>Android</b>: файл <code>.dark</code>",
+        "🍏 <b>iPhone</b>: подписка NPV",
+        "💻 <b>ПК</b>: подписка ArsenVPN",
         "",
-        "<i>Нажми на кнопку ниже, чтобы получить конфиг для своего устройства.</i>"
+        "<i>Нажми на кнопку ниже.</i>"
     ]
     text = NL.join(lines)
-    kb = {'inline_keyboard': [
-        [{'text': '🤖 Ключ для Android', 'callback_data': f'cab_darkfile:{key_name}'},
-         {'text': '🍏 Ключ для iPhone', 'callback_data': f'cab_npvt:{key_name}'}],
-        [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'},
-         {'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
-    ]}
+    
+    kb = {'inline_keyboard': []}
     if is_vip:
-        kb['inline_keyboard'].insert(0, [
-            {'text': '⏰  Продлить', 'callback_data': f'cab_key_extend:{key_name}'}
+        kb['inline_keyboard'].append([
+            {'text': '⏰ Продлить', 'callback_data': f'cab_key_extend:{key_name}'}
         ])
+        
+    kb['inline_keyboard'].append([
+        {'text': '📱 Android', 'callback_data': f'cab_darkfile:{key_name}'},
+        {'text': '🍏 iPhone', 'callback_data': f'cab_npvt:{key_name}'},
+        {'text': '💻 ПК', 'callback_data': f'cab_pcsub:{key_name}'}
+    ])
+    
+    kb['inline_keyboard'].append([
+        {'text': '🔑 Ключи', 'callback_data': 'cab_keys'},
+        {'text': '👤 Кабинет', 'callback_data': 'cab_main'}
+    ])
     return text, kb
-
 
 def send_npvt_file(cfg, chat_id, user_id, key_name):
     token = cfg['BOT_TOKEN']
     key = db.get_test_key(key_name) or db.get_vip_key(key_name)
     if not key or int(key['tg_id']) != int(user_id):
-        _send(token, chat_id, "❌  Ключ не найден")
-        return
-        
-    if not key_name.startswith('vip_'):
-        from bot_modules import cabinet as _cab
-        _kb = {'inline_keyboard': [
-            [{'text': '💎 Купить VIP ключ', 'callback_data': 'cab_buy_vip'}],
-            [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'},
-             {'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
-        ]}
-        _cab._send_new(token, chat_id, "🍏 <b>Ключи для iPhone (NPV Tunnel)</b>" + chr(10) + chr(10) + "🔒 <i>Эти конфигурации доступны только VIP клиентам.</i>" + chr(10) + chr(10) + "Оформите VIP-подписку в разделе <b>💎 Купить VIP ключ</b>, чтобы получить доступ к данному формату.", _kb)
+        _send(token, chat_id, "❌ Ключ не найден")
         return
 
-    import re
-    _dom = re.search(r'DOMAIN="([^"]+)"', open("/etc/UDPCustom/domain.conf").read()).group(1)
+    _dom = "de.cdnstore.shop"
+    try:
+        import re
+        _dom = re.search(r'DOMAIN="([^"]+)"', open("/etc/UDPCustom/domain.conf").read()).group(1)
+    except: pass
+
     sub_url = f"https://{_dom}/sub/{key_name}"
-    from bot_modules import cabinet as _cab
     NL = chr(10)
     text = NL.join([
-        '🍏 <b>Подписка для iPhone (NPV Tunnel)</b>',
-        '',
-        '1. Нажми на ссылку ниже (она скопируется)',
-        '2. Открой NPV Tunnel',
-        '3. Вкладка <b>Configs</b> → <b>Add subscription</b>',
-        '4. Вставь ссылку и нажми OK',
-        '',
-        f'<code>{sub_url}</code>'
+        "🍏 <b>Подписка для iPhone (NPV Tunnel)</b>",
+        "",
+        "1. Скачай приложение: <a href='https://apps.apple.com/us/app/npv-tunnel/id1629465476'>App Store</a>",
+        "2. Открой вкладку <b>Configs</b> → <b>Add subscription</b>",
+        "3. Вставь ссылку ниже и нажми OK",
+        "",
+        f"<code>{sub_url}</code>"
     ])
-    _kb = {'inline_keyboard': [
-        [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'},
-         {'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
-    ]}
-    _cab._send_new(token, chat_id, text, _kb)
+    _kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
+    
+    _send_instr(token, chat_id, text, _kb)
+
+def _send_instr(token, chat_id, text, kb=None):
+    import os
+    instr_file = f"/tmp/smart_instr_{chat_id}"
+    if os.path.exists(instr_file):
+        try:
+            old_id = int(open(instr_file).read().strip())
+            _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': old_id})
+        except: pass
+        try: os.remove(instr_file)
+        except: pass
+    res = _tg(token, 'sendMessage', {'chat_id': chat_id, 'text': text, 'reply_markup': kb, 'parse_mode': 'HTML', 'disable_web_page_preview': True})
+    if res and res.get('ok'):
+        try: open(instr_file, 'w').write(str(res['result']['message_id']))
+        except: pass
+    return res
 
 def show_key_detail(cfg, chat_id, user_id, key_name, msg_id=None):
     try:
@@ -2231,35 +2242,57 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         show_key_detail(cfg, chat_id, user_id, key_name, msg_id)
         return True
 
+    if cb_data.startswith('cab_pcsub:'):
+        key_name = cb_data.split(':', 1)[1]
+        if not key_name.startswith('vip_'):
+            _kb = {'inline_keyboard': [[{'text': '⬅️ Назад', 'callback_data': f'cab_key:{key_name}'}]]}
+            _send_instr(token, chat_id, "💻 <b>Ключ для ПК (ArsenVPN)</b>" + chr(10) + chr(10) + "🔒 <i>Для тестовых ключей доступен только Android.</i>" + chr(10) + chr(10) + "Оформите VIP ключ, чтобы получить доступ к приложению для ПК.", _kb)
+            return True
+            
+        _dom = "de.cdnstore.shop"
+        try:
+            import re as _re
+            _dom = _re.search(r'DOMAIN="([^"]+)"', open("/etc/UDPCustom/domain.conf").read()).group(1)
+        except: pass
+        
+        _sub_url = f"https://{_dom}/sub_dark/{key_name}"
+        _text = "💻 <b>Подписка для ПК (ArsenVPN)</b>" + chr(10) + chr(10) + "1. Скачай приложение: <a href='https://github.com/zotac85/ArsenVpn'>GitHub</a>" + chr(10) + "2. Открой приложение и нажми «Добавить подписку»" + chr(10) + "3. Вставь ссылку ниже и нажми OK" + chr(10) + chr(10) + f"<code>{_sub_url}</code>"
+        _kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
+        
+        _send_instr(token, chat_id, _text, _kb)
+        return True
+            
+        _dom = "de.cdnstore.shop"
+        try:
+            import re
+            _dom = re.search(r'DOMAIN="([^"]+)"', open("/etc/UDPCustom/domain.conf").read()).group(1)
+        except: pass
+        
+        _sub_url = f"https://{_dom}/sub_dark/{key_name}"
+        _text = "💻 <b>Подписка для ПК (ArsenVPN)</b>" + chr(10) + chr(10) + \
+                "1. Скачай приложение: <a href='https://github.com/zotac85/ArsenVpn'>GitHub</a>" + chr(10) + \
+                "2. Открой приложение и нажми «Добавить подписку»" + chr(10) + \
+                "3. Вставь ссылку ниже и нажми OK" + chr(10) + chr(10) + \
+                f"<code>{_sub_url}</code>"
+        _kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
+        _send_instr(token, chat_id, _text, _kb)
+        return True
     if cb_data.startswith('cab_darkfile:'):
         key_name = cb_data.split(':', 1)[1]
-        try: _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg_id})
-        except: pass
         try: _smart_files_clear(token, chat_id)
         except: pass
+        
+        _inst_text = "📱 <b>Ключи для Android (DarkTunnel)</b>" + chr(10) + chr(10) + \
+                     "1. Скачай приложение: <a href='https://play.google.com/store/apps/details?id=net.darktunnel.app'>Google Play</a>" + chr(10) + \
+                     "2. Нажми на файл ключа ниже" + chr(10) + \
+                     "3. Выбери <b>Открыть с помощью DarkTunnel</b>" + chr(10)
+        _inst_kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
+        
+        _send_instr(token, chat_id, _inst_text, _inst_kb)
         send_dark_files_all_nodes(cfg, chat_id, user_id, key_name)
-        
-        # Отправляем кнопку для возврата и ссылку для ПК
-        _kb = {'inline_keyboard': [
-            [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'},
-             {'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
-        ]}
-        
-        import re
-        _dom = re.search(r'DOMAIN="([^"]+)"', open("/etc/UDPCustom/domain.conf").read()).group(1)
-        _sub_url = f"https://{_dom}/sub_dark/{key_name}"
-        _pc_text = (
-            "☝️ <b>Конфиги отправлены выше.</b>" + chr(10) + chr(10) +
-            "💻 <b>Ссылка для ПК (ArsenVPN):</b>" + chr(10) +
-            f"<code>{_sub_url}</code>" + chr(10) +
-            "<i>(Скоро вы сможете вставить её в приложение для ПК)</i>"
-        )
-        _send_new(token, chat_id, _pc_text, _kb)
         return True
     if cb_data.startswith('cab_npvt:'):
         key_name = cb_data.split(':', 1)[1]
-        try: _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg_id})
-        except: pass
         try: _smart_files_clear(token, chat_id)
         except: pass
         send_npvt_file(cfg, chat_id, user_id, key_name)
@@ -2621,7 +2654,8 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
                 "👇 <b>Как получить:</b>" + chr(10) +
                 "1️⃣ Перейди в раздел <b>🔑 Мои ключи</b>." + chr(10) +
                 "2️⃣ Нажми на свой <b>VIP-ключ</b>." + chr(10) +
-                "3️⃣ Скачай файл <code>.dark</code> и импортируй в приложение." + chr(10) + chr(10) +
+                "3️⃣ Нажми <b>🤖 Ключ для Android</b>." + chr(10) +
+                "4️⃣ Скопируй <b>ссылку для ПК</b> и вставь её в приложение." + chr(10) + chr(10) +
                 "💾 <b>Скачать приложение:</b> https://github.com/zotac85/ArsenVpn"
             )
             _pc_kb = {'inline_keyboard': [
