@@ -2368,6 +2368,10 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         _tg(token, 'answerCallbackQuery', {'callback_query_id': cb['id']})
         
     # Восстановленная логика
+    if cb_data.startswith('cab_key_resethwid:'):
+        key_name = cb_data.split(':', 1)[1]
+        ask_key_hwid(cfg, chat_id, user_id, key_name, msg_id)
+        return True
     if cb_data.startswith('cab_key_reset:'):
         show_key_reset_confirm(cfg, chat_id, user_id, cb_data.split(':', 1)[1], msg_id)
         return True
