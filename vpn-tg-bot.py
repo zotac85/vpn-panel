@@ -2519,6 +2519,14 @@ def post_to_channel(cfg, chat_id, user_id):
         _gb = cfg.get('TEST_TRAFFIC_GB', '')
         _devices = cfg.get('TEST_DEVICES', '')
         _location = cfg.get('SERVER_LOCATION', '')
+        try:
+            import sqlite3 as _sq
+            _con = _sq.connect("/etc/UDPCustom/vpn.db")
+            _rows = _con.execute("SELECT name FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
+            _con.close()
+            if _rows:
+                _location = ' · '.join([r[0] for r in _rows])
+        except: pass
         personalized = post_text.replace('{sponsors_list}', sponsors_list)
         personalized = personalized.replace('{primary}', primary_clean)
         personalized = personalized.replace('{hours}', _hours)
