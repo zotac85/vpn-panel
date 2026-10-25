@@ -2570,6 +2570,27 @@ def post_to_channel(cfg, chat_id, user_id):
                     _flags.append(_em if _em else r[0])
                 _location = ' '.join(_flags)
         except: pass
+        
+        import random
+        _titles = [
+            "🚀 Разгоняем скорость!", "🔥 Твой быстрый VPN ждет!",
+            "💎 Забирай свой тест-ключ!", "⚡️ Максимальная скорость и свобода!",
+            "🌍 Открой свободный интернет!", "🎁 Подарок для тебя — бесплатный VPN!",
+            "🛡 Твой надежный щит в сети!", "✨ Подключайся без ограничений!"
+        ]
+        _random_title = random.choice(_titles)
+        try:
+            import sqlite3 as _sq
+            _con = _sq.connect("/etc/UDPCustom/vpn.db")
+            _rows = _con.execute("SELECT name FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
+            _con.close()
+            if _rows:
+                _flags = []
+                for r in _rows:
+                    _em = ''.join([c for c in r[0] if ord(c) > 0x1F000])
+                    _flags.append(_em if _em else r[0])
+                _location = ' '.join(_flags)
+        except: pass
         # Случайный заголовок для разнообразия
         import random
         _titles = [
