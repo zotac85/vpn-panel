@@ -1262,6 +1262,45 @@ def _send_instr(token, chat_id, text, kb=None):
         except: pass
     return res
 
+
+def send_pdf_document(token, chat_id, file_path, caption):
+    import urllib.request, os
+    if not os.path.exists(file_path): return False
+    boundary = '----WebKitFormBoundary7MA4YWxkTrZu0gW'
+    body = []
+    body.append(f'--{boundary}')
+    body.append('Content-Disposition: form-data; name="chat_id"')
+    body.append('')
+    body.append(str(chat_id))
+    body.append(f'--{boundary}')
+    body.append('Content-Disposition: form-data; name="caption"')
+    body.append('')
+    body.append(caption)
+    body.append(f'--{boundary}')
+    body.append('Content-Disposition: form-data; name="parse_mode"')
+    body.append('')
+    body.append('HTML')
+    body.append(f'--{boundary}')
+    body.append(f'Content-Disposition: form-data; name="document"; filename="{os.path.basename(file_path)}"')
+    body.append('Content-Type: application/pdf')
+    body.append('')
+    
+    with open(file_path, 'rb') as f:
+        file_data = f.read()
+        
+    body_bytes = '\r\n'.join(body).encode('utf-8') + b'\r\n' + file_data + f'\r\n--{boundary}--\r\n'.encode('utf-8')
+    req = urllib.request.Request(
+        f"https://api.telegram.org/bot{token}/sendDocument",
+        data=body_bytes,
+        headers={'Content-Type': f'multipart/form-data; boundary={boundary}'}
+    )
+    try:
+        urllib.request.urlopen(req, timeout=30)
+        return True
+    except Exception as e:
+        cab_log.error(f"send_pdf error: {e}")
+        return False
+
 def show_key_detail(cfg, chat_id, user_id, key_name, msg_id=None):
     try:
         token = cfg['BOT_TOKEN']
@@ -2150,13 +2189,17 @@ def show_help_npv(cfg, chat_id, user_id, msg_id=None):
 def show_help_whitedns(cfg, chat_id, user_id, msg_id=None):
     token = cfg['BOT_TOKEN']
     text = _get_help_generic('/etc/UDPCustom/help_whitedns.txt', cfg) or \
-        "\u2699\uFE0F <b>WhiteDns</b>\n\nОтредактируй /etc/UDPCustom/help_whitedns.txt"
+        "🌐 <b>WhiteDNS</b>\n\nИнструкция недоступна."
     kb = _help_back_kb()
+    
     if msg_id:
         _edit(token, chat_id, msg_id, text, kb)
     else:
         _send(token, chat_id, text, kb)
-
+        
+    # Отправляем PDF
+    pdf_path = '/etc/UDPCustom/whitedns_guide.pdf'
+    send_pdf_document(token, chat_id, pdf_path, '📄 <b>PDF-инструкция WhiteDNS</b>')
 
 def show_help_video(cfg, chat_id, user_id, msg_id=None):
     token = cfg['BOT_TOKEN']

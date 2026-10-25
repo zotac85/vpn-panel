@@ -1,30 +1,39 @@
 🌐 <b>Инструкция: WhiteDNS (Android / iOS / ПК)</b>
 ━━━━━━━━━━━━━━━━━━━━
 
-<b>1. Скачай приложения:</b>
-📱 <b>Android:</b> <a href="https://github.com/WhiteDNS/WhiteDNS-Android/releases">WhiteDNS</a> + <a href="https://play.google.com/store/apps/details?id=com.lonelycatgames.Xplore">X-plore (Файлы)</a>
-💻 <b>ПК (Windows/macOS):</b> <a href="https://github.com/WhiteDNS/WhiteDNS-Desktop">Скачать WhiteDNS Desktop</a>
+📥 <b>1. Скачай приложения:</b>
 
-<b>2. Получи конфиг в боте:</b>
+📱 <b>WhiteDNS (VPN-клиент):</b>
+<i>Нужен для подключения к серверам.</i>
+🔗 <a href="https://github.com/WhiteDNS/WhiteDNS-Android/releases">Скачать для Android (APK)</a>
+🔗 <a href="https://github.com/WhiteDNS/WhiteDNS-Desktop">Скачать для ПК (Windows/macOS)</a>
+
+📁 <b>X-plore (Файловый менеджер):</b>
+<i>Нужен для удобного открытия файлов из Telegram (только Android).</i>
+🔗 <a href="https://play.google.com/store/apps/details?id=com.lonelycatgames.Xplore">Скачать в Google Play</a>
+
+━━━━━━━━━━━━━━━━━━━━
+🔗 <b>2. Получи конфиг в боте:</b>
 • Зайди в <b>👤 Личный кабинет</b> → <b>💎 WhiteDns</b>
 • Выбери сервер (🇩🇪 Германия / 🇫🇮 Финляндия) и профиль (📱 3G / 📶 WiFi / 💻 ADSL)
-• Нажми <b>«✅ ДА, ВСЁ ВЕРНО»</b>
+• Нажми «✅ <b>ДА, ВСЁ ВЕРНО</b>»
 • Бот пришлет 3 файла: <i>connection, settings, resolvers</i>
 
-<b>3. Импорт в приложение:</b>
+━━━━━━━━━━━━━━━━━━━━
+📥 <b>3. Импорт в приложение:</b>
 ⚠️ <i>Строго в свои разделы! Без пустого имени профиля.</i>
 • <b>connection.txt</b> → вкладка <b>Connection</b> (Import)
 • <b>settings.txt</b> → вкладка <b>Setting</b> (Import)
 • <b>resolvers.txt</b> → вкладка <b>Resolver</b> (Create)
 
-<b>4. Подключение:</b>
+━━━━━━━━━━━━━━━━━━━━
+🚀 <b>4. Подключение:</b>
 • Перейди во вкладку <b>Connect</b>
 • Выбери созданные профили
 • Нажми <b>CONNECT</b> 🔌 (появится STOP — значит подключено)
 
-🛠 <b>Частые ошибки:</b>
-❌ <b>«No connection»</b> — не выбраны профили в Connect.
-❌ <b>Медленно</b> — попробуй сменить сервер или запусти Background scan в Resolver.
-❌ <b>Ошибка имени</b> — при импорте обязательно введи любое имя профиля.
+━━━━━━━━━━━━━━━━━━━━
+📄 <b>5. Подробная инструкция:</b>
+Ниже бот пришлет полный PDF-файл с картинками и детальной настройкой!
 
 💬 Если нужна помощь: {support}
