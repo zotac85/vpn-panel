@@ -4489,12 +4489,16 @@ def handle_reactions_menu(cfg, chat_id, user_id, msg_id=None):
                 if line.startswith('MODE='): mode = line.split('=')[1].strip()
     except: pass
     
-    mode_str = "🎲 Рандом (бот сам выбирает)" if mode == "RANDOM" else "🎯 Фиксированная"
+    mode_str = "🎲 Рандом" if mode == "RANDOM" else "🎯 Фикс"
     
     kb = {'inline_keyboard': [
-        [{'text': 'Выключить' if enabled == '1' else 'Включить', 'callback_data': 'adm_react_toggle'}],
-        [{'text': f'Режим: {mode_str}', 'callback_data': 'adm_react_mode'}],
-        [{'text': '🔥', 'callback_data': 'adm_react_emoji:🔥'}, {'text': '❤️', 'callback_data': 'adm_react_emoji:❤️'}, {'text': '👍', 'callback_data': 'adm_react_emoji:👍'}, {'text': '🎉', 'callback_data': 'adm_react_emoji:🎉'}]
+        [{'text': 'Выключить' if enabled == '1' else 'Включить', 'callback_data': 'adm_react_toggle'},
+         {'text': f'Режим: {mode_str}', 'callback_data': 'adm_react_mode'}],
+        [{'text': '🔥', 'callback_data': 'adm_react_emoji:🔥'}, 
+         {'text': '❤️', 'callback_data': 'adm_react_emoji:❤️'}, 
+         {'text': '👍', 'callback_data': 'adm_react_emoji:👍'}, 
+         {'text': '🎉', 'callback_data': 'adm_react_emoji:🎉'}],
+        [{'text': '⬅️ Назад', 'callback_data': 'admin_stats'}]
     ]}
     if msg_id:
         try:
@@ -4799,6 +4803,42 @@ def main():
                         if bid > 0:
                             _do_broadcast_send(cfg, cb, bid)
                         continue
+                    elif cb_data == 'adm_reactions_menu':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        handle_reactions_menu(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                    elif cb_data.startswith('adm_react_'):
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        if cb_data == 'adm_react_toggle':
+                            enabled = "1"
+                            try:
+                                with open('/etc/UDPCustom/reactions.conf') as f:
+                                    for l in f:
+                                        if l.startswith('ENABLED='): enabled = l.split('=')[1].strip()
+                            except: pass
+                            new_st = "0" if enabled == "1" else "1"
+                            import subprocess
+                            subprocess.run(['sed', '-i', f's/^ENABLED=.*/ENABLED={new_st}/', '/etc/UDPCustom/reactions.conf'])
+                            handle_reactions_menu(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                        elif cb_data == 'adm_react_mode':
+                            mode = "FIXED"
+                            try:
+                                with open('/etc/UDPCustom/reactions.conf') as f:
+                                    for l in f:
+                                        if l.startswith('MODE='): mode = l.split('=')[1].strip()
+                            except: pass
+                            new_mode = "RANDOM" if mode == "FIXED" else "FIXED"
+                            import subprocess
+                            subprocess.run(['sed', '-i', f's/^MODE=.*/MODE={new_mode}/', '/etc/UDPCustom/reactions.conf'])
+                            subprocess.run(['bash', '-c', f"grep -q '^MODE=' /etc/UDPCustom/reactions.conf || echo 'MODE={new_mode}' >> /etc/UDPCustom/reactions.conf"])
+                            handle_reactions_menu(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                        elif cb_data.startswith('adm_react_emoji:'):
+                            emj = cb_data.split(':')[1]
+                            import subprocess
+                            subprocess.run(['sed', '-i', f's/^EMOJI=.*/EMOJI={emj}/', '/etc/UDPCustom/reactions.conf'])
+                            handle_reactions_menu(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                    elif cb_data == 'admin_stats':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        handle_stats(cfg, cb['message']['chat']['id'], cb_user_id, 'main', cb['message']['message_id'])
                     elif cb_data == 'adm_admins':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         # Показываем список админов + инструкция
@@ -4935,11 +4975,6 @@ def main():
                         smart_send(cfg['BOT_TOKEN'], cb['message']['chat']['id'], instr,
                                    reply_markup={'force_reply': True, 'selective': True},
                                    parse_mode='HTML')
-                    elif cb_data == 'adm_reactions_menu':
-                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
-                        if not is_admin(cfg, cb['from']['id']): return
-                        handle_reactions_menu(cfg, cb['message']['chat']['id'], cb['from']['id'], cb['message']['message_id'])
-                        return
                     elif cb_data.startswith('adm_react_'):
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         if not is_admin(cfg, cb['from']['id']): return
