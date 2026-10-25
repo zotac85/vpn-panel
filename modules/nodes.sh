@@ -252,51 +252,58 @@ _nodes_optimize() {
     row=$(_nodes_py get "$nid")
     [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
     IFS='|' read -r name host ip sport wsport suser <<< "$row"
-    
-    # Защита от сброса порта в 0 или пустоту
-    if [ -z "$wsport" ] || [ "$wsport" = "0" ]; then
-        wsport=80
-    fi
+    if [ -z "$wsport" ] || [ "$wsport" = "0" ]; then wsport=80; fi
 
     echo ""
-    echo -e "${CYAN}Выберите тип оптимизации для $name ($ip):${NC}"
-    echo -e " 1) ⚡ Полная оптимизация (BBR, UFW, Fail2ban, буферы)"
-    echo -e " 2) 🚦 Установить лимит скорости (TC)"
+    echo -e "${CYAN}Выберите действие для $name ($ip):${NC}"
+    echo -e " 1) ⚡ Полная оптимизация (BBR, UFW, Fail2ban, Буферы)"
+    echo -e " 2) 🚦 Установить лимиты скорости (TC)"
     echo -e " 0) Назад"
     read -p "Действие [0-2]: " opt_type
 
     if [ "$opt_type" = "1" ]; then
-        echo -e "${YELLOW}Применяю полную оптимизацию (может занять 10-20 секунд)...${NC}"
+        echo -e "${YELLOW}Будет применено:${NC}"
+        echo " - Установка UFW и Fail2ban"
+        echo " - Включение BBR (ускорение TCP)"
+        echo " - Тюнинг сетевых буферов (16MB)"
+        echo " - Отключение IPv6"
+        echo " - Настройка UFW (порты $sport, $wsport)"
+        echo ""
+        read -p "Продолжить? (y/n): " confirm
+        [[ "$confirm" != "y" && "$confirm" != "Y" ]] && return
+
+        echo -e "${CYAN}Применяю (может занять 10-20 сек)...${NC}"
         
         REMOTE_CMD="export DEBIAN_FRONTEND=noninteractive; "
-        REMOTE_CMD+="echo '-> 1/4 Обновление пакетов и установка UFW/Fail2ban...'; "
-        REMOTE_CMD+="apt update -y > /dev/null 2>&1 && apt install -y ufw fail2ban > /dev/null 2>&1 || echo 'ОШИБКА ПРИ УСТАНОВКЕ ПАКЕТОВ'; "
+        REMOTE_CMD+="echo '--> Обновление пакетов и установка UFW/Fail2ban...'; "
+        REMOTE_CMD+="apt update -y > /dev/null 2>&1 && apt install -y ufw fail2ban > /dev/null 2>&1 || echo 'ОШИБКА УСТАНОВКИ'; "
         
-        REMOTE_CMD+="echo '-> 2/4 Включение BBR и настройка буферов...'; "
+        REMOTE_CMD+="echo '--> Включение BBR и тюнинг буферов...'; "
         REMOTE_CMD+="sysctl -w net.core.default_qdisc=fq; "
         REMOTE_CMD+="sysctl -w net.ipv4.tcp_congestion_control=bbr; "
         REMOTE_CMD+="sysctl -w net.core.rmem_max=16777216; "
         REMOTE_CMD+="sysctl -w net.core.wmem_max=16777216; "
-        REMOTE_CMD+="sysctl -w net.ipv4.tcp_rmem='4096 87380 16777216'; "
-        REMOTE_CMD+="sysctl -w net.ipv4.tcp_wmem='4096 65536 16777216'; "
         REMOTE_CMD+="grep -q 'net.ipv4.tcp_congestion_control=bbr' /etc/sysctl.conf || echo 'net.ipv4.tcp_congestion_control=bbr' >> /etc/sysctl.conf; "
         REMOTE_CMD+="grep -q 'net.core.default_qdisc=fq' /etc/sysctl.conf || echo 'net.core.default_qdisc=fq' >> /etc/sysctl.conf; "
         
-        REMOTE_CMD+="echo '-> 3/4 Настройка UFW...'; "
+        REMOTE_CMD+="echo '--> Отключение IPv6...'; "
+        REMOTE_CMD+="sysctl -w net.ipv6.conf.all.disable_ipv6=1 > /dev/null 2>&1; "
+        
+        REMOTE_CMD+="echo '--> Настройка UFW...'; "
+        REMOTE_CMD+="ufw --force reset > /dev/null 2>&1; "
         REMOTE_CMD+="ufw default deny incoming > /dev/null 2>&1; "
         REMOTE_CMD+="ufw default allow outgoing > /dev/null 2>&1; "
         REMOTE_CMD+="ufw allow $sport/tcp > /dev/null 2>&1; "
         REMOTE_CMD+="ufw allow $wsport/tcp > /dev/null 2>&1; "
         REMOTE_CMD+="ufw --force enable; "
         
-        REMOTE_CMD+="echo '-> 4/4 Запуск Fail2ban...'; "
+        REMOTE_CMD+="echo '--> Запуск Fail2ban...'; "
         REMOTE_CMD+="systemctl enable fail2ban > /dev/null 2>&1; systemctl restart fail2ban; "
-        REMOTE_CMD+="echo '=== ВСЕ ГОТОВО ==='; "
-        
+        REMOTE_CMD+="echo '=== ГОТОВО ==='; "
+
         ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "$REMOTE_CMD"
         
-        echo -e "${GREEN}✅ Процесс завершен. Если выше нет красных ошибок — все установилось.${NC}"
-
+        echo -e "${GREEN}✅ Оптимизация завершена!${NC}"
     elif [ "$opt_type" = "2" ]; then
         echo ""
         read -p "Введите лимит TCP (SSH/WS) в Мбит/с (0 - снять): " speed_tcp
