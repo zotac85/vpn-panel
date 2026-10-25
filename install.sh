@@ -942,3 +942,16 @@ EOF_SVC
     systemctl restart npvt-sub.service >/dev/null 2>&1
     echo "✅ Сервис подписок (npvt-sub) установлен и запущен."
 fi
+
+# === АВТО-ОБНОВЛЕНИЕ БОТОВ ===
+if [ -f "/root/vpn-panel-sync/vpn-tg-bot.py" ]; then
+    cp /root/vpn-panel-sync/vpn-tg-bot.py /usr/local/bin/vpn-tg-bot.py
+    echo "✅ Основной бот обновлен."
+fi
+if [ -f "/root/vpn-panel-sync/support-bot.py" ]; then
+    cp /root/vpn-panel-sync/support-bot.py /usr/local/bin/support-bot.py
+    echo "✅ Бот поддержки обновлен."
+fi
+systemctl restart vpn-tg-bot 2>/dev/null
+systemctl restart support-bot 2>/dev/null
+echo "✅ Боты перезапущены."
