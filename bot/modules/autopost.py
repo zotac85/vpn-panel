@@ -10,7 +10,7 @@ import threading
 import urllib.request
 
 
-def _track_and_delete_autopost(token, chat_id, new_msg_id, max_posts=2):
+def _track_and_delete_autopost(token, chat_id, new_msg_id, max_posts=2, log=None):
     import json, os
     path = '/etc/UDPCustom/last_posts.json'
     data = {}
@@ -18,31 +18,27 @@ def _track_and_delete_autopost(token, chat_id, new_msg_id, max_posts=2):
         try:
             with open(path) as f: data = json.load(f)
         except: pass
+    
+    # Используем строковый ключ чата
     chat_key = str(chat_id)
     if chat_key not in data: data[chat_key] = []
+    
+    # Добавляем новый ID
     data[chat_key].append(new_msg_id)
     
+    # Если постов больше, чем max_posts — удаляем старые
     while len(data[chat_key]) > max_posts:
         old_id = data[chat_key].pop(0)
-        try:
-            _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': old_id})
-        except: pass
-        
+        # Пытаемся удалить
+        res = _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': old_id})
+        if res and not res.get('ok'):
+            if log: log.error(f"Autopost delete error: {res.get('description')}")
+            print(f"Autopost delete error: {res.get('description')}")
+        else:
+            if log: log.info(f"Autopost deleted old msg {old_id}")
+            print(f"Autopost deleted old msg {old_id}")
+            
     with open(path, 'w') as f: json.dump(data, f)
-
-
-CONFIG_FILE = "/etc/UDPCustom/autopost.conf"
-MSGS_DIR = "/etc/UDPCustom/autopost_msgs"
-POST_FILE = "/etc/UDPCustom/post.txt"
-CHANNELS_FILE = "/etc/UDPCustom/channels.txt"
-
-auto_log = logging.getLogger("autopost")
-if not auto_log.handlers:
-    auto_log.setLevel(logging.INFO)
-    _h = logging.FileHandler("/var/log/vpn-tg-bot.log")
-    _h.setFormatter(logging.Formatter('%(asctime)s [AUTOPOST] %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
-    auto_log.addHandler(_h)
-
 
 def _tg(token, method, params=None, timeout=35):
     url = f"https://api.telegram.org/bot{token}/{method}"
