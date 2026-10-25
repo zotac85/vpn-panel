@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """Модуль автопостинга"""
 import os
+import random
 import json
 import time
 import logging
@@ -174,6 +175,14 @@ def publish_post(token):
     _gb = _bcfg.get('TEST_TRAFFIC_GB', '50')
     _devices = _bcfg.get('TEST_DEVICES', '1')
     _location = _bcfg.get('SERVER_LOCATION', '')
+    try:
+        import sqlite3 as _sq
+        _con = _sq.connect("/etc/UDPCustom/vpn.db")
+        _rows = _con.execute("SELECT name FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
+        _con.close()
+        if _rows:
+            _location = ' · '.join([r[0] for r in _rows])
+    except: pass
     
     bot_username = _get_bot_username(token)
     if not bot_username:
@@ -203,6 +212,7 @@ def publish_post(token):
             .replace('{gb}', _gb)
             .replace('{devices}', _devices)
             .replace('{location}', _location)
+            .replace('{random_title}', _random_title)
             .replace('{support}', _support_user))
         
         r = _send(token, target, personalized, keyboard, parse_mode='HTML')
