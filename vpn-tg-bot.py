@@ -2543,12 +2543,27 @@ def post_to_channel(cfg, chat_id, user_id):
             if _rows:
                 _location = ' · '.join([r[0] for r in _rows])
         except: pass
+        # Случайный заголовок для разнообразия
+        import random
+        _titles = [
+            "🚀 Разгоняем скорость!",
+            "🔥 Твой быстрый VPN ждет!",
+            "💎 Забирай свой тест-ключ!",
+            "⚡️ Максимальная скорость и свобода!",
+            "🌍 Открой свободный интернет!",
+            "🎁 Подарок для тебя — бесплатный VPN!",
+            "🛡 Твой надежный щит в сети!",
+            "✨ Подключайся без ограничений!"
+        ]
+        _random_title = random.choice(_titles)
+        
         personalized = post_text.replace('{sponsors_list}', sponsors_list)
         personalized = personalized.replace('{primary}', primary_clean)
         personalized = personalized.replace('{hours}', _hours)
         personalized = personalized.replace('{gb}', _gb)
         personalized = personalized.replace('{devices}', _devices)
         personalized = personalized.replace('{location}', _location)
+        personalized = personalized.replace('{random_title}', _random_title)
         
         result = tg_request(token, 'sendMessage', {
             'chat_id': target_channel,
