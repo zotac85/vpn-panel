@@ -23,3 +23,8 @@ https://play.google.com/store/apps/details?id=net.darktunnel.app
 
 ━━━━━━━━━━━━━━━━━━━━
 💬 Проблемы? Пиши {support}
+
+━━━━━━━━━━━━━━━━━━━━
+📍 Серверы: {location}
+📊 Лимиты: {hours} ч. · {gb} ГБ · {devices} устр.
+📢 Канал: @{primary}

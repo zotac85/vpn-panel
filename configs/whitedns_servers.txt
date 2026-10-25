@@ -1,23 +1,3 @@
-🎁 ПОЛУЧИ БЕСПЛАТНЫЙ VPN 🎁
-
-📍 Сервер: {location}
-⏰  {hours} часов | 📊 {gb} ГБ | 📱 {devices} устройство
-
-📲 Скачай APK DarkTunnel
-🖥️ Скачай EXE DarkTunnel
-
-🔑 Готовый конфиг для DarkTunnel
-━━━━━━━━━━━━━━━━━━━
-⚠️ Для получения:
-1️⃣ Подпишись на спонсоров: {sponsors_list}
-
-2️⃣ Нажми кнопку
-👇ПОЛУЧИТЬ ТЕСТ👇
-━━━━━━━━━━━━━━━━━━━━
-📍 Ты в: @{primary}
-💬 {support}
-
-
-━━━━━━━━━━━━━━━━━━
+stormdns://eyJzY2hlbWEiOiJ3aGl0ZWRucy5wcm9maWxlIiwidmVyc2lvbiI6MSwicHJvZmlsZSI6eyJuYW1lIjoi4pqhR0VSTUFOWSDwn4en8J-HqiIsInNlcnZlciI6eyJkb21haW4iOiJkZS5jbG91ZGJlc3Quc2hvcCIsImVuY3J5cHRpb25fa2V5IjoiYTkwMDQyMDA3MDNmYzA0NGFmNzI0YTZiZjJkNDA2ZjEiLCJlbmNyeXB0aW9uX21ldGhvZCI6MX19fQ
 stormdns://eyJzY2hlbWEiOiJ3aGl0ZWRucy5wcm9maWxlIiwidmVyc2lvbiI6MSwicHJvZmlsZSI6eyJuYW1lIjoi4pqh0KTQuNC90LvRj9C90LTQuNGPIPCfh6vwn4euIiwic2VydmVyIjp7ImRvbWFpbiI6InVzLmNsb3VkYmVzdC5zaG9wIiwiZW5jcnlwdGlvbl9rZXkiOiJiN2YzYTIxZWU1Y2IwYjk2ODIzZDVhMzE2YTQzMjA2ZSIsImVuY3J5cHRpb25fbWV0aG9kIjoxfX19
-stormdns://eyJzY2hlbWEiOiJ3aGl0ZWRucy5wcm9maWxlIiwidmVyc2lvbiI6MSwicHJvZmlsZSI6eyJuYW1lIjoi4pqhINCk0YDQsNC90YbQuNGPIPCfh6vwn4e3Iiwic2VydmVyIjp7ImRvbWFpbiI6ImZmLjI2Y2VudHJhbC5hc2lhIiwiZW5jcnlwdGlvbl9rZXkiOiI1NWUxMDAyMTRhMTY2ZTg0YjVhYTMzYTRlZDUwZWQxOSIsImVuY3J5cHRpb25fbWV0aG9kIjoxfX19
+stormdns://eyJzY2hlbWEiOiJ3aGl0ZWRucy5wcm9maWxlIiwidmVyc2lvbiI6MSwicHJvZmlsZSI6eyJuYW1lIjoi4pqhINCk0YDQsNC90YbQuNGPIPCfh6vwn4e3Iiwic2VydmVyIjp7ImRvbWFpbiI6ImZyLmNsb3VkYmVzdC5zaG9wIiwiZW5jcnlwdGlvbl9rZXkiOiI2YjBlNzUyYTJjNzc5OTNkOTYzZmQxOWVjNjdiNmU3OCIsImVuY3J5cHRpb25fbWV0aG9kIjoxfX19
