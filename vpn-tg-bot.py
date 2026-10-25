@@ -608,6 +608,14 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         gb = cfg.get("TEST_TRAFFIC_GB", "50")
         devices = cfg.get("TEST_DEVICES", "1")
         location = cfg.get("SERVER_LOCATION", "🌍 Сервер")
+        try:
+            import sqlite3 as _sq
+            _con = _sq.connect("/etc/UDPCustom/vpn.db")
+            _rows = _con.execute("SELECT name FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
+            _con.close()
+            if _rows:
+                location = ' · '.join([r[0] for r in _rows])
+        except: pass
         if tpl_ready:
             text = (tpl_ready
                     .replace("{name}", name)
