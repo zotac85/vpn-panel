@@ -177,7 +177,11 @@ def publish_post(token):
         _rows = _con.execute("SELECT name FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
         _con.close()
         if _rows:
-            _location = ' · '.join([r[0] for r in _rows])
+            _flags = []
+            for r in _rows:
+                _em = ''.join([c for c in r[0] if ord(c) > 0x1F000])
+                _flags.append(_em if _em else r[0])
+            _location = ' '.join(_flags)
     except: pass
     
     bot_username = _get_bot_username(token)
