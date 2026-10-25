@@ -4537,14 +4537,19 @@ def process_channel_post(cfg, msg):
             import random
             emoji = random.choice(['🔥', '❤️', '👍', '🎉', '⚡', '🚀', '🏆', '💯'])
             
-        try:
-            tg_request(cfg['BOT_TOKEN'], 'setMessageReaction', {
-                'chat_id': msg['chat']['id'],
-                'message_id': msg['message_id'],
-                'reaction': [{'type': 'emoji', 'emoji': emoji}]
-            })
-        except Exception as e:
-            log.error(f"React error: {e}")
+        import threading, random, time
+        def _delayed_react(tok, cid, mid, emj):
+            delay = random.randint(10, 60)
+            time.sleep(delay)
+            try:
+                tg_request(tok, 'setMessageReaction', {
+                    'chat_id': cid,
+                    'message_id': mid,
+                    'reaction': [{'type': 'emoji', 'emoji': emj}]
+                })
+            except Exception as _e:
+                log.error(f"React error: {_e}")
+        threading.Thread(target=_delayed_react, args=(cfg['BOT_TOKEN'], msg['chat']['id'], msg['message_id'], emoji), daemon=True).start()
 
 
 def main():

@@ -1302,13 +1302,18 @@ def process_channel_post(cfg, msg):
     except: pass
     
     if enabled == "1":
-        try:
-            tg(cfg['BOT_TOKEN'], 'setMessageReaction', {
-                'chat_id': msg['chat']['id'],
-                'message_id': msg['message_id'],
-                'reaction': [{'type': 'emoji', 'emoji': emoji}]
-            })
-        except: pass
+        import threading, random, time
+        def _delayed_react_sup(tok, cid, mid, emj):
+            delay = random.randint(10, 60)
+            time.sleep(delay)
+            try:
+                tg(tok, 'setMessageReaction', {
+                    'chat_id': cid,
+                    'message_id': mid,
+                    'reaction': [{'type': 'emoji', 'emoji': emj}]
+                })
+            except: pass
+        threading.Thread(target=_delayed_react_sup, args=(cfg['BOT_TOKEN'], msg['chat']['id'], msg['message_id'], emoji), daemon=True).start()
 
 def main():
     cfg = load_config()
