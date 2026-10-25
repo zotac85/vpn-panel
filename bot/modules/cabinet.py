@@ -2484,6 +2484,24 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
             _send_new(token, chat_id, _wd_text, _wd_kb)
         return True
 
+    if cb_data == 'cab_wd_de':
+        show_whitedns_profiles(cfg, chat_id, user_id, 0, msg_id)
+        return True
+    if cb_data == 'cab_wd_fi':
+        show_whitedns_profiles(cfg, chat_id, user_id, 1, msg_id)
+        return True
+    if cb_data == 'cab_wd_se':
+        show_whitedns_profiles(cfg, chat_id, user_id, 2, msg_id)
+        return True
+    if cb_data.startswith('cab_wd_prof:'):
+        _parts = cb_data.split(':')
+        show_whitedns_confirm(cfg, chat_id, user_id, int(_parts[2]), int(_parts[1]), msg_id)
+        return True
+
+    if cb_data.startswith('cab_wd_send:'):
+        _parts = cb_data.split(':')
+        send_whitedns_files(cfg, chat_id, user_id, int(_parts[1]), int(_parts[2]))
+        return True
     if cb_data == 'cab_balance':
         show_balance(cfg, chat_id, user_id, msg_id)
         return True
@@ -2949,6 +2967,29 @@ def _wd_c_log(user_id, username, server_idx, prof_idx):
         with open(WD_ISSUED_LOG, 'a') as f:
             f.write(str(user_id) + '|' + str(username) + '|' + WD_SRV_NAMES[server_idx] + '|' + WD_PROF_NAMES[prof_idx] + '|' + _dt.now().strftime('%F %H:%M') + chr(10))
     except: pass
+
+def send_whitedns_files(cfg, chat_id, user_id, server_idx, prof_idx):
+    import requests
+    import os
+    token = cfg['BOT_TOKEN']
+    _wd_c_log(user_id, chat_id, server_idx, prof_idx)
+    res_data = _wd_c_read_file(WD_RES_PATHS[server_idx])
+    set_data = _wd_c_read_file(WD_SET_PATHS[prof_idx])
+    conn_data = _wd_c_read_servers()[server_idx]
+    res_file = f"/tmp/wd_res_{user_id}.txt"
+    set_file = f"/tmp/wd_set_{user_id}.txt"
+    with open(res_file, 'w') as f: f.write(res_data)
+    with open(set_file, 'w') as f: f.write(set_data)
+    text = f"✅ <b>Твои файлы готовы!</b>\n\n🌐 Сервер: {WD_SRV_NAMES[server_idx]}\n⚙️ Профиль: {WD_PROF_NAMES[prof_idx]}\n\n📥 <b>Connection:</b> <code>{conn_data}</code>"
+    _send(token, chat_id, text)
+    url = f"https://api.telegram.org/bot{token}/sendDocument"
+    try:
+        requests.post(url, data={'chat_id': chat_id, 'caption': '🔢 Resolvers'}, files={'document': open(res_file, 'rb')})
+        requests.post(url, data={'chat_id': chat_id, 'caption': '⚙️ Settings'}, files={'document': open(set_file, 'rb')})
+    except Exception as e:
+        pass
+    os.remove(res_file)
+    os.remove(set_file)
 
 def show_whitedns_profiles(cfg, chat_id, user_id, server_idx, msg_id=None):
     token = cfg['BOT_TOKEN']
