@@ -283,7 +283,7 @@ _nodes_optimize() {
         REMOTE_CMD+="sysctl -w net.ipv4.tcp_congestion_control=bbr; "
         REMOTE_CMD+="sysctl -w net.core.rmem_max=16777216; "
         REMOTE_CMD+="sysctl -w net.core.wmem_max=16777216; "
-        REMOTE_CMD+="grep -q 'net.ipv4.tcp_congestion_control=bbr' /etc/sysctl.conf || echo 'net.ipv4.tcp_congestion_control=bbr' >> /etc/sysctl.conf; "
+        REMOTE_CMD+="touch /etc/sysctl.conf; grep -q 'net.ipv4.tcp_congestion_control=bbr' /etc/sysctl.conf || echo 'net.ipv4.tcp_congestion_control=bbr' >> /etc/sysctl.conf; "
         REMOTE_CMD+="grep -q 'net.core.default_qdisc=fq' /etc/sysctl.conf || echo 'net.core.default_qdisc=fq' >> /etc/sysctl.conf; "
         
         REMOTE_CMD+="echo '--> Отключение IPv6...'; "
