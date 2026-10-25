@@ -1,65 +1,4 @@
 #!/bin/bash
-# ==========================================
-# АВТОМАТИЧЕСКАЯ НАСТРОЙКА ОКРУЖЕНИЯ
-# ==========================================
-
-# 1. Создание мастер-токена (если его нет)
-MASTER_TOKEN=$(cat /root/.vpn-panel.token 2>/dev/null)
-
-# Создание дефолтного конфига домена, если его нет
-if [ ! -f /etc/UDPCustom/domain.conf ]; then
-    echo 'DOMAIN="de.cdnstore.shop"' > /etc/UDPCustom/domain.conf
-    echo "✅ Создан конфиг домена по умолчанию (/etc/UDPCustom/domain.conf)"
-fi
-
-# Создание дефолтного конфига реакций (если его нет)
-if [ ! -f /etc/UDPCustom/reactions.conf ]; then
-    echo -e "ENABLED=1\nEMOJI=🔥\nMODE=FIXED" > /etc/UDPCustom/reactions.conf
-    echo "✅ Создан дефолтный конфиг реакций (/etc/UDPCustom/reactions.conf)"
-fi
-
-# === КОПИРОВАНИЕ PDF-ИНСТРУКЦИЙ ===
-if [ -f "/root/vpn-panel-sync/configs/whitedns_guide.pdf" ]; then
-    cp /root/vpn-panel-sync/configs/whitedns_guide.pdf /etc/UDPCustom/whitedns_guide.pdf
-    chmod 644 /etc/UDPCustom/whitedns_guide.pdf
-    echo "✅ PDF-инструкция WhiteDNS скопирована."
-fi
-
-
-
-if [ ! -f /root/.vpn-panel.token ]; then
-    echo "$MASTER_TOKEN" > /root/.vpn-panel.token
-    chmod 600 /root/.vpn-panel.token
-    echo "✅ Токен панели автоматически создан."
-fi
-
-# 2. Синхронизация порта WS из конфига в БД
-python3 -c '
-import sqlite3, os
-db_path = "/etc/UDPCustom/vpn.db"
-ws_port = "2052"
-import re
-if os.path.exists("/usr/local/bin/ws-proxy.py"):
-    with open("/usr/local/bin/ws-proxy.py") as f:
-        for line in f:
-            match = re.search(r"listen_port\s*=\s*(\d+)", line)
-            if match:
-                ws_port = match.group(1)
-                break
-if os.path.exists(db_path):
-    try:
-        db = sqlite3.connect(db_path)
-        db.execute("UPDATE nodes SET ws_port=?", (ws_port,))
-        db.commit()
-        print(f"✅ Порт WS в базе данных синхронизирован: {ws_port}")
-    except Exception as e:
-        pass
-' 2>/dev/null
-
-# ==========================================
-# НАЧАЛО ОСНОВНОГО СКРИПТА
-# ==========================================
-
 
 if [ "$EUID" -ne 0 ]; then
   echo "Ошибка: запустите скрипт от root (sudo -i)"
@@ -340,7 +279,7 @@ if [ -d "$PANEL_DIR" ] || [ -f "/usr/local/bin/vpn" ]; then
                 exit 0
             fi
             BK_TS=$(date +%F_%H%M)
-            TEXT_FILES="welcome.txt start.txt test_ready.txt test_issued.txt help.txt help_instruction.txt help_faq.txt help_darktunnel.txt help_npv.txt help_whitedns.txt help_video.txt ad.txt vip_buy.txt post.txt faq_keywords.txt ref_post.txt"
+            TEXT_FILES="welcome.txt start.txt test_ready.txt test_issued.txt help.txt help_instruction.txt help_faq.txt help_darktunnel.txt help_httpcustom.txt help_whitedns.txt help_video.txt ad.txt vip_buy.txt post.txt faq_keywords.txt ref_post.txt"
             OK=0
             SKIP=0
             for f in $TEXT_FILES; do
@@ -624,8 +563,6 @@ fi
 
 # ── БЛОКИРОВКА ИСТЁКШИХ (SSH-туннель + сообщение) ──
 curl -sf -o /usr/local/bin/vpn-nologin.sh "$REPO_URL/scripts/vpn-nologin.sh"
-curl -sf -o /usr/local/bin/check-device-limit-pam "$REPO_URL/scripts/check-device-limit-pam"
-chmod +x /usr/local/bin/check-device-limit-pam
 curl -sf -o /usr/local/bin/vpn-expiry-check.sh "$REPO_URL/scripts/vpn-expiry-check.sh"
 chmod +x /usr/local/bin/vpn-nologin.sh /usr/local/bin/vpn-expiry-check.sh
 # vpn-nologin.sh в /etc/shells
@@ -634,8 +571,6 @@ grep -q "vpn-nologin.sh" /etc/shells || echo "/usr/local/bin/vpn-nologin.sh" >> 
 mkdir -p /etc/ssh/sshd_config.d
 touch /etc/ssh/sshd_config.d/blocked-users.conf
 chmod 644 /etc/ssh/sshd_config.d/blocked-users.conf
-sed -i '/^Banner/d' /etc/ssh/sshd_config 2>/dev/null || true
-sed -i '/^Banner/d' /etc/ssh/sshd_config.d/*.conf 2>/dev/null || true
 # Удаляем все Include и добавляем в конец (чтобы Match User переопределял глобальный Banner)
 cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak_$(date +%F_%H%M)
 sed -i '/^Include \/etc\/ssh\/sshd_config.d/d' /etc/ssh/sshd_config
@@ -919,47 +854,3 @@ fi
 [ -d "$SRC_DIR" ] && rm -rf "$SRC_DIR" 2>/dev/null || true
 echo -e "\n\033[0;32m🟢 Операция успешно завершена, Хозяин!\033[0m"
 echo -e "Запуск панели: \033[1;33mvpn\033[0m"
-
-# ==========================================
-# АВТОМАТИЧЕСКАЯ УСТАНОВКА СЕРВИСА ПОДПИСОК (NPVT)
-# ==========================================
-if [ -f /root/vpn-panel-sync/scripts/npvt-sub-server.py ]; then
-    cp /root/vpn-panel-sync/scripts/npvt-sub-server.py /usr/local/bin/npvt-sub-server.py
-    chmod +x /usr/local/bin/npvt-sub-server.py
-    
-    cat << 'EOF_SVC' > /etc/systemd/system/npvt-sub.service
-[Unit]
-Description=NPVT Subscription Server
-After=network.target
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/usr/local/bin
-ExecStart=/usr/bin/python3 /usr/local/bin/npvt-sub-server.py
-Restart=always
-RestartSec=3
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-EOF_SVC
-    systemctl daemon-reload
-    systemctl enable npvt-sub.service >/dev/null 2>&1
-    systemctl restart npvt-sub.service >/dev/null 2>&1
-    echo "✅ Сервис подписок (npvt-sub) установлен и запущен."
-fi
-
-# === АВТО-ОБНОВЛЕНИЕ БОТОВ ===
-if [ -f "/root/vpn-panel-sync/vpn-tg-bot.py" ]; then
-    cp /root/vpn-panel-sync/vpn-tg-bot.py /usr/local/bin/vpn-tg-bot.py
-    echo "✅ Основной бот обновлен."
-fi
-if [ -f "/root/vpn-panel-sync/support-bot.py" ]; then
-    cp /root/vpn-panel-sync/support-bot.py /usr/local/bin/support-bot.py
-    echo "✅ Бот поддержки обновлен."
-fi
-systemctl restart vpn-tg-bot 2>/dev/null
-systemctl restart support-bot 2>/dev/null
-echo "✅ Боты перезапущены."

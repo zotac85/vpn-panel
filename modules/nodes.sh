@@ -263,48 +263,58 @@ _nodes_optimize() {
 
     if [ "$opt_type" = "1" ]; then
         echo -e "${YELLOW}Будет применено:${NC}"
+        echo " - Обновление пакетов (apt update + upgrade)"
         echo " - Установка UFW и Fail2ban"
-        echo " - Включение BBR (ускорение TCP)"
-        echo " - Тюнинг сетевых буферов (16MB)"
-        echo " - Отключение IPv6"
+        echo " - Включение TCP BBR (ускорение)"
+        echo " - Тюнинг буферов (16MB)"
+        echo " - Отключение IPv6 (с сохранением)"
+        echo " - Создание Swap 1GB"
+        echo " - Установка AdGuard DNS (блокировка рекламы)"
+        echo " - Ускорение SSH (DNS/GSSAPI)"
         echo " - Настройка UFW (порты $sport, $wsport)"
         echo ""
         read -p "Продолжить? (y/n): " confirm
         [[ "$confirm" != "y" && "$confirm" != "Y" ]] && return
-
-        echo -e "${CYAN}Применяю (может занять 10-20 сек)...${NC}"
-        
+        echo -e "${CYAN}Применяю (может занять 1-2 минуты)...${NC}"
         REMOTE_CMD="export DEBIAN_FRONTEND=noninteractive; "
-        REMOTE_CMD+="echo '--> Обновление пакетов и установка UFW/Fail2ban...'; "
-        REMOTE_CMD+="apt update -y > /dev/null 2>&1 && apt install -y ufw fail2ban > /dev/null 2>&1 || echo 'ОШИБКА УСТАНОВКИ'; "
-        
-        REMOTE_CMD+="echo '--> Включение BBR и тюнинг буферов...'; "
+        REMOTE_CMD+="echo '--> Обновление пакетов (update & upgrade)...'; "
+        REMOTE_CMD+="apt update -y > /dev/null 2>&1 && apt upgrade -y > /dev/null 2>&1 && apt install -y ufw fail2ban > /dev/null 2>&1 || echo 'ОШИБКА УСТАНОВКИ'; "
+        REMOTE_CMD+="echo '--> Настройка AdGuard DNS...'; "
+        REMOTE_CMD+="systemctl disable systemd-resolved --now > /dev/null 2>&1; "
+        REMOTE_CMD+="rm -f /etc/resolv.conf; "
+        REMOTE_CMD+="echo -e 'nameserver 94.140.14.14\nnameserver 94.140.15.15' > /etc/resolv.conf; "
+        REMOTE_CMD+="chattr +i /etc/resolv.conf; "
+        REMOTE_CMD+="echo '--> Включение TCP BBR и тюнинг буферов...'; "
         REMOTE_CMD+="sysctl -w net.core.default_qdisc=fq; "
         REMOTE_CMD+="sysctl -w net.ipv4.tcp_congestion_control=bbr; "
         REMOTE_CMD+="sysctl -w net.core.rmem_max=16777216; "
         REMOTE_CMD+="sysctl -w net.core.wmem_max=16777216; "
         REMOTE_CMD+="touch /etc/sysctl.conf; grep -q 'net.ipv4.tcp_congestion_control=bbr' /etc/sysctl.conf || echo 'net.ipv4.tcp_congestion_control=bbr' >> /etc/sysctl.conf; "
         REMOTE_CMD+="grep -q 'net.core.default_qdisc=fq' /etc/sysctl.conf || echo 'net.core.default_qdisc=fq' >> /etc/sysctl.conf; "
-        
         REMOTE_CMD+="echo '--> Отключение IPv6...'; "
         REMOTE_CMD+="sysctl -w net.ipv6.conf.all.disable_ipv6=1 > /dev/null 2>&1; "
-        
+        REMOTE_CMD+="grep -q 'net.ipv6.conf.all.disable_ipv6=1' /etc/sysctl.conf || echo 'net.ipv6.conf.all.disable_ipv6=1' >> /etc/sysctl.conf; "
+        REMOTE_CMD+="echo '--> Создание Swap 1GB...'; "
+        REMOTE_CMD+="fallocate -l 1G /swapfile 2>/dev/null; chmod 600 /swapfile; mkswap /swapfile > /dev/null 2>&1; swapon /swapfile 2>/dev/null; "
+        REMOTE_CMD+="grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab; "
         REMOTE_CMD+="echo '--> Настройка UFW...'; "
         REMOTE_CMD+="ufw --force reset > /dev/null 2>&1; "
         REMOTE_CMD+="ufw default deny incoming > /dev/null 2>&1; "
         REMOTE_CMD+="ufw default allow outgoing > /dev/null 2>&1; "
         REMOTE_CMD+="ufw allow $sport/tcp > /dev/null 2>&1; "
         REMOTE_CMD+="ufw allow $wsport/tcp > /dev/null 2>&1; "
-        REMOTE_CMD+="ufw --force enable; "
-        
-        REMOTE_CMD+="echo '--> Запуск Fail2ban...'; "
+        REMOTE_CMD+="ufw --force enable > /dev/null 2>&1; "
+        REMOTE_CMD+="echo '--> Настройка Fail2ban...'; "
         REMOTE_CMD+="systemctl enable fail2ban > /dev/null 2>&1; systemctl restart fail2ban; "
+        REMOTE_CMD+="echo '--> Ускорение SSH (DNS/GSSAPI)...'; "
+        REMOTE_CMD+="grep -q 'UseDNS no' /etc/ssh/sshd_config || echo 'UseDNS no' >> /etc/ssh/sshd_config; "
+        REMOTE_CMD+="grep -q 'GSSAPIAuthentication no' /etc/ssh/sshd_config || echo 'GSSAPIAuthentication no' >> /etc/ssh/sshd_config; "
+        REMOTE_CMD+="systemctl restart ssh; "
         REMOTE_CMD+="echo '=== ГОТОВО ==='; "
-
         ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "$REMOTE_CMD"
+        echo -e "${GREEN}✅  Оптимизация завершена!${NC}"
         
-        echo -e "${GREEN}✅ Оптимизация завершена!${NC}"
-    elif [ "$opt_type" = "2" ]; then
+elif [ "$opt_type" = "2" ]; then
         echo ""
         read -p "Введите лимит TCP (SSH/WS) в Мбит/с (0 - снять): " speed_tcp
         read -p "Введите лимит DNS (MasterDnsVPN) в Мбит/с (0 - снять): " speed_dns
