@@ -12,6 +12,13 @@ if [ ! -f /etc/UDPCustom/domain.conf ]; then
     echo "✅ Создан конфиг домена по умолчанию (/etc/UDPCustom/domain.conf)"
 fi
 
+# Создание дефолтного конфига реакций (если его нет)
+if [ ! -f /etc/UDPCustom/reactions.conf ]; then
+    echo -e "ENABLED=1\nEMOJI=🔥\nMODE=FIXED" > /etc/UDPCustom/reactions.conf
+    echo "✅ Создан дефолтный конфиг реакций (/etc/UDPCustom/reactions.conf)"
+fi
+
+
 if [ ! -f /root/.vpn-panel.token ]; then
     echo "$MASTER_TOKEN" > /root/.vpn-panel.token
     chmod 600 /root/.vpn-panel.token

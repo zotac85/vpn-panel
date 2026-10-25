@@ -1288,6 +1288,28 @@ def auto_close_loop(cfg):
             log.error(f"auto_close: {e}")
 
 
+
+def process_channel_post(cfg, msg):
+    chat_username = msg.get('chat', {}).get('username', '').lower()
+    if chat_username != 'arsenvipkeys': return
+    enabled = "0"
+    emoji = "🔥"
+    try:
+        with open('/etc/UDPCustom/reactions.conf') as f:
+            for line in f:
+                if line.startswith('ENABLED='): enabled = line.split('=')[1].strip()
+                if line.startswith('EMOJI='): emoji = line.split('=')[1].strip()
+    except: pass
+    
+    if enabled == "1":
+        try:
+            tg(cfg['BOT_TOKEN'], 'setMessageReaction', {
+                'chat_id': msg['chat']['id'],
+                'message_id': msg['message_id'],
+                'reaction': [{'type': 'emoji', 'emoji': emoji}]
+            })
+        except: pass
+
 def main():
     cfg = load_config()
     token = cfg.get('BOT_TOKEN', '')
@@ -1325,17 +1347,9 @@ def main():
     log.info(f"Admin: {admin_id}")
     tg(token, 'deleteWebhook')
     # Команды для ВСЕХ
-    tg(token, 'setMyCommands', {'commands': [
-        {'command': 'start', 'description': '👋 Начать'}
-    ]})
+    
     # Команды только для админа (scope: chat)
-    tg(token, 'setMyCommands', {
-        'commands': [
-            {'command': 'start', 'description': '👋 Начать'},
-            {'command': 'admin', 'description': '⚙️ Админ-панель'}
-        ],
-        'scope': {'type': 'chat', 'chat_id': int(admin_id)}
-    })
+    
     # Убираем старое глобальное меню (если было)
     try:
         tg(token, 'deleteMyCommands', {'scope': {'type': 'default'}})
@@ -1350,26 +1364,32 @@ def main():
         import urllib.request, json
         _token = cfg.get("BOT_TOKEN", "")
         if _token:
-            cmds = {"commands": [
-                {"command": "start", "description": "🏠 Главное меню"},
-                {"command": "faq", "description": "📖 Частые вопросы"},
-                {"command": "ai", "description": "🧠 Спросить у ИИ"}
-            ]}
+            cmds = {
+                "commands": [
+                    {"command": "start", "description": "🏠 Главное меню"},
+                    {"command": "faq", "description": "📖 Частые вопросы"},
+                    {"command": "ai", "description": "🧠 Спросить у ИИ"}
+                ],
+                "scope": {"type": "all_private_chats"}
+            }
             req = urllib.request.Request(f"https://api.telegram.org/bot{_token}/setMyCommands", data=json.dumps(cmds).encode(), headers={"Content-Type": "application/json"})
             urllib.request.urlopen(req, timeout=5)
-            req2 = urllib.request.Request(f"https://api.telegram.org/bot{_token}/setChatMenuButton", data=json.dumps({"menu_button": {"type": "commands"}}).encode(), headers={"Content-Type": "application/json"})
-            urllib.request.urlopen(req2, timeout=5)
+            # setChatMenuButton отключен для предотвращения появления меню в группах
     except Exception:
         pass
 
     while True:
         try:
             updates = tg(token, 'getUpdates', {'offset': offset, 'timeout': 30,
-                                               'allowed_updates': ['message', 'callback_query']})
+                                               'allowed_updates': ['message', 'callback_query', 'channel_post']})
             if not updates or not updates.get('ok'):
                 time.sleep(3); continue
             for upd in updates.get('result', []):
                 offset = upd['update_id'] + 1
+                
+                if 'channel_post' in upd:
+                    process_channel_post(cfg, upd['channel_post'])
+                    continue
                 try:
                     if 'callback_query' in upd:
                         handle_callback(cfg, upd['callback_query'], token, admin_id)
