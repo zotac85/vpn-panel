@@ -2382,12 +2382,16 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         show_help_faq(cfg, chat_id, user_id, msg_id)
         return True
     if cb_data == 'cab_help_back':
+        try: _smart_files_clear(token, chat_id)
+        except: pass
         show_help_back(cfg, chat_id, user_id, msg_id)
         return True
     if cb_data == 'cab_ad':
         show_ad(cfg, chat_id, user_id, msg_id)
         return True
     if cb_data == 'cab_help':
+        try: _smart_files_clear(token, chat_id)
+        except: pass
         show_help_back(cfg, chat_id, user_id, msg_id)
         return True
     if cb_data == 'cab_help_darktunnel':
