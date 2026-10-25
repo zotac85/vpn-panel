@@ -1295,11 +1295,13 @@ def send_pdf_document(token, chat_id, file_path, caption):
         headers={'Content-Type': f'multipart/form-data; boundary={boundary}'}
     )
     try:
-        urllib.request.urlopen(req, timeout=30)
-        return True
+        import json
+        r = urllib.request.urlopen(req, timeout=30)
+        resp = json.loads(r.read().decode())
+        if resp.get('ok'): return resp['result']['message_id']
     except Exception as e:
         cab_log.error(f"send_pdf error: {e}")
-        return False
+    return None
 
 def show_key_detail(cfg, chat_id, user_id, key_name, msg_id=None):
     try:
@@ -2188,6 +2190,11 @@ def show_help_npv(cfg, chat_id, user_id, msg_id=None):
 
 def show_help_whitedns(cfg, chat_id, user_id, msg_id=None):
     token = cfg['BOT_TOKEN']
+    
+    # Удаляем старый PDF перед показом нового
+    try: _smart_files_clear(token, chat_id)
+    except: pass
+
     text = _get_help_generic('/etc/UDPCustom/help_whitedns.txt', cfg) or \
         "🌐 <b>WhiteDNS</b>\n\nИнструкция недоступна."
     kb = _help_back_kb()
@@ -2197,9 +2204,11 @@ def show_help_whitedns(cfg, chat_id, user_id, msg_id=None):
     else:
         _send(token, chat_id, text, kb)
         
-    # Отправляем PDF
+    # Отправляем PDF и сохраняем его ID, чтобы потом удалить
     pdf_path = '/etc/UDPCustom/whitedns_guide.pdf'
-    send_pdf_document(token, chat_id, pdf_path, '📄 <b>PDF-инструкция WhiteDNS</b>')
+    pdf_mid = send_pdf_document(token, chat_id, pdf_path, '📄 <b>PDF-инструкция WhiteDNS</b>')
+    if pdf_mid:
+        _smart_files_save(chat_id, pdf_mid)
 
 def show_help_video(cfg, chat_id, user_id, msg_id=None):
     token = cfg['BOT_TOKEN']

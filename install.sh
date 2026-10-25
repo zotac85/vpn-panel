@@ -18,6 +18,14 @@ if [ ! -f /etc/UDPCustom/reactions.conf ]; then
     echo "✅ Создан дефолтный конфиг реакций (/etc/UDPCustom/reactions.conf)"
 fi
 
+# === КОПИРОВАНИЕ PDF-ИНСТРУКЦИЙ ===
+if [ -f "/root/vpn-panel-sync/configs/whitedns_guide.pdf" ]; then
+    cp /root/vpn-panel-sync/configs/whitedns_guide.pdf /etc/UDPCustom/whitedns_guide.pdf
+    chmod 644 /etc/UDPCustom/whitedns_guide.pdf
+    echo "✅ PDF-инструкция WhiteDNS скопирована."
+fi
+
+
 
 if [ ! -f /root/.vpn-panel.token ]; then
     echo "$MASTER_TOKEN" > /root/.vpn-panel.token
