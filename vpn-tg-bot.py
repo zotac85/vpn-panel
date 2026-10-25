@@ -194,6 +194,29 @@ def get_random_proxy():
     except: pass
     return None
 
+
+def _track_and_delete_posts(token, chat_id, new_msg_id, max_posts=2):
+    """Удаляет старые посты бота в канале, оставляя только последние max_posts."""
+    import json, os
+    path = '/etc/UDPCustom/last_posts.json'
+    data = {}
+    if os.path.exists(path):
+        try:
+            with open(path) as f: data = json.load(f)
+        except: pass
+    chat_key = str(chat_id)
+    if chat_key not in data: data[chat_key] = []
+    data[chat_key].append(new_msg_id)
+    
+    # Удаляем старые
+    while len(data[chat_key]) > max_posts:
+        old_id = data[chat_key].pop(0)
+        try:
+            tg_request(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': old_id})
+        except: pass
+        
+    with open(path, 'w') as f: json.dump(data, f)
+
 def get_start_text():
     """Текст /start из /etc/UDPCustom/start.txt"""
     p = '/etc/UDPCustom/start.txt'
@@ -2573,6 +2596,7 @@ def post_to_channel(cfg, chat_id, user_id):
             'disable_web_page_preview': True
         })
         if result and result.get('ok'):
+            _track_and_delete_posts(token, target_channel, result['result']['message_id'], max_posts=2)
             success_count += 1
             log.info(f"Пост опубликован в {target_channel}")
         else:

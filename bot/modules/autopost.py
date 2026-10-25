@@ -8,6 +8,28 @@ import logging
 import threading
 import urllib.request
 
+
+def _track_and_delete_autopost(token, chat_id, new_msg_id, max_posts=2):
+    import json, os
+    path = '/etc/UDPCustom/last_posts.json'
+    data = {}
+    if os.path.exists(path):
+        try:
+            with open(path) as f: data = json.load(f)
+        except: pass
+    chat_key = str(chat_id)
+    if chat_key not in data: data[chat_key] = []
+    data[chat_key].append(new_msg_id)
+    
+    while len(data[chat_key]) > max_posts:
+        old_id = data[chat_key].pop(0)
+        try:
+            _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': old_id})
+        except: pass
+        
+    with open(path, 'w') as f: json.dump(data, f)
+
+
 CONFIG_FILE = "/etc/UDPCustom/autopost.conf"
 MSGS_DIR = "/etc/UDPCustom/autopost_msgs"
 POST_FILE = "/etc/UDPCustom/post.txt"
@@ -40,7 +62,10 @@ def _send(token, chat_id, text, reply_markup=None, parse_mode=None):
     params = {'chat_id': chat_id, 'text': text, 'disable_web_page_preview': True}
     if reply_markup: params['reply_markup'] = reply_markup
     if parse_mode: params['parse_mode'] = parse_mode
-    return _tg(token, 'sendMessage', params)
+    res = _tg(token, 'sendMessage', params)
+    if res and res.get('ok'):
+        _track_and_delete_autopost(token, chat_id, res['result']['message_id'], max_posts=2)
+    return res
 
 
 def load_autopost_config():
