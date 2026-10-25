@@ -645,6 +645,14 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         _dev = cfg.get("TEST_DEVICES", "1")
         if tpl_start:
             _loc = cfg.get("SERVER_LOCATION", "")
+            try:
+                import sqlite3 as _sq
+                _con = _sq.connect("/etc/UDPCustom/vpn.db")
+                _rows = _con.execute("SELECT name FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
+                _con.close()
+                if _rows:
+                    _loc = ' · '.join([r[0] for r in _rows])
+            except: pass
             text = (tpl_start
                     .replace("{name}", name)
                     .replace("{primary}", primary_clean)
