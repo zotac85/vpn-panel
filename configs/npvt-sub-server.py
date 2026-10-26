@@ -108,20 +108,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             conn.close()
             
             links = [generate_npvt(key['login'], key['password'], host, name) for name, host in nodes]
-            
+            _data = "\n".join(links).encode('utf-8')
             self.send_response(200)
             self.send_header('Content-type', 'text/plain; charset=utf-8')
+            self.send_header('Content-Length', str(len(_data)))
             self.end_headers()
-            self.wfile.write("\n".join(links).encode('utf-8'))
-        else:
-            self.send_response(404)
+            self.wfile.write(_data)
+            return
             self.end_headers()
 
 socketserver.TCPServer.allow_reuse_address = True
-with socketserver.TCPServer(("", PORT), Handler) as httpd:
-    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    import re
-    _dom = re.search(r'DOMAIN="([^"]+)"', open('/etc/UDPCustom/domain.conf').read()).group(1)
-    context.load_cert_chain(f'/etc/letsencrypt/live/{_dom}/fullchain.pem', f'/etc/letsencrypt/live/{_dom}/privkey.pem')
-    httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
+with socketserver.ThreadingTCPServer(("127.0.0.1", PORT), Handler) as httpd:
+    # SSL отключен, так как Nginx берет на себя шифрование
     httpd.serve_forever()
