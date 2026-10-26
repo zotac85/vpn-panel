@@ -4,3 +4,9 @@
 *.crt
 *.p12
 ssl/
+
+# Очистка мусора
+__pycache__/
+*.pyc
+*.bak
+*.bak_*
