@@ -23,7 +23,7 @@ def load_cfg():
     return cfg
 
 
-PORT = 443
+PORT = 8444
 
 def b64(s): return base64.b64encode(s.encode()).decode()
 

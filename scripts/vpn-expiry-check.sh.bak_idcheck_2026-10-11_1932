@@ -1,0 +1,65 @@
+#!/bin/bash
+# vpn-expiry-check.sh — блокировка юзеров с истёкшим сроком (cron каждую минуту)
+TS_DIR="/etc/UDPCustom/expire_ts"
+LOG="/var/log/vpn-expiry-check.log"
+BLOCKED_CONF="/etc/ssh/sshd_config.d/blocked-users.conf"
+NOW=$(date +%s)
+
+[ -d "$TS_DIR" ] || exit 0
+
+# Собираем список заблокированных сейчас
+declare -A SHOULD_BLOCK
+
+for ts_file in "$TS_DIR"/*; do
+    [ -f "$ts_file" ] || continue
+    user=$(basename "$ts_file")
+    case "$user" in
+        vip*|test*) ;;
+        *) continue ;;
+    esac
+    exp=$(cat "$ts_file" 2>/dev/null)
+    [[ "$exp" =~ ^[0-9]+$ ]] || continue
+    shell=$(getent passwd "$user" | cut -d: -f7)
+
+    if [ "$NOW" -gt "$exp" ]; then
+        # Истёк — должен быть заблокирован
+        SHOULD_BLOCK[$user]=1
+        if [ "$shell" != "/usr/local/bin/vpn-nologin.sh" ]; then
+            usermod -s /usr/local/bin/vpn-nologin.sh "$user" 2>/dev/null
+            pkill -KILL -u "$user" 2>/dev/null
+            echo "$(date '+%F %T') EXPIRED: $user" >> "$LOG"
+        fi
+    else
+        # Активен — должен быть разблокирован
+        if [ "$shell" = "/usr/local/bin/vpn-nologin.sh" ] || [ "$shell" = "/usr/sbin/nologin" ]; then
+            usermod -s /bin/false "$user" 2>/dev/null
+            echo "$(date '+%F %T') RESTORED: $user" >> "$LOG"
+        fi
+    fi
+done
+
+# Обновляем sshd_config.d/blocked-users.conf
+NEW_CONF=$(mktemp)
+echo "# Автогенерируется vpn-expiry-check.sh" > "$NEW_CONF"
+echo "# Юзеры с истёкшим сроком — SSH-туннель запрещён" >> "$NEW_CONF"
+for u in "${!SHOULD_BLOCK[@]}"; do
+    echo "" >> "$NEW_CONF"
+    echo "Match User $u" >> "$NEW_CONF"
+    echo "    ForceCommand /usr/local/bin/vpn-nologin.sh" >> "$NEW_CONF"
+    echo "    AllowTcpForwarding no" >> "$NEW_CONF"
+    echo "    PermitOpen none" >> "$NEW_CONF"
+done
+
+# Применяем если изменилось
+if ! diff -q "$NEW_CONF" "$BLOCKED_CONF" >/dev/null 2>&1; then
+    mv "$NEW_CONF" "$BLOCKED_CONF"
+    chmod 644 "$BLOCKED_CONF"
+    if sshd -t 2>/dev/null; then
+        systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+        echo "$(date '+%F %T') sshd reloaded (blocked-users.conf changed)" >> "$LOG"
+    else
+        echo "$(date '+%F %T') ERROR: sshd syntax!" >> "$LOG"
+    fi
+else
+    rm -f "$NEW_CONF"
+fi
