@@ -546,34 +546,10 @@ def format_time(seconds):
     return f"{h} ч {m} мин" if h > 0 else f"{m} мин"
 
 def generate_darktunnel_url(username, password, domain, ws_port, proxy, cfg):
-    import base64
-    snic = cfg.get('SNI', '') or ''
-    pcfg = get_payload() or cfg.get('PAYLOAD', '') or 'CONNECT http://co.nr HTTP/1.1[crlf]'
-    proxy_host = proxy if proxy else ''
-    proxy_port = int(ws_port) if str(ws_port).isdigit() else 2052
-    config = {
-        "type": "SSH",
-        "name": (f"💎 VIP {cfg.get('SERVER_LOCATION','VPN')} {username[4:]}" if username.startswith('vip_') else f"🎁 TEST {cfg.get('SERVER_LOCATION','VPN')} {username[4:]}" if username.startswith('test') else username),
-        "sshTunnelConfig": {
-            "sshConfig": {
-                "host": domain,
-                "port": int(ws_port) if str(ws_port).isdigit() else 2052,
-                "username": username,
-                "password": password
-            },
-            "injectConfig": {
-                "mode": "PROXY",
-                "serverNameIndication": snic,
-                "proxyHost": proxy_host,
-                "proxyPort": proxy_port,
-                "payload": pcfg
-            }
-        }
-    }
-    j = json.dumps(config, ensure_ascii=False, separators=(',', ':'))
-    b = base64.urlsafe_b64encode(j.encode("utf-8")).decode("ascii").rstrip("=")
-    return "darktunnel://" + b
-
+    # Унификация: используем единый генератор из cabinet.py
+    from bot_modules import cabinet
+    loc = cfg.get('SERVER_LOCATION', 'VPN')
+    return cabinet.make_darktunnel_url(username, password, domain, ws_port, proxy, loc)
 
 def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
     token = cfg['BOT_TOKEN']
