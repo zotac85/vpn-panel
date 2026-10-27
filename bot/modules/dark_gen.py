@@ -45,7 +45,7 @@ def build_hwid(h):
     return HW_CONST.encode().hex() + h.encode().hex() + hashlib.sha256(b'').hexdigest()
 
 def generate(hwid, host=DEF_HOST, port=DEF_PORT, user=DEF_USER, pw=DEF_PASS,
-             proxyhost=DEF_PROXYHOST, proxyport=DEF_PROXYPORT, name=None, payload=None):
+             proxyhost=DEF_PROXYHOST, proxyport=DEF_PROXYPORT, name=None, payload=None, sni="", mode="PROXY"):
     if name is None:
         name = f'VIP-\u0413\u0435\u0440\u043c\u0430\u043d\u0438\u044f-{hwid[:6]}'
 
@@ -88,11 +88,11 @@ def generate(hwid, host=DEF_HOST, port=DEF_PORT, user=DEF_USER, pw=DEF_PASS,
     # InjectConfig
     inj = locked['InjectConfig']
     inj['IsEncrypted']                   = True
-    inj['EncryptedMode']                 = E(KEY192, 'PROXY')
+    inj['EncryptedMode']                 = E(KEY192, mode)
     inj['EncryptedProxyHost']            = E(KEY192, proxyhost)
     inj['EncryptedProxyPort']            = E(KEY192, proxyport)
-    inj['EncryptedServerNameIndication'] = E(KEY192, '')
-    inj['EncryptedPayload']              = E(KEY192, DEF_PAYLOAD)
+    inj['EncryptedServerNameIndication'] = E(KEY192, sni)
+    inj['EncryptedPayload']              = E(KEY192, payload if payload else DEF_PAYLOAD)
     inj['EncryptedDnsttDnsHost']         = E(KEY192, '1.1.1.1')
     inj['EncryptedDnsttDnsPort']         = E(KEY192, '53')
     inj['EncryptedDnsttServerName']      = E(KEY192, '')

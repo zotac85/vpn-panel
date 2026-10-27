@@ -326,16 +326,48 @@ def make_darktunnel_url(username, password, domain, ws_port, proxy, loc='VPN'):
     """Генерирует darktunnel:// ссылку"""
     if not (username and password and domain):
         return None
-    pcfg = get_payload()
-    proxy_host = proxy if proxy else ""
+    
+    import sqlite3
     try:
-        pport = int(ws_port) if str(ws_port).isdigit() else 2052
-    except:
-        pport = 2052
-    try:
-        sport = int(ws_port) if str(ws_port).isdigit() else 2052
-    except:
-        sport = 2052
+        _db = sqlite3.connect('/etc/UDPCustom/vpn.db')
+        _m = _db.execute("SELECT value FROM settings WHERE key='MODE'").fetchone()
+        current_mode = _m[0] if _m else 'WS'
+        
+        if current_mode == 'TLS':
+            # Ищем TLS домен по старому (жесткий маппинг)
+            _map = {
+                "de.cdnstore.shop": "de.ruzone27.shop",
+                "us.cdnstore.shop": "us.ruzone27.shop",
+                "fr.cdnstore.shop": "fr.ruzone27.shop",
+                "fin.cdnstore.shop": "fin.ruzone27.shop"
+            }
+            domain = _map.get(domain, "de.ruzone27.shop")
+            
+            sport = 443
+            pport = 443
+            proxy_host = "104.18.0.3"
+            sni = "ruzone27.shop"
+            mode = "PROXY_SNI"
+            _pl = _db.execute("SELECT value FROM settings WHERE key='TLS_PAYLOAD'").fetchone()
+            pcfg = _pl[0] if _pl else "HEAD / HTTP/1.1[crlf]Host: cdnstore.scia.net[crlf]User-Agent: Mozilla/5.0[crlf][crlf]POST / HTTP/1.1[crlf]Host: [host][crlf]Connection: upgrade[crlf]Upgrade: websocket[crlf][crlf]"
+        else:
+            sport = int(ws_port) if str(ws_port).isdigit() else 80
+            pport = sport
+            proxy_host = proxy if proxy else ""
+            sni = ""
+            mode = "PROXY"
+            _pl = _db.execute("SELECT value FROM settings WHERE key='WS_PAYLOAD'").fetchone()
+            pcfg = _pl[0] if _pl else "CONNECT / HTTP/1.1[crlf]Host: ya.ru[crlf]User-Agent: Mozilla/5.0[crlf][crlf]POST / HTTP/1.1[crlf]Host: [host][crlf]Connection: upgrade[crlf]Upgrade: websocket[crlf][crlf]"
+        _db.close()
+    except Exception as e:
+        cab_log.error(f"DB error in make_darktunnel_url: {e}")
+        sport = int(ws_port) if str(ws_port).isdigit() else 80
+        pport = sport
+        proxy_host = proxy if proxy else ""
+        sni = ""
+        mode = "PROXY"
+        pcfg = get_payload()
+
     config = {
         "type": "SSH",
         "name": _format_config_name(username, loc),
@@ -347,8 +379,8 @@ def make_darktunnel_url(username, password, domain, ws_port, proxy, loc='VPN'):
                 "password": password
             },
             "injectConfig": {
-                "mode": "PROXY",
-                "serverNameIndication": "",
+                "mode": mode,
+                "serverNameIndication": sni,
                 "proxyHost": proxy_host,
                 "proxyPort": pport,
                 "payload": pcfg
@@ -362,6 +394,7 @@ def make_darktunnel_url(username, password, domain, ws_port, proxy, loc='VPN'):
     except Exception as e:
         cab_log.error(f"make_darktunnel_url: {e}")
         return None
+
 def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
     """Главное меню кабинета — данные из БД"""
     token = cfg['BOT_TOKEN']
@@ -1386,19 +1419,57 @@ def _build_dark_url_for_key(cfg, key_name, domain=None, ws_port=None, location_n
     if _hwid:
         try:
             from bot_modules import dark_gen
-            _proxy_str = proxy or '162.159.228.0'
-            _proxyhost = _proxy_str.split(':')[0] if ':' in _proxy_str else _proxy_str
+            import sqlite3
+            
+            # 1. Читаем режим из БД
+            _db_fix = sqlite3.connect('/etc/UDPCustom/vpn.db')
+            _m_row = _db_fix.execute("SELECT value FROM settings WHERE key='MODE'").fetchone()
+            _current_mode = _m_row[0] if _m_row else 'WS'
+            _db_fix.close()
+            
+            if _current_mode == 'TLS':
+                # ХАРДКОД МАППИНГ (чтобы 100% сработало)
+                _map = {
+                    "de.cdnstore.shop": "de.ruzone27.shop",
+                    "us.cdnstore.shop": "us.ruzone27.shop",
+                    "fr.cdnstore.shop": "fr.ruzone27.shop",
+                    "fin.cdnstore.shop": "fin.ruzone27.shop"
+                }
+                if domain in _map:
+                    domain = _map[domain]
+                else:
+                    domain = "de.ruzone27.shop" # Дефолт, если не нашли
+                
+                ws_port = 443
+                _proxyhost = "104.18.0.3"
+                _proxyport = "443"
+                _sni = "ruzone27.shop"
+                _dt_mode = "PROXY_SNI"
+                _payload = "HEAD / HTTP/1.1[crlf]Host: cdnstore.scia.net[crlf]User-Agent: Mozilla/5.0[crlf][crlf]POST / HTTP/1.1[crlf]Host: [host][crlf]Connection: upgrade[crlf]Upgrade: websocket[crlf][crlf]"
+            else:
+                ws_port = 80
+                _proxy_str = proxy or '162.159.228.0'
+                _proxyhost = _proxy_str.split(':')[0] if ':' in _proxy_str else _proxy_str
+                _proxyport = str(ws_port)
+                _sni = ""
+                _dt_mode = "PROXY"
+                _payload = "CONNECT / HTTP/1.1[crlf]Host: ya.ru[crlf]User-Agent: Mozilla/5.0[crlf][crlf]POST / HTTP/1.1[crlf]Host: [host][crlf]Connection: upgrade[crlf]Upgrade: websocket[crlf][crlf]"
+
+            # 3. Формируем имя конфига
             if key_name.startswith('vip_'):
                 _cfg_name = f"\U0001F48E VIP {_loc} {key_name[4:]}"
             elif key_name.startswith('test'):
                 _cfg_name = f"\U0001F381 TEST {_loc} {key_name[4:]}"
             else:
                 _cfg_name = f"\u2B50  {key_name}"
+            
+            # 4. Вызываем генератор
             dt_url = dark_gen.generate(
                 hwid=_hwid, host=domain, port=str(ws_port),
                 user=key_name, pw=password,
-                proxyhost=_proxyhost, proxyport=str(ws_port),
-                name=_cfg_name, payload=get_payload()
+                proxyhost=_proxyhost, proxyport=_proxyport,
+                name=_cfg_name, payload=_payload,
+                sni=_sni, mode=_dt_mode
             )
             return dt_url, _cfg_name
         except Exception as e:
