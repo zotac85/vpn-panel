@@ -2316,22 +2316,6 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         
         _send_instr(token, chat_id, _text, _kb)
         return True
-            
-        _dom = "de.cdnstore.shop"
-        try:
-            import re
-            _dom = re.search(r'DOMAIN="([^"]+)"', open("/etc/UDPCustom/domain.conf").read()).group(1)
-        except: pass
-        
-        _sub_url = f"https://{_dom}/sub_dark/{key_name}"
-        _text = "💻 <b>Подписка для ПК (ArsenVPN)</b>" + chr(10) + chr(10) + \
-                "1. Скачай приложение: <a href='https://github.com/zotac85/ArsenVpn'>GitHub</a>" + chr(10) + \
-                "2. Открой приложение и нажми «Добавить подписку»" + chr(10) + \
-                "3. Вставь ссылку ниже и нажми OK" + chr(10) + chr(10) + \
-                f"<code>{_sub_url}</code>"
-        _kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
-        _send_instr(token, chat_id, _text, _kb)
-        return True
     if cb_data.startswith('cab_darkfile:'):
         key_name = cb_data.split(':', 1)[1]
         try: _smart_files_clear(token, chat_id)
