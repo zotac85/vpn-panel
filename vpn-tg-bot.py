@@ -5517,6 +5517,15 @@ def main():
                             log.error(f'cab_extend_pay: {_e}')
                         continue
                     elif cb_data.startswith('cab_vip_confirm:'):
+                        # ПРОВЕРКА НА ОТСУТСТВИЕ @USERNAME
+                        if not cb.get('from', {}).get('username'):
+                            tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
+                                'callback_query_id': cb['id'],
+                                'text': '❌ Вам нужно установить @username в настройках Telegram, чтобы купить ключ!',
+                                'show_alert': True
+                            })
+                            continue
+
                         try:
                             idx = int(cb_data.split(':', 1)[1])
                         except:
@@ -5715,6 +5724,14 @@ def main():
                         handle_test(cfg, cb['message']['chat']['id'], cb_user_id, cb_first_name, cb['id'], hwid='')
                     # Кнопка из ЛИЧКИ → обычный /test
                     elif cb_data == 'get_test':
+                        # ПРОВЕРКА НА ОТСУТСТВИЕ @USERNAME ДЛЯ ТЕСТА
+                        if not cb.get('from', {}).get('username'):
+                            tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
+                                'callback_query_id': cb['id'],
+                                'text': '❌ Вам нужно установить @username в настройках Telegram, чтобы получить тестовый ключ!',
+                                'show_alert': True
+                            })
+                            continue
                         handle_test(cfg, cb['message']['chat']['id'], cb_user_id, cb_first_name, cb['id'])
                     else:
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
