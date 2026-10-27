@@ -29,7 +29,7 @@ DEF_USER      = 'vip_rrrttrrrr'
 DEF_PASS      = 'G4PY1McMVote'
 DEF_PROXYHOST = '162.159.228.0'
 DEF_PROXYPORT = '2052'
-DEF_PAYLOAD   = ('CONNECT http://co.nr HTTP/1.1[crlf]Host: www.icloud.com[crlf]'
+DEF_PAYLOAD   = ('CONNECT / HTTP/1.1[crlf]Host: ya.ru[crlf]'
                  'User-Agent: microsoft.com[crlf][crlf]AN / HTTP/1.1[lf]Host: [host][lf]'
                  'Connection: Upgrade[lf]Upgrade: websocket[crlf][crlf]')
 
@@ -45,7 +45,7 @@ def build_hwid(h):
     return HW_CONST.encode().hex() + h.encode().hex() + hashlib.sha256(b'').hexdigest()
 
 def generate(hwid, host=DEF_HOST, port=DEF_PORT, user=DEF_USER, pw=DEF_PASS,
-             proxyhost=DEF_PROXYHOST, proxyport=DEF_PROXYPORT, name=None):
+             proxyhost=DEF_PROXYHOST, proxyport=DEF_PROXYPORT, name=None, payload=None):
     if name is None:
         name = f'VIP-\u0413\u0435\u0440\u043c\u0430\u043d\u0438\u044f-{hwid[:6]}'
 

@@ -1394,7 +1394,7 @@ def _build_dark_url_for_key(cfg, key_name, domain=None, ws_port=None, location_n
                 hwid=_hwid, host=domain, port=str(ws_port),
                 user=key_name, pw=password,
                 proxyhost=_proxyhost, proxyport=str(ws_port),
-                name=_cfg_name,
+                name=_cfg_name, payload=get_payload()
             )
             return dt_url, _cfg_name
         except Exception as e:

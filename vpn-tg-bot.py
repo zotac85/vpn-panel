@@ -278,14 +278,16 @@ def get_support():
 
 
 def get_payload():
-    """Payload из файла /etc/UDPCustom/payload.txt"""
-    p = '/etc/UDPCustom/payload.txt'
-    if os.path.exists(p):
-        try:
-            with open(p) as f:
-                pl = f.read().strip()
-                if pl: return pl
-        except: pass
+    """Payload из базы данных"""
+    try:
+        import sqlite3
+        db = sqlite3.connect('/etc/UDPCustom/vpn.db')
+        mode_row = db.execute("SELECT value FROM settings WHERE key='MODE'").fetchone()
+        mode = mode_row[0] if mode_row else 'WS'
+        key = 'TLS_PAYLOAD' if mode == 'TLS' else 'WS_PAYLOAD'
+        row = db.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+        if row: return row[0]
+    except: pass
     return None
 
 
@@ -3817,13 +3819,21 @@ def handle_payload(cfg, chat_id, user_id, msg_id=None):
     if not is_admin(cfg, user_id):
         send_message(token, chat_id, "🚫 Только для админа."); return
     try:
-        pl = open(PAYLOAD_FILE).read().strip() if os.path.exists(PAYLOAD_FILE) else ''
+        import sqlite3
+        _db = sqlite3.connect('/etc/UDPCustom/vpn.db')
+        _mode = _db.execute("SELECT value FROM settings WHERE key='MODE'").fetchone()
+        _mode = _mode[0] if _mode else 'WS'
+        _pk = 'TLS_PAYLOAD' if _mode == 'TLS' else 'WS_PAYLOAD'
+        _pl = _db.execute("SELECT value FROM settings WHERE key=?", (_pk,)).fetchone()
+        pl = _pl[0] if _pl else ''
+        _db.close()
     except Exception:
         pl = ''
+        _mode = 'WS'
     NL = chr(10)
     if pl:
         _prev = pl[:500] + ('...' if len(pl) > 500 else '')
-        lines = ['📦 <b>PAYLOAD (' + str(len(pl)) + ' символов)</b>', '━━━━━━━━━━━━━━━━━━━━', '', '<pre>' + _prev + '</pre>']
+        lines = [f'📦 <b>PAYLOAD {_mode} (' + str(len(pl)) + ' символов)</b>', '━━━━━━━━━━━━━━━━━━━━', '', '<pre>' + _prev + '</pre>']
     else:
         lines = ['📦 <b>PAYLOAD</b>', '━━━━━━━━━━━━━━━━━━━━', '', '❌ Не задан']
     lines += ['', '━━━━━━━━━━━━━━━━━━━━', '<i>Отправка полностью заменяет payload</i>']
@@ -4079,21 +4089,36 @@ def handle_services(cfg, chat_id, user_id, msg_id=None):
         proxy_cnt = len(ips)
     except: proxy_cnt = 0
     try:
-        pl = open(PAYLOAD_FILE).read().strip() if os.path.exists(PAYLOAD_FILE) else ""
-        pl_len = len(pl)
-    except: pl_len = 0
+        import sqlite3
+        _db = sqlite3.connect('/etc/UDPCustom/vpn.db')
+        _mode_row = _db.execute("SELECT value FROM settings WHERE key='MODE'").fetchone()
+        _mode = _mode_row[0] if _mode_row else 'WS'
+        _pk = 'TLS_PAYLOAD' if _mode == 'TLS' else 'WS_PAYLOAD'
+        _pl_row = _db.execute("SELECT value FROM settings WHERE key=?", (_pk,)).fetchone()
+        pl_len = len(_pl_row[0]) if _pl_row else 0
+        _db.close()
+    except: 
+        pl_len = 0
+        _mode = 'WS'
     
-    text += f"\n<b>🌐 Домены:</b>\n"
+    text += f"\n<b>🌐 Домены ({_mode}):</b>\n"
     try:
-        for _nid, _nname, _nhost, _is_m in _get_all_domains():
+        import sqlite3
+        _db_dom = sqlite3.connect('/etc/UDPCustom/vpn.db')
+        _col = 'tls_host' if _mode == 'TLS' else 'host'
+        _dom_rows = _db_dom.execute(f"SELECT name, {_col} FROM nodes WHERE is_active=1 ORDER BY is_master DESC, id").fetchall()
+        _db_dom.close()
+        for _nname, _nhost in _dom_rows:
             text += f"  {_nname}: <code>{_nhost}</code>\n"
     except Exception as _e:
         text += f"  ⚠️ {_e}\n"
+    text += f"\n<b>⚙️ Текущий режим:</b> <code>{_mode}</code>\n"
     text += f"\n<b>Текущие настройки:</b>\n"
     text += f"  🔒 Прокси: <b>{proxy_cnt}</b> шт.\n"
     text += f"  📦 Payload: <b>{pl_len}</b> симв.\n"
     
     keyboard = {'inline_keyboard': [
+        [{'text': f'🔄 Сменить режим (сейчас {_mode})', 'callback_data': 'toggle_mode'}],
         [{'text': '🌐 Домен', 'callback_data': 'manage_domains'},
          {'text': '🔒 Прокси', 'callback_data': 'manage_proxies'},
          {'text': '📦 Payload', 'callback_data': 'manage_payload'}],
@@ -5338,6 +5363,22 @@ def main():
                         except Exception:
                             pass
                         show_payload_edit(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                    elif cb_data == 'toggle_mode':
+                        import sqlite3
+                        _db_t = sqlite3.connect('/etc/UDPCustom/vpn.db')
+                        _cur_mode_row = _db_t.execute("SELECT value FROM settings WHERE key='MODE'").fetchone()
+                        _cur_mode = _cur_mode_row[0] if _cur_mode_row else 'WS'
+                        _new_mode = 'TLS' if _cur_mode == 'WS' else 'WS'
+                        _db_t.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('MODE', ?)", (_new_mode,))
+                        _db_t.commit()
+                        _db_t.close()
+                        
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
+                            'callback_query_id': cb['id'],
+                            'text': f'✅ Режим изменен на {_new_mode}',
+                            'show_alert': True
+                        })
+                        handle_services(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
                     elif cb_data == 'restart_ws':
                         import subprocess as _sp
                         try:
