@@ -471,7 +471,7 @@ _nodes_install_udpgw() {
 
 _nodes_install_tls() {
     clear
-    echo -e "${YELLOW}── Установка TLS (Nginx) на ноду ──${NC}"
+    echo -e "${YELLOW}── Установка TLS (Nginx + Сертификаты) на ноду ──${NC}"
     echo ""
     while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
         [ -z "$_id" ] && continue
@@ -485,105 +485,32 @@ _nodes_install_tls() {
     [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
     IFS='|' read -r name host ip sport wsport suser <<< "$row"
     
-    echo -e "${CYAN}Настраиваю TLS для $name ($host)...${NC}"
-    ssh -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "mkdir -p /etc/nginx/ssl" 2>/dev/null
-    scp -o StrictHostKeyChecking=no -P "$sport" /etc/nginx/ssl/ruzone.crt root@"$ip":/etc/nginx/ssl/ >/dev/null 2>&1
-    scp -o StrictHostKeyChecking=no -P "$sport" /etc/nginx/ssl/ruzone.key root@"$ip":/etc/nginx/ssl/ >/dev/null 2>&1
-    scp -o StrictHostKeyChecking=no -P "$sport" /usr/local/share/vpn-panel/setup-tls-node.sh root@"$ip":/tmp/ >/dev/null 2>&1
+    # Для TLS всегда берем домен из колонки tls_host
+    TLS_DOMAIN=$(_nodes_py tls_host "$nid" 2>/dev/null)
+    [ -z "$TLS_DOMAIN" ] && TLS_DOMAIN="$host"
+
+    echo -e "${CYAN}Настраиваю TLS для $name ($TLS_DOMAIN)...${NC}"
     
-    ssh -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "bash /tmp/setup-tls-node.sh $host"
+    # 1. Создаем папку на ноде
+    ssh -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "mkdir -p /etc/nginx/ssl" 2>/dev/null
+    
+    # 2. Копируем сертификаты с мастера
+    if [ -f /etc/nginx/ssl/ruzone.crt ]; then
+        scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /etc/nginx/ssl/ruzone.crt root@"$ip":/etc/nginx/ssl/ >/dev/null 2>&1
+        scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /etc/nginx/ssl/ruzone.key root@"$ip":/etc/nginx/ssl/ >/dev/null 2>&1
+        echo -e "  ✓ Сертификаты скопированы"
+    else
+        echo -e "  ${RED}⚠️ На мастере нет /etc/nginx/ssl/ruzone.crt${NC}"
+    fi
+    
+    # 3. Копируем и запускаем скрипт установки
+    scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /usr/local/share/vpn-panel/setup-tls-node.sh root@"$ip":/tmp/ >/dev/null 2>&1
+    ssh -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "chmod +x /tmp/setup-tls-node.sh && bash /tmp/setup-tls-node.sh $TLS_DOMAIN"
+    
     echo -e "${GREEN}✅  TLS успешно установлен на $name${NC}"
     read -p "Нажмите Enter..."
 }
 
-_nodes_auto_add() {
-    clear
-    echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
-    echo -e "        ${YELLOW}🚀  ПОЛНАЯ АВТОУСТАНОВКА НОВОЙ НОДЫ${NC}"
-    echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
-    echo ""
-    read -p "Имя (например 'Германия 🇩🇪'): " name
-    [ -z "$name" ] && { echo "Отмена"; return; }
-    
-    read -p "Домен (например 'de.ruzone27.shop'): " host
-    [ -z "$host" ] && { echo "Отмена"; return; }
-    
-    read -p "IP адрес сервера: " ip
-    [ -z "$ip" ] && { echo "Отмена"; return; }
-    
-    read -p "SSH-порт (Enter=22): " sport
-    sport=${sport:-22}
-    
-    read -p "WS-порт (Enter=80): " wsport
-    wsport=${wsport:-80}
-
-    echo ""
-    echo -e "${YELLOW}── ПРОВЕРЬТЕ ДАННЫЕ ──${NC}"
-    echo -e " Имя     : ${GREEN}$name${NC}"
-    echo -e " Домен   : ${GREEN}$host${NC}"
-    echo -e " IP      : ${GREEN}$ip${NC}"
-    echo -e " SSH порт: ${GREEN}$sport${NC}"
-    echo -e " WS порт : ${GREEN}$wsport${NC}"
-    echo ""
-    read -p "Всё верно? Начинаем установку? (y/n): " confirm
-    [[ "$confirm" != "y" && "$confirm" != "Y" ]] && return
-
-    echo ""
-    echo -e "${CYAN}[1/5] 📝 Добавляем ноду в базу данных...${NC}"
-    _nodes_py add "$name" "$host" "$ip" "$sport" "$wsport" > /dev/null
-    sleep 1
-
-    echo -e "${CYAN}[2/5] 🔑 Копируем SSH-ключ (введите пароль от сервера, если попросит)...${NC}"
-    _nodes_sync_key "$ip" "$sport"
-    
-    echo -e "${CYAN}[3/5] ⚙️  Устанавливаем WS-прокси на ноду...${NC}"
-    LOCAL_SCRIPT="/usr/local/share/vpn-panel/install-node.sh"
-    [ ! -f "$LOCAL_SCRIPT" ] && LOCAL_SCRIPT="/root/vpn-panel-sync/install-node.sh"
-    
-    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" \
-        "[ -f /root/.vpn-panel.token ] || (echo '$(cat /root/.vpn-panel.token 2>/dev/null)' > /root/.vpn-panel.token && chmod 600 /root/.vpn-panel.token)" 2>/dev/null
-    scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" "$LOCAL_SCRIPT" root@"$ip":/tmp/inst.sh >/dev/null 2>&1
-    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "printf '%s
-%s
-' '$wsport' '$sport' | bash /tmp/inst.sh" 2>&1 | grep -E "✅|❌|Готово|Ошибка" || true
-
-    echo -e "${CYAN}[4/5] 🔒 Устанавливаем Nginx и TLS...${NC}"
-    ssh -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "mkdir -p /etc/nginx/ssl" 2>/dev/null
-    scp -o StrictHostKeyChecking=no -P "$sport" /etc/nginx/ssl/ruzone.crt root@"$ip":/etc/nginx/ssl/ >/dev/null 2>&1
-    scp -o StrictHostKeyChecking=no -P "$sport" /etc/nginx/ssl/ruzone.key root@"$ip":/etc/nginx/ssl/ >/dev/null 2>&1
-    scp -o StrictHostKeyChecking=no -P "$sport" /usr/local/share/vpn-panel/setup-tls-node.sh root@"$ip":/tmp/ >/dev/null 2>&1
-    ssh -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "bash /tmp/setup-tls-node.sh $host" 2>&1 | grep -E "successful|✅|error" || true
-
-    echo -e "${CYAN}[5/5] 🔄 Синхронизируем пользователей на новую ноду...${NC}"
-    TMP_FILE="/tmp/_auto_sync.$$"
-    python3 - > "$TMP_FILE" << 'PYCODE'
-import sqlite3, time
-db = sqlite3.connect('/etc/UDPCustom/vpn.db')
-now = int(time.time())
-for tbl in ['test_keys', 'vip_keys']:
-    for login, pwd, dev, exp in db.execute(f"SELECT login, password, devices, expires_at FROM {tbl} WHERE expires_at > ?", (now,)).fetchall():
-        if login and pwd: print(f"{login}|{pwd}|{dev or 1}|{exp or 0}")
-PYCODE
-    OK=0; FAIL=0
-    while IFS='|' read -r login pwd dev exp; do
-        [ -z "$login" ] && continue
-        RES=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "node-user.sh add '$login' '$pwd' '$exp' && node-user.sh setlimit '$login' '$dev'" < /dev/null 2>/dev/null)
-        if echo "$RES" | grep -q "OK"; then OK=$((OK+1)); else FAIL=$((FAIL+1)); fi
-        sleep 0.2
-    done < "$TMP_FILE"
-    rm -f "$TMP_FILE"
-    echo -e "      ${GREEN}✓ Синхронизировано: $OK${NC}   ${RED}✗ Ошибок: $FAIL${NC}"
-
-    echo ""
-    echo -e "${GREEN}═══════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}  ✅  НОДА $name УСПЕШНО ДОБАВЛЕНА И НАСТРОЕНА!${NC}"
-    echo -e "${GREEN}═══════════════════════════════════════════════${NC}"
-    echo -e "${YELLOW}  Не забудьте добавить А-запись в Cloudflare:${NC}"
-    echo -e "  Имя: ${GREEN}$host${NC}"
-    echo -e "  IP:  ${GREEN}$ip${NC} (Оранжевая тучка)"
-    echo ""
-    read -p "Нажмите Enter для выхода..."
-}
 menu_nodes() {
     while true; do
         clear
