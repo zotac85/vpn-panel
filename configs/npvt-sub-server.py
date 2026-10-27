@@ -4,6 +4,7 @@ import socketserver
 import base64
 import json
 import sqlite3
+import os
 import sys
 import ssl
 
@@ -27,10 +28,10 @@ PORT = 8444
 
 def b64(s): return base64.b64encode(s.encode()).decode()
 
-def generate_npvt(username, password, host, remark):
-    port = 80
+def generate_npvt(username, password, host, remark, port=80, payload=None):
     proxy = cab.get_random_proxy() or "8.6.112.0:80"
-    payload = "CONNECT / HTTP/1.1[crlf]Host: ya.ru[crlf]User-Agent: Mozilla/5.0 (Linux; Android 13) Chrome/120[crlf][crlf]POST / HTTP/1.1[crlf]Host: [host][crlf]Connection: upgrade[crlf]Upgrade: websocket[crlf][crlf]"
+    if payload is None:
+        payload = "CONNECT / HTTP/1.1[crlf]Host: ya.ru[crlf]User-Agent: Mozilla/5.0 (Linux; Android 13) Chrome/120[crlf][crlf]POST / HTTP/1.1[crlf]Host: [host][crlf]Connection: upgrade[crlf]Upgrade: websocket[crlf][crlf]"
 
     data = {
         "sshConfigType": "npvs1:" + b64("SSH-Proxy-Payload"),

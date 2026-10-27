@@ -1350,10 +1350,21 @@ def _build_dark_url_for_key(cfg, key_name, domain=None, ws_port=None, location_n
     password = key['password']
     if not password:
         return None, None
-    if domain is None:
-        domain = get_domain()
-    if ws_port is None:
-        ws_port = get_ws_port()
+    # Проверяем режим (TLS или WS)
+    mode = "WS"
+    if os.path.exists('/etc/UDPCustom/sub_mode.conf'):
+        with open('/etc/UDPCustom/sub_mode.conf', 'r') as f:
+            if 'TLS' in f.read(): mode = "TLS"
+            
+    if mode == "TLS":
+        if domain is None:
+            domain = key.get('tls_host') or get_domain() # Берем tls_host из ключа (нужно будет обновить SQL в боте)
+        ws_port = 443
+    else:
+        if domain is None:
+            domain = get_domain()
+        if ws_port is None:
+            ws_port = get_ws_port()
     proxy = get_random_proxy()
     try:
         _hwid = key['hwid']
