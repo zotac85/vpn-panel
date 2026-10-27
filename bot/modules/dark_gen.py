@@ -110,6 +110,11 @@ def generate(hwid, host=DEF_HOST, port=DEF_PORT, user=DEF_USER, pw=DEF_PASS,
     # ВАЖНО: поле encryptedLockedConfig сохраняет padding '='
     o2['encryptedLockedConfig'] = base64.urlsafe_b64encode(enc).decode()
     o2['name'] = name
+    
+    # Косметика для интерфейса DarkTunnel (чтобы показывал "Proxy with SNI")
+    if mode == "PROXY_SNI":
+        if 'sshTunnelConfig' in o2 and 'injectConfig' in o2['sshTunnelConfig']:
+            o2['sshTunnelConfig']['injectConfig']['mode'] = "PROXY_SNI"
     # А вот внешняя ссылка — без padding
     return 'darktunnel://' + b64u(json.dumps(o2, ensure_ascii=False, separators=(',',':')).encode())
 
