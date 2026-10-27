@@ -1350,15 +1350,19 @@ def _build_dark_url_for_key(cfg, key_name, domain=None, ws_port=None, location_n
     password = key['password']
     if not password:
         return None, None
-    # Проверяем режим (TLS или WS)
+    # Проверяем режим (TLS или WS) из БД
     mode = "WS"
-    if os.path.exists('/etc/UDPCustom/sub_mode.conf'):
-        with open('/etc/UDPCustom/sub_mode.conf', 'r') as f:
-            if 'TLS' in f.read(): mode = "TLS"
+    try:
+        import sqlite3
+        _db_c = sqlite3.connect('/etc/UDPCustom/vpn.db')
+        _row = _db_c.execute("SELECT value FROM settings WHERE key='MODE'").fetchone()
+        if _row and _row[0] == 'TLS': mode = "TLS"
+        _db_c.close()
+    except: pass
             
     if mode == "TLS":
         if domain is None:
-            domain = key.get('tls_host') or get_domain() # Берем tls_host из ключа (нужно будет обновить SQL в боте)
+            domain = get_domain()
         ws_port = 443
     else:
         if domain is None:

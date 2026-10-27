@@ -28,13 +28,12 @@ PORT = 8444
 
 def b64(s): return base64.b64encode(s.encode()).decode()
 
-def generate_npvt(username, password, host, remark, port=80, payload=None):
-    proxy = cab.get_random_proxy() or "8.6.112.0:80"
+def generate_npvt(username, password, host, remark, port=80, payload=None, sni="", proxy="104.18.0.1:80"):
+    proto = "SSH-TLS-Proxy-Payload" if sni else "SSH-Proxy-Payload"
     if payload is None:
         payload = "CONNECT / HTTP/1.1[crlf]Host: ya.ru[crlf]User-Agent: Mozilla/5.0 (Linux; Android 13) Chrome/120[crlf][crlf]POST / HTTP/1.1[crlf]Host: [host][crlf]Connection: upgrade[crlf]Upgrade: websocket[crlf][crlf]"
-
     data = {
-        "sshConfigType": "npvs1:" + b64("SSH-Proxy-Payload"),
+        "sshConfigType": "npvs1:" + b64(proto),
         "remarks": "npvs1:" + b64(remark),
         "sshHost": "npvs1:" + b64(host),
         "sshPort": port,
@@ -43,7 +42,7 @@ def generate_npvt(username, password, host, remark, port=80, payload=None):
         "sshAuthMethod": "npvs1:" + b64("PASSWORD"),
         "sshPrivateKey": "",
         "sshPrivateKeyPassphrase": "",
-        "sni": "",
+        "sni": sni,
         "tlsVersion": "npvs1:" + b64("DEFAULT"),
         "httpProxy": "npvs1:" + b64(proxy),
         "authenticateProxy": False,
@@ -59,6 +58,9 @@ def generate_npvt(username, password, host, remark, port=80, payload=None):
     }
     json_str = json.dumps(data, separators=(',', ':'))
     return f"npvt-ssh://{base64.b64encode(json_str.encode()).decode()}"
+
+
+
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
@@ -103,12 +105,33 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(b"Key not found")
                 return
-            
+
+            mode = "WS"
+            try:
+                _db_mode = sqlite3.connect('/etc/UDPCustom/vpn.db')
+                _row = _db_mode.execute("SELECT value FROM settings WHERE key='MODE'").fetchone()
+                if _row and _row[0] == 'TLS': mode = "TLS"
+                _db_mode.close()
+            except: pass
+
             conn = sqlite3.connect('/etc/UDPCustom/vpn.db')
-            nodes = conn.execute("SELECT name, host FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
+            if mode == "TLS":
+                nodes = conn.execute("SELECT name, tls_host FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
+                port = 443
+                payload = "HEAD / HTTP/1.1[crlf]Host: cdnstore.scia.net[crlf]User-Agent: Mozilla/5.0[crlf][crlf]POST / HTTP/1.1[crlf]Host: [host][crlf]Connection: upgrade[crlf]Upgrade: websocket[crlf][crlf]"
+                _sni_row = conn.execute("SELECT value FROM settings WHERE key='TLS_SNI'").fetchone()
+                sni = _sni_row[0] if _sni_row else "ruzone27.shop"
+                proxy = "104.18.0.3:443"
+            else:
+                nodes = conn.execute("SELECT name, host FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
+                port = 80
+                payload = None
+                sni = ""
+                proxy = "104.18.0.3:80"
             conn.close()
-            
-            links = [generate_npvt(key['login'], key['password'], host, name) for name, host in nodes]
+
+            links = [generate_npvt(key['login'], key['password'], host, name, port, payload, sni, proxy) for name, host in nodes if host]
+
             _data = "\n".join(links).encode('utf-8')
             self.send_response(200)
             self.send_header('Content-type', 'text/plain; charset=utf-8')
@@ -116,7 +139,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(_data)
             return
-            self.end_headers()
 
 socketserver.TCPServer.allow_reuse_address = True
 with socketserver.ThreadingTCPServer(("127.0.0.1", PORT), Handler) as httpd:
