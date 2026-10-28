@@ -46,8 +46,7 @@ elif cmd == 'set_status':
     db.execute("UPDATE nodes SET status=?, last_check=datetime('now') WHERE id=?", (args[1], int(args[2])))
     db.commit()
 elif cmd == 'get':
-    # Игнорируем мастера, сортируем по ID
-    rows = db.execute("SELECT id,name,host,ip,ssh_port,ws_port,ssh_user FROM nodes WHERE is_master=0 ORDER BY id").fetchall()
+    rows = db.execute("SELECT id,name,host,ip,ssh_port,ws_port,ssh_user FROM nodes ORDER BY is_master DESC, id").fetchall()
     try:
         idx = int(args[1]) - 1
         if 0 <= idx < len(rows):
@@ -55,8 +54,7 @@ elif cmd == 'get':
             print('|'.join(str(x) for x in r[1:]))
     except: pass
 elif cmd == 'get_full':
-    # Игнорируем мастера, сортируем по ID
-    rows = db.execute("SELECT id,name,host,tls_host,ip,ssh_port,ws_port FROM nodes WHERE is_master=0 ORDER BY id").fetchall()
+    rows = db.execute("SELECT id,name,host,tls_host,ip,ssh_port,ws_port FROM nodes ORDER BY is_master DESC, id").fetchall()
     try:
         idx = int(args[1]) - 1
         if 0 <= idx < len(rows):
@@ -106,7 +104,7 @@ _nodes_install_ws() {
     local num=0
     while IFS='|' read -r id name host ip sport wsport is_master is_active status; do
         [ -z "$id" ] && continue
-        [ "$is_master" = "1" ] && continue
+        # [ "$is_master" = "1" ] && continue
         num=$((num+1))
         echo "  $num) $name ($ip)"
     done < <(_nodes_py list)
@@ -161,7 +159,7 @@ _nodes_install_banner() {
     local num=0
     while IFS='|' read -r id name host ip sport wsport is_master is_active status; do
         [ -z "$id" ] && continue
-        [ "$is_master" = "1" ] && continue
+        # [ "$is_master" = "1" ] && continue
         num=$((num+1))
         echo "  $num) $name ($ip)"
     done < <(_nodes_py list)
@@ -287,7 +285,7 @@ _nodes_optimize() {
     local num=0
     while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
         [ -z "$_id" ] && continue
-        [ "$_im" = "1" ] && continue
+        # [ "$_im" = "1" ] && continue
         num=$((num+1))
         echo "  $num) $_name ($_ip)"
     done < <(_nodes_py list)
@@ -401,7 +399,7 @@ _nodes_reboot() {
     local num=0
     while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
         [ -z "$_id" ] && continue
-        [ "$_im" = "1" ] && continue
+        # [ "$_im" = "1" ] && continue
         num=$((num+1))
         echo "  $num) $_name ($_ip)"
     done < <(_nodes_py list)
@@ -441,20 +439,29 @@ _nodes_change_domain() {
     local num=0
     while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
         [ -z "$_id" ] && continue
-        [ "$_im" = "1" ] && continue
         num=$((num+1))
-        echo "  $num) $_name ($_ip) — домен: $_host"
+        local mark="🌍"
+        [ "$_im" = "1" ] && mark="👑 [МАСТЕР]"
+        echo "  $num) $_name ($_ip) — домен: $_host $mark"
     done < <(_nodes_py list)
     echo ""
     read -p "Введите номер ноды: " nid
     [ -z "$nid" ] && return
     
-    # Получаем реальные данные по порядковому номеру
-    row=$(_nodes_py get_full "$nid")
+    # Получаем данные по порядковому номеру (включая Мастера)
+    row=$(python3 -c "
+import sqlite3, sys
+db = sqlite3.connect('/etc/UDPCustom/vpn.db')
+rows = db.execute('SELECT id,name,host,tls_host,ip,ssh_port,ws_port,is_master FROM nodes ORDER BY is_master DESC, id').fetchall()
+try:
+    idx = int('$nid') - 1
+    if 0 <= idx < len(rows):
+        r = rows[idx]
+        print(f'{r[0]}|{r[1]}|{r[2]}|{r[3]}|{r[4]}|{r[5]}|{r[6]}|{r[7]}')
+except: pass
+")
     [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
-    
-    # get_full возвращает: real_id|name|host|tls_host|ip|ssh_port|ws_port
-    IFS='|' read -r real_id name host tls_host ip sport wsport <<< "$row"
+    IFS='|' read -r real_id name host tls_host ip sport wsport is_master <<< "$row"
     
     echo ""
     echo -e "${CYAN}Текущие данные для $name:${NC}"
@@ -471,6 +478,12 @@ _nodes_change_domain() {
     # Обновляем в базе (используя реальный ID)
     _nodes_py update "$real_id" "$name" "$new_ws" "$new_tls" "$ip" "$sport" "$wsport" > /dev/null
     
+    # Если это Мастер, обновляем главный конфиг домена
+    if [ "$is_master" = "1" ]; then
+        echo "DOMAIN=\"$new_ws\"" > /etc/UDPCustom/domain.conf
+        echo -e "${GREEN}✅ Главный домен Мастера обновлен в domain.conf${NC}"
+    fi
+    
     echo ""
     echo -e "${GREEN}✅  Домены ноды обновлены!${NC}"
     echo -e "${YELLOW}⚠️  Клиентам нужно пересоздать .dark для этой ноды${NC}"
@@ -485,7 +498,7 @@ _nodes_install_udpgw() {
     local num=0
     while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
         [ -z "$_id" ] && continue
-        [ "$_im" = "1" ] && continue
+        # [ "$_im" = "1" ] && continue
         num=$((num+1))
         echo "  $num) $_name ($_ip)"
     done < <(_nodes_py list)
@@ -522,40 +535,75 @@ _nodes_install_tls() {
     local num=0
     while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
         [ -z "$_id" ] && continue
-        [ "$_im" = "1" ] && continue
         num=$((num+1))
         echo "  $num) $_name ($_ip)"
     done < <(_nodes_py list)
     echo ""
     read -p "Введите ID ноды: " nid
     [ -z "$nid" ] && return
+    
     row=$(_nodes_py get_full "$nid")
     [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
     IFS='|' read -r real_id name host tls_host ip sport wsport <<< "$row"
-    
-    # Для TLS всегда берем домен из колонки tls_host
-    TLS_DOMAIN=$(_nodes_py tls_host "$nid" 2>/dev/null)
-    [ -z "$TLS_DOMAIN" ] && TLS_DOMAIN="$host"
+
+    # Берем TLS-домен из переменной tls_host
+    [ -z "$tls_host" ] && tls_host="$host"
+    TLS_DOMAIN="$tls_host"
 
     echo -e "${CYAN}Настраиваю TLS для $name ($TLS_DOMAIN)...${NC}"
-    
-    # 1. Создаем папку на ноде
+    echo ""
+
+    # 1. Проверка SSH
+    echo -ne "[1/4] Проверка SSH-соединения... "
+    if ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 -p "$sport" root@"$ip" "echo OK" >/dev/null 2>&1; then
+        echo -e "${GREEN}✅ OK${NC}"
+    else
+        echo -e "${RED}❌ Нода недоступна!${NC}"
+        read -p "Нажмите Enter..."; return
+    fi
+
+    # 2. Создание папки и копирование сертификатов
+    echo -ne "[2/4] Копирование сертификатов Cloudflare... "
     ssh -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "mkdir -p /etc/nginx/ssl" 2>/dev/null
-    
-    # 2. Копируем сертификаты с мастера
-    if [ -f /etc/nginx/ssl/ruzone.crt ]; then
+
+    if [ -f /etc/nginx/ssl/ruzone.crt ] && [ -f /etc/nginx/ssl/ruzone.key ]; then
         scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /etc/nginx/ssl/ruzone.crt root@"$ip":/etc/nginx/ssl/ >/dev/null 2>&1
         scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /etc/nginx/ssl/ruzone.key root@"$ip":/etc/nginx/ssl/ >/dev/null 2>&1
-        echo -e "  ✓ Сертификаты скопированы"
+        echo -e "${GREEN}✅ Скопированы${NC}"
     else
-        echo -e "  ${RED}⚠️ На мастере нет /etc/nginx/ssl/ruzone.crt${NC}"
+        echo -e "${RED}❌ На мастере нет файлов в /etc/nginx/ssl/${NC}"
+        read -p "Нажмите Enter..."; return
     fi
-    
-    # 3. Копируем и запускаем скрипт установки
+
+    # 3. Запуск скрипта установки Nginx (с подавлением баннера)
+    echo -ne "[3/4] Настройка Nginx и проверка конфига... "
     scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /usr/local/share/vpn-panel/setup-tls-node.sh root@"$ip":/tmp/ >/dev/null 2>&1
-    ssh -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "chmod +x /tmp/setup-tls-node.sh && bash /tmp/setup-tls-node.sh $TLS_DOMAIN"
-    
-    echo -e "${GREEN}✅  TLS успешно установлен на $name${NC}"
+    SSH_OUT=$(ssh -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "chmod +x /tmp/setup-tls-node.sh && bash /tmp/setup-tls-node.sh $TLS_DOMAIN" 2>&1)
+
+    if echo "$SSH_OUT" | grep -q "successful"; then
+        echo -e "${GREEN}✅ OK${NC}"
+    else
+        echo -e "${RED}❌ Ошибка Nginx!${NC}"
+        echo -e "${YELLOW}--- Вывод ошибки с ноды ---${NC}"
+        echo "$SSH_OUT" | grep -vE "^<h|^SSH-2|Banner" | tail -n 10
+        read -p "Нажмите Enter..."; return
+    fi
+
+    # 4. Проверка статуса Nginx
+    echo -ne "[4/4] Проверка статуса Nginx... "
+    NGINX_STATUS=$(ssh -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "systemctl is-active nginx" 2>/dev/null)
+    if [ "$NGINX_STATUS" = "active" ]; then
+        echo -e "${GREEN}✅ Active (Running)${NC}"
+    else
+        echo -e "${RED}❌ Не запущен ($NGINX_STATUS)${NC}"
+    fi
+
+    echo ""
+    echo -e "${GREEN}═══════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}  ✅  TLS УСПЕШНО УСТАНОВЛЕН НА $name!${NC}"
+    echo -e "${GREEN}  🌐 Домен: $TLS_DOMAIN${NC}"
+    echo -e "${GREEN}═══════════════════════════════════════════════${NC}"
+    echo ""
     read -p "Нажмите Enter..."
 }
 
@@ -595,14 +643,13 @@ menu_nodes() {
         echo -e " 9) 🔄 Перезагрузить ноду"
         echo -e " 10) 🌐 Изменить домен ноды"
         echo -e " 11) 📡 Установить UDPGW на ноду"
-        echo -e " 12) ⚙️  Настройки мастера"
-        echo -e " 13) 🔄 Обновить скрипты на нодах"
-        echo -e " 14) 🔒 Установить TLS (Nginx) на ноду"
-        echo -e " 15) 🚀 ПОДКЛЮЧИТЬ НОВУЮ НОДУ (Полный автомат)"
-        echo -e " 16) ✏️  Редактировать ноду"
+                echo -e " 12) 🔄 Обновить скрипты на нодах"
+        echo -e " 13) 🔒 Установить TLS (Nginx) на ноду"
+        echo -e " 14) 🚀 ПОДКЛЮЧИТЬ НОВУЮ НОДУ (Полный автомат)"
+        echo -e " 15) ✏️  Редактировать ноду"
         echo -e " 0) ↩️  Назад"
         echo ""
-        read -p "Выберите действие [0-16]: " n_choice
+        read -p "Выберите действие [0-15]: " n_choice
         case "$n_choice" in
             1) _nodes_add ;;
             2) _nodes_check_all ;;
@@ -615,11 +662,10 @@ menu_nodes() {
             9) _nodes_reboot ;;
             10) _nodes_change_domain ;;
             11) _nodes_install_udpgw ;;
-            12) _nodes_master_settings ;;
-            13) _nodes_update_scripts ;;
-            14) _nodes_install_tls ;;
-            15) _nodes_auto_add ;;
-            16) _nodes_edit ;;
+            12) _nodes_update_scripts ;;
+            13) _nodes_install_tls ;;
+            14) _nodes_auto_add ;;
+            15) _nodes_edit ;;
             0) return ;;
         esac
     done
@@ -632,7 +678,7 @@ _nodes_update_scripts() {
     local num=0
     while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
         [ -z "$_id" ] && continue
-        [ "$_im" = "1" ] && continue
+        # [ "$_im" = "1" ] && continue
         num=$((num+1))
         echo "  $num) $_name ($_ip)"
     done < <(_nodes_py list)
@@ -650,7 +696,7 @@ _nodes_update_scripts() {
     if [ "$nid" = "all" ]; then
         while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
             [ -z "$_id" ] && continue
-            [ "$_im" = "1" ] && continue
+            # [ "$_im" = "1" ] && continue
             nodes_to_update+=("$_id")
         done < <(_nodes_py list)
     else
@@ -894,16 +940,20 @@ _nodes_edit() {
     local num=0
     while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
         [ -z "$_id" ] && continue
-        [ "$_im" = "1" ] && continue
         num=$((num+1))
-        echo "  $num) $_name ($_ip)"
+        local mark="🌍"
+        [ "$_im" = "1" ] && mark="👑"
+        echo "  $num) $mark $_name ($_ip)"
     done < <(_nodes_py list)
     echo ""
     read -p "Введите ID ноды: " nid
     [ -z "$nid" ] && return
     row=$(_nodes_py get_full "$nid")
     [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
-    IFS='|' read -r cur_name cur_host cur_tls cur_ip cur_sport cur_wsport <<< "$row"
+    
+    # ВОТ ЗДЕСЬ ИСПРАВЛЕНИЕ: Добавлен real_id в начало
+    IFS='|' read -r real_id cur_name cur_host cur_tls cur_ip cur_sport cur_wsport <<< "$row"
+    
     echo ""
     echo -e "${CYAN}Текущие данные:${NC}"
     echo -e "  Имя       : ${GREEN}$cur_name${NC}"
@@ -914,13 +964,31 @@ _nodes_edit() {
     echo -e "  WS порт   : ${GREEN}$cur_wsport${NC}"
     echo ""
     echo -e "${YELLOW}Enter = оставить текущее значение.${NC}"
-    read -p "Имя [$cur_name]: " name; name=${name:-$cur_name}
-    read -p "WS-домен [$cur_host]: " host; host=${host:-$cur_host}
-    read -p "TLS-домен [$cur_tls]: " tls_host; tls_host=${tls_host:-$cur_tls}
-    read -p "IP [$cur_ip]: " ip; ip=${ip:-$cur_ip}
-    read -p "SSH-порт [$cur_sport]: " sport; sport=${sport:-$cur_sport}
-    read -p "WS-порт [$cur_wsport]: " wsport; wsport=${wsport:-$cur_wsport}
-    result=$(_nodes_py update "$nid" "$name" "$host" "$tls_host" "$ip" "$sport" "$wsport")
+    read -p "Имя/Локация [$cur_name] (0-выход): " in_name
+    [ "$in_name" = "0" ] && return
+    name=${in_name:-$cur_name}
+
+    read -p "WS-домен [$cur_host] (0-выход): " in_host
+    [ "$in_host" = "0" ] && return
+    host=${in_host:-$cur_host}
+
+    read -p "TLS-домен [$cur_tls] (0-выход): " in_tls
+    [ "$in_tls" = "0" ] && return
+    tls_host=${in_tls:-$cur_tls}
+
+    read -p "IP [$cur_ip] (0-выход): " in_ip
+    [ "$in_ip" = "0" ] && return
+    ip=${in_ip:-$cur_ip}
+
+    read -p "SSH-порт [$cur_sport] (0-выход): " in_sport
+    [ "$in_sport" = "0" ] && return
+    sport=${in_sport:-$cur_sport}
+
+    read -p "WS-порт [$cur_wsport] (0-выход): " in_wsport
+    [ "$in_wsport" = "0" ] && return
+    wsport=${in_wsport:-$cur_wsport}
+    
+    result=$(_nodes_py update "$real_id" "$name" "$host" "$tls_host" "$ip" "$sport" "$wsport")
     if [[ "$result" == DUP:* ]]; then
         IFS=':' read -r _ dup_id dup_name <<< "$result"
         echo ""
@@ -935,7 +1003,7 @@ _nodes_edit() {
     fi
     read -p "Нажмите Enter..."
 }
-_nodes_add() {
+_nodes_add() {_nodes_add() {
     clear
     echo -e "${YELLOW}── Добавление ноды ──${NC}"
     read -p "Имя (например 'Латвия 🇱🇻'): " name
@@ -969,7 +1037,7 @@ _nodes_del() {
     local num=0
     while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
         [ -z "$_id" ] && continue
-        [ "$_im" = "1" ] && continue
+        # [ "$_im" = "1" ] && continue
         num=$((num+1))
         echo "  $num) $_name ($_ip) [$_st]"
     done < <(_nodes_py list)
@@ -1011,7 +1079,7 @@ _nodes_key() {
     local num=0
     while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
         [ -z "$_id" ] && continue
-        [ "$_im" = "1" ] && continue
+        # [ "$_im" = "1" ] && continue
         num=$((num+1))
         echo "  $num) $_name ($_ip)"
     done < <(_nodes_py list)
