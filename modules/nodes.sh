@@ -321,6 +321,7 @@ _nodes_optimize() {
         REMOTE_CMD+="ufw default allow outgoing > /dev/null 2>&1; "
         REMOTE_CMD+="ufw allow $sport/tcp > /dev/null 2>&1; "
         REMOTE_CMD+="ufw allow $wsport/tcp > /dev/null 2>&1; "
+        REMOTE_CMD+="ufw allow 443/tcp > /dev/null 2>&1; "
         REMOTE_CMD+="ufw --force enable > /dev/null 2>&1; "
         REMOTE_CMD+="echo '--> Настройка Fail2ban...'; "
         REMOTE_CMD+="systemctl enable fail2ban > /dev/null 2>&1; systemctl restart fail2ban; "
