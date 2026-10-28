@@ -194,6 +194,29 @@ def get_random_proxy():
     except: pass
     return None
 
+
+def _track_and_delete_posts(token, chat_id, new_msg_id, max_posts=2):
+    """Удаляет старые посты бота в канале, оставляя только последние max_posts."""
+    import json, os
+    path = '/etc/UDPCustom/last_posts.json'
+    data = {}
+    if os.path.exists(path):
+        try:
+            with open(path) as f: data = json.load(f)
+        except: pass
+    chat_key = str(chat_id)
+    if chat_key not in data: data[chat_key] = []
+    data[chat_key].append(new_msg_id)
+    
+    # Удаляем старые
+    while len(data[chat_key]) > max_posts:
+        old_id = data[chat_key].pop(0)
+        try:
+            tg_request(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': old_id})
+        except: pass
+        
+    with open(path, 'w') as f: json.dump(data, f)
+
 def get_start_text():
     """Текст /start из /etc/UDPCustom/start.txt"""
     p = '/etc/UDPCustom/start.txt'
@@ -255,14 +278,16 @@ def get_support():
 
 
 def get_payload():
-    """Payload из файла /etc/UDPCustom/payload.txt"""
-    p = '/etc/UDPCustom/payload.txt'
-    if os.path.exists(p):
-        try:
-            with open(p) as f:
-                pl = f.read().strip()
-                if pl: return pl
-        except: pass
+    """Payload из базы данных"""
+    try:
+        import sqlite3
+        db = sqlite3.connect('/etc/UDPCustom/vpn.db')
+        mode_row = db.execute("SELECT value FROM settings WHERE key='MODE'").fetchone()
+        mode = mode_row[0] if mode_row else 'WS'
+        key = 'TLS_PAYLOAD' if mode == 'TLS' else 'WS_PAYLOAD'
+        row = db.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+        if row: return row[0]
+    except: pass
     return None
 
 
@@ -521,34 +546,10 @@ def format_time(seconds):
     return f"{h} ч {m} мин" if h > 0 else f"{m} мин"
 
 def generate_darktunnel_url(username, password, domain, ws_port, proxy, cfg):
-    import base64
-    snic = cfg.get('SNI', '') or ''
-    pcfg = get_payload() or cfg.get('PAYLOAD', '') or 'CONNECT http://co.nr HTTP/1.1[crlf]'
-    proxy_host = proxy if proxy else ''
-    proxy_port = int(ws_port) if str(ws_port).isdigit() else 2052
-    config = {
-        "type": "SSH",
-        "name": (f"💎 VIP {cfg.get('SERVER_LOCATION','VPN')} {username[4:]}" if username.startswith('vip_') else f"🎁 TEST {cfg.get('SERVER_LOCATION','VPN')} {username[4:]}" if username.startswith('test') else username),
-        "sshTunnelConfig": {
-            "sshConfig": {
-                "host": domain,
-                "port": int(ws_port) if str(ws_port).isdigit() else 2052,
-                "username": username,
-                "password": password
-            },
-            "injectConfig": {
-                "mode": "PROXY",
-                "serverNameIndication": snic,
-                "proxyHost": proxy_host,
-                "proxyPort": proxy_port,
-                "payload": pcfg
-            }
-        }
-    }
-    j = json.dumps(config, ensure_ascii=False, separators=(',', ':'))
-    b = base64.urlsafe_b64encode(j.encode("utf-8")).decode("ascii").rstrip("=")
-    return "darktunnel://" + b
-
+    # Унификация: используем единый генератор из cabinet.py
+    from bot_modules import cabinet
+    loc = cfg.get('SERVER_LOCATION', 'VPN')
+    return cabinet.make_darktunnel_url(username, password, domain, ws_port, proxy, loc)
 
 def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
     token = cfg['BOT_TOKEN']
@@ -608,6 +609,14 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         gb = cfg.get("TEST_TRAFFIC_GB", "50")
         devices = cfg.get("TEST_DEVICES", "1")
         location = cfg.get("SERVER_LOCATION", "🌍 Сервер")
+        try:
+            import sqlite3 as _sq
+            _con = _sq.connect("/etc/UDPCustom/vpn.db")
+            _rows = _con.execute("SELECT name FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
+            _con.close()
+            if _rows:
+                location = ' · '.join([r[0] for r in _rows])
+        except: pass
         if tpl_ready:
             text = (tpl_ready
                     .replace("{name}", name)
@@ -645,6 +654,14 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         _dev = cfg.get("TEST_DEVICES", "1")
         if tpl_start:
             _loc = cfg.get("SERVER_LOCATION", "")
+            try:
+                import sqlite3 as _sq
+                _con = _sq.connect("/etc/UDPCustom/vpn.db")
+                _rows = _con.execute("SELECT name FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
+                _con.close()
+                if _rows:
+                    _loc = ' · '.join([r[0] for r in _rows])
+            except: pass
             text = (tpl_start
                     .replace("{name}", name)
                     .replace("{primary}", primary_clean)
@@ -754,7 +771,16 @@ def _send_username_required(cfg, chat_id):
         'После этого напиши /start снова \U0001F447',
     ])
     kb = {'inline_keyboard': [[{'text': '\U0001F504 Проверить снова', 'callback_data': 'check_username'}]]}
-    send_message(cfg['BOT_TOKEN'], chat_id, text, reply_markup=kb, parse_mode='HTML')
+    if msg_id:
+        try:
+            tg_request(cfg['BOT_TOKEN'], 'editMessageText', {
+                'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'reply_markup': kb, 'parse_mode': 'HTML'
+            })
+        except Exception as e:
+            # Если текст не изменился, Telegram выдает ошибку 400, игнорируем её
+            pass
+    else:
+        send_message(cfg['BOT_TOKEN'], chat_id, text, reply_markup=kb, parse_mode='HTML')
 
 
 def handle_test(cfg, chat_id, user_id, first_name, cb_id=None, hwid=None):
@@ -2510,12 +2536,60 @@ def post_to_channel(cfg, chat_id, user_id):
         _gb = cfg.get('TEST_TRAFFIC_GB', '')
         _devices = cfg.get('TEST_DEVICES', '')
         _location = cfg.get('SERVER_LOCATION', '')
+        try:
+            import sqlite3 as _sq
+            _con = _sq.connect("/etc/UDPCustom/vpn.db")
+            _rows = _con.execute("SELECT name FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
+            _con.close()
+            if _rows:
+                _flags = []
+                for r in _rows:
+                    _em = ''.join([c for c in r[0] if ord(c) > 0x1F000])
+                    _flags.append(_em if _em else r[0])
+                _location = ' '.join(_flags)
+        except: pass
+        
+        import random
+        _titles = [
+            "🚀 Разгоняем скорость!", "🔥 Твой быстрый VPN ждет!",
+            "💎 Забирай свой тест-ключ!", "⚡️ Максимальная скорость и свобода!",
+            "🌍 Открой свободный интернет!", "🎁 Подарок для тебя — бесплатный VPN!",
+            "🛡 Твой надежный щит в сети!", "✨ Подключайся без ограничений!"
+        ]
+        _random_title = random.choice(_titles)
+        try:
+            import sqlite3 as _sq
+            _con = _sq.connect("/etc/UDPCustom/vpn.db")
+            _rows = _con.execute("SELECT name FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
+            _con.close()
+            if _rows:
+                _flags = []
+                for r in _rows:
+                    _em = ''.join([c for c in r[0] if ord(c) > 0x1F000])
+                    _flags.append(_em if _em else r[0])
+                _location = ' '.join(_flags)
+        except: pass
+        # Случайный заголовок для разнообразия
+        import random
+        _titles = [
+            "🚀 Разгоняем скорость!",
+            "🔥 Твой быстрый VPN ждет!",
+            "💎 Забирай свой тест-ключ!",
+            "⚡️ Максимальная скорость и свобода!",
+            "🌍 Открой свободный интернет!",
+            "🎁 Подарок для тебя — бесплатный VPN!",
+            "🛡 Твой надежный щит в сети!",
+            "✨ Подключайся без ограничений!"
+        ]
+        _random_title = random.choice(_titles)
+        
         personalized = post_text.replace('{sponsors_list}', sponsors_list)
         personalized = personalized.replace('{primary}', primary_clean)
         personalized = personalized.replace('{hours}', _hours)
         personalized = personalized.replace('{gb}', _gb)
         personalized = personalized.replace('{devices}', _devices)
         personalized = personalized.replace('{location}', _location)
+        personalized = personalized.replace('{random_title}', _random_title)
         
         result = tg_request(token, 'sendMessage', {
             'chat_id': target_channel,
@@ -2525,6 +2599,7 @@ def post_to_channel(cfg, chat_id, user_id):
             'disable_web_page_preview': True
         })
         if result and result.get('ok'):
+            _track_and_delete_posts(token, target_channel, result['result']['message_id'], max_posts=2)
             success_count += 1
             log.info(f"Пост опубликован в {target_channel}")
         else:
@@ -2817,7 +2892,8 @@ def handle_stats(cfg, chat_id, user_id, mode='main', msg_id=None):
         kb = {'inline_keyboard': [
             [{'text': '📊 Общая', 'callback_data': 'admin_stats'},
              {'text': '✅ 📈 Трафик', 'callback_data': 'noop'}],
-            [{'text': '🔄 Обновить', 'callback_data': 'admin_stats_traffic'}],
+            [{'text': '🔄 Обновить', 'callback_data': 'admin_stats_traffic'},
+             {'text': '👍 Реакции', 'callback_data': 'adm_reactions_menu'}],
             [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
         ]}
     else:
@@ -3719,13 +3795,21 @@ def handle_payload(cfg, chat_id, user_id, msg_id=None):
     if not is_admin(cfg, user_id):
         send_message(token, chat_id, "🚫 Только для админа."); return
     try:
-        pl = open(PAYLOAD_FILE).read().strip() if os.path.exists(PAYLOAD_FILE) else ''
+        import sqlite3
+        _db = sqlite3.connect('/etc/UDPCustom/vpn.db')
+        _mode = _db.execute("SELECT value FROM settings WHERE key='MODE'").fetchone()
+        _mode = _mode[0] if _mode else 'WS'
+        _pk = 'TLS_PAYLOAD' if _mode == 'TLS' else 'WS_PAYLOAD'
+        _pl = _db.execute("SELECT value FROM settings WHERE key=?", (_pk,)).fetchone()
+        pl = _pl[0] if _pl else ''
+        _db.close()
     except Exception:
         pl = ''
+        _mode = 'WS'
     NL = chr(10)
     if pl:
         _prev = pl[:500] + ('...' if len(pl) > 500 else '')
-        lines = ['📦 <b>PAYLOAD (' + str(len(pl)) + ' символов)</b>', '━━━━━━━━━━━━━━━━━━━━', '', '<pre>' + _prev + '</pre>']
+        lines = [f'📦 <b>PAYLOAD {_mode} (' + str(len(pl)) + ' символов)</b>', '━━━━━━━━━━━━━━━━━━━━', '', '<pre>' + _prev + '</pre>']
     else:
         lines = ['📦 <b>PAYLOAD</b>', '━━━━━━━━━━━━━━━━━━━━', '', '❌ Не задан']
     lines += ['', '━━━━━━━━━━━━━━━━━━━━', '<i>Отправка полностью заменяет payload</i>']
@@ -3981,21 +4065,36 @@ def handle_services(cfg, chat_id, user_id, msg_id=None):
         proxy_cnt = len(ips)
     except: proxy_cnt = 0
     try:
-        pl = open(PAYLOAD_FILE).read().strip() if os.path.exists(PAYLOAD_FILE) else ""
-        pl_len = len(pl)
-    except: pl_len = 0
+        import sqlite3
+        _db = sqlite3.connect('/etc/UDPCustom/vpn.db')
+        _mode_row = _db.execute("SELECT value FROM settings WHERE key='MODE'").fetchone()
+        _mode = _mode_row[0] if _mode_row else 'WS'
+        _pk = 'TLS_PAYLOAD' if _mode == 'TLS' else 'WS_PAYLOAD'
+        _pl_row = _db.execute("SELECT value FROM settings WHERE key=?", (_pk,)).fetchone()
+        pl_len = len(_pl_row[0]) if _pl_row else 0
+        _db.close()
+    except: 
+        pl_len = 0
+        _mode = 'WS'
     
-    text += f"\n<b>🌐 Домены:</b>\n"
+    text += f"\n<b>🌐 Домены ({_mode}):</b>\n"
     try:
-        for _nid, _nname, _nhost, _is_m in _get_all_domains():
+        import sqlite3
+        _db_dom = sqlite3.connect('/etc/UDPCustom/vpn.db')
+        _col = 'tls_host' if _mode == 'TLS' else 'host'
+        _dom_rows = _db_dom.execute(f"SELECT name, {_col} FROM nodes WHERE is_active=1 ORDER BY is_master DESC, id").fetchall()
+        _db_dom.close()
+        for _nname, _nhost in _dom_rows:
             text += f"  {_nname}: <code>{_nhost}</code>\n"
     except Exception as _e:
         text += f"  ⚠️ {_e}\n"
+    text += f"\n<b>⚙️ Текущий режим:</b> <code>{_mode}</code>\n"
     text += f"\n<b>Текущие настройки:</b>\n"
     text += f"  🔒 Прокси: <b>{proxy_cnt}</b> шт.\n"
     text += f"  📦 Payload: <b>{pl_len}</b> симв.\n"
     
     keyboard = {'inline_keyboard': [
+        [{'text': f'🔄 Сменить режим (сейчас {_mode})', 'callback_data': 'toggle_mode'}],
         [{'text': '🌐 Домен', 'callback_data': 'manage_domains'},
          {'text': '🔒 Прокси', 'callback_data': 'manage_proxies'},
          {'text': '📦 Payload', 'callback_data': 'manage_payload'}],
@@ -4456,6 +4555,92 @@ def handle_mykey(cfg, chat_id, user_id):
     smart_send(token, chat_id, text, parse_mode='HTML')
 
 
+
+def handle_reactions_menu(cfg, chat_id, user_id, msg_id=None):
+    if not is_admin(cfg, user_id): return
+    enabled = "1"
+    emoji = "🔥"
+    try:
+        with open('/etc/UDPCustom/reactions.conf') as f:
+            for line in f:
+                if line.startswith('ENABLED='): enabled = line.split('=')[1].strip()
+                if line.startswith('EMOJI='): emoji = line.split('=')[1].strip()
+    except: pass
+    
+    status = "Включены ✅" if enabled == "1" else "Выключены ❌"
+    NL = chr(10)
+    text = f"👍 <b>Управление реакциями на посты</b>{NL}{NL}Статус: <b>{status}</b>{NL}Эмодзи: <b>{emoji}</b>{NL}{NL}Боты будут ставить эту реакцию на все новые посты в канале @ArsenVipKeys."
+    
+    mode = "FIXED"
+    try:
+        with open('/etc/UDPCustom/reactions.conf') as f:
+            for line in f:
+                if line.startswith('MODE='): mode = line.split('=')[1].strip()
+    except: pass
+    
+    mode_str = "🎲 Рандом" if mode == "RANDOM" else "🎯 Фикс"
+    
+    kb = {'inline_keyboard': [
+        [{'text': 'Выключить' if enabled == '1' else 'Включить', 'callback_data': 'adm_react_toggle'},
+         {'text': f'Режим: {mode_str}', 'callback_data': 'adm_react_mode'}],
+        [{'text': '🔥', 'callback_data': 'adm_react_emoji:🔥'}, 
+         {'text': '❤️', 'callback_data': 'adm_react_emoji:❤️'}, 
+         {'text': '👍', 'callback_data': 'adm_react_emoji:👍'}, 
+         {'text': '🎉', 'callback_data': 'adm_react_emoji:🎉'}],
+        [{'text': '⬅️ Назад', 'callback_data': 'admin_stats'}]
+    ]}
+    if msg_id:
+        try:
+            tg_request(cfg['BOT_TOKEN'], 'editMessageText', {
+                'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'reply_markup': kb, 'parse_mode': 'HTML'
+            })
+        except Exception as e:
+            # Если текст не изменился, Telegram выдает ошибку 400, игнорируем её
+            pass
+    else:
+        send_message(cfg['BOT_TOKEN'], chat_id, text, reply_markup=kb, parse_mode='HTML')
+
+def process_channel_post(cfg, msg):
+    # Функция для реакции на пост в канале
+    chat_username = msg.get('chat', {}).get('username', '').lower()
+    if chat_username != 'arsenvipkeys': return
+    
+    enabled = "0"
+    emoji = "🔥"
+    try:
+        with open('/etc/UDPCustom/reactions.conf') as f:
+            for line in f:
+                if line.startswith('ENABLED='): enabled = line.split('=')[1].strip()
+                if line.startswith('EMOJI='): emoji = line.split('=')[1].strip()
+    except: pass
+    
+    if enabled == "1":
+        mode = "FIXED"
+        try:
+            with open('/etc/UDPCustom/reactions.conf') as f:
+                for line in f:
+                    if line.startswith('MODE='): mode = line.split('=')[1].strip()
+        except: pass
+        
+        if mode == "RANDOM":
+            import random
+            emoji = random.choice(['🔥', '❤️', '👍', '🎉', '⚡', '🚀', '🏆', '💯'])
+            
+        import threading, random, time
+        def _delayed_react(tok, cid, mid, emj):
+            delay = random.randint(10, 60)
+            time.sleep(delay)
+            try:
+                tg_request(tok, 'setMessageReaction', {
+                    'chat_id': cid,
+                    'message_id': mid,
+                    'reaction': [{'type': 'emoji', 'emoji': emj}]
+                })
+            except Exception as _e:
+                log.error(f"React error: {_e}")
+        threading.Thread(target=_delayed_react, args=(cfg['BOT_TOKEN'], msg['chat']['id'], msg['message_id'], emoji), daemon=True).start()
+
+
 def main():
     cfg = load_config()
     if not cfg.get('BOT_TOKEN'):
@@ -4490,10 +4675,20 @@ def main():
     offset = 0
     while True:
         try:
-            updates = tg_request(cfg['BOT_TOKEN'], 'getUpdates', {'offset': offset, 'timeout': 30, 'allowed_updates': ['message', 'callback_query']})
+            updates = tg_request(cfg['BOT_TOKEN'], 'getUpdates', {'offset': offset, 'timeout': 30, 'allowed_updates': ['message', 'callback_query', 'channel_post']})
             if not updates or not updates.get('ok'): time.sleep(3); continue
             for upd in updates.get('result', []):
                 offset = upd['update_id'] + 1
+                
+                # Обработка постов в канале
+                if 'channel_post' in upd:
+                    process_channel_post(cfg, upd['channel_post'])
+                    continue
+                
+                # Команда /reactions
+                if 'message' in upd and upd['message'].get('text') == '/reactions':
+                    handle_reactions_menu(cfg, upd['message']['chat']['id'], upd['message']['from']['id'])
+                    continue
                 
                 # === ЗАЩИТА ОТ ГРУПП И КАНАЛОВ ===
                 _chat_type = None
@@ -4702,6 +4897,42 @@ def main():
                         if bid > 0:
                             _do_broadcast_send(cfg, cb, bid)
                         continue
+                    elif cb_data == 'adm_reactions_menu':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        handle_reactions_menu(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                    elif cb_data.startswith('adm_react_'):
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        if cb_data == 'adm_react_toggle':
+                            enabled = "1"
+                            try:
+                                with open('/etc/UDPCustom/reactions.conf') as f:
+                                    for l in f:
+                                        if l.startswith('ENABLED='): enabled = l.split('=')[1].strip()
+                            except: pass
+                            new_st = "0" if enabled == "1" else "1"
+                            import subprocess
+                            subprocess.run(['sed', '-i', f's/^ENABLED=.*/ENABLED={new_st}/', '/etc/UDPCustom/reactions.conf'])
+                            handle_reactions_menu(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                        elif cb_data == 'adm_react_mode':
+                            mode = "FIXED"
+                            try:
+                                with open('/etc/UDPCustom/reactions.conf') as f:
+                                    for l in f:
+                                        if l.startswith('MODE='): mode = l.split('=')[1].strip()
+                            except: pass
+                            new_mode = "RANDOM" if mode == "FIXED" else "FIXED"
+                            import subprocess
+                            subprocess.run(['sed', '-i', f's/^MODE=.*/MODE={new_mode}/', '/etc/UDPCustom/reactions.conf'])
+                            subprocess.run(['bash', '-c', f"grep -q '^MODE=' /etc/UDPCustom/reactions.conf || echo 'MODE={new_mode}' >> /etc/UDPCustom/reactions.conf"])
+                            handle_reactions_menu(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                        elif cb_data.startswith('adm_react_emoji:'):
+                            emj = cb_data.split(':')[1]
+                            import subprocess
+                            subprocess.run(['sed', '-i', f's/^EMOJI=.*/EMOJI={emj}/', '/etc/UDPCustom/reactions.conf'])
+                            handle_reactions_menu(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                    elif cb_data == 'admin_stats':
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        handle_stats(cfg, cb['message']['chat']['id'], cb_user_id, 'main', cb['message']['message_id'])
                     elif cb_data == 'adm_admins':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         # Показываем список админов + инструкция
@@ -4838,7 +5069,39 @@ def main():
                         smart_send(cfg['BOT_TOKEN'], cb['message']['chat']['id'], instr,
                                    reply_markup={'force_reply': True, 'selective': True},
                                    parse_mode='HTML')
-                    elif cb_data == 'admin_stats':
+                    elif cb_data.startswith('adm_react_'):
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
+                        if not is_admin(cfg, cb['from']['id']): return
+                        if cb_data == 'adm_react_toggle':
+                            enabled = "1"
+                            try:
+                                with open('/etc/UDPCustom/reactions.conf') as f:
+                                    for line in f:
+                                        if line.startswith('ENABLED='): enabled = line.split('=')[1].strip()
+                            except: pass
+                            new_st = "0" if enabled == "1" else "1"
+                            import subprocess
+                            subprocess.run(['sed', '-i', f's/^ENABLED=.*/ENABLED={new_st}/', '/etc/UDPCustom/reactions.conf'])
+                            handle_reactions_menu(cfg, cb['message']['chat']['id'], cb['from']['id'], cb['message']['message_id'])
+                        elif cb_data == 'adm_react_mode':
+                            mode = "FIXED"
+                            try:
+                                with open('/etc/UDPCustom/reactions.conf') as f:
+                                    for line in f:
+                                        if line.startswith('MODE='): mode = line.split('=')[1].strip()
+                            except: pass
+                            new_mode = "RANDOM" if mode == "FIXED" else "FIXED"
+                            import subprocess
+                            subprocess.run(['sed', '-i', f's/^MODE=.*/MODE={new_mode}/', '/etc/UDPCustom/reactions.conf'])
+                            subprocess.run(['bash', '-c', f"grep -q '^MODE=' /etc/UDPCustom/reactions.conf || echo 'MODE={new_mode}' >> /etc/UDPCustom/reactions.conf"])
+                            handle_reactions_menu(cfg, cb['message']['chat']['id'], cb['from']['id'], cb['message']['message_id'])
+                        elif cb_data.startswith('adm_react_emoji:'):
+                            emj = cb_data.split(':')[1]
+                            import subprocess
+                            subprocess.run(['sed', '-i', f's/^EMOJI=.*/EMOJI={emj}/', '/etc/UDPCustom/reactions.conf'])
+                            handle_reactions_menu(cfg, cb['message']['chat']['id'], cb['from']['id'], cb['message']['message_id'])
+                        return
+
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         handle_stats(cfg, cb['message']['chat']['id'], cb_user_id, 'main', cb['message']['message_id'])
                     elif cb_data == 'admin_stats_keys':
@@ -5076,6 +5339,22 @@ def main():
                         except Exception:
                             pass
                         show_payload_edit(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                    elif cb_data == 'toggle_mode':
+                        import sqlite3
+                        _db_t = sqlite3.connect('/etc/UDPCustom/vpn.db')
+                        _cur_mode_row = _db_t.execute("SELECT value FROM settings WHERE key='MODE'").fetchone()
+                        _cur_mode = _cur_mode_row[0] if _cur_mode_row else 'WS'
+                        _new_mode = 'TLS' if _cur_mode == 'WS' else 'WS'
+                        _db_t.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('MODE', ?)", (_new_mode,))
+                        _db_t.commit()
+                        _db_t.close()
+                        
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
+                            'callback_query_id': cb['id'],
+                            'text': f'✅ Режим изменен на {_new_mode}',
+                            'show_alert': True
+                        })
+                        handle_services(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
                     elif cb_data == 'restart_ws':
                         import subprocess as _sp
                         try:
@@ -5238,6 +5517,15 @@ def main():
                             log.error(f'cab_extend_pay: {_e}')
                         continue
                     elif cb_data.startswith('cab_vip_confirm:'):
+                        # ПРОВЕРКА НА ОТСУТСТВИЕ @USERNAME
+                        if not cb.get('from', {}).get('username'):
+                            tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
+                                'callback_query_id': cb['id'],
+                                'text': '❌ Вам нужно установить @username в настройках Telegram, чтобы купить ключ!',
+                                'show_alert': True
+                            })
+                            continue
+
                         try:
                             idx = int(cb_data.split(':', 1)[1])
                         except:
@@ -5436,6 +5724,14 @@ def main():
                         handle_test(cfg, cb['message']['chat']['id'], cb_user_id, cb_first_name, cb['id'], hwid='')
                     # Кнопка из ЛИЧКИ → обычный /test
                     elif cb_data == 'get_test':
+                        # ПРОВЕРКА НА ОТСУТСТВИЕ @USERNAME ДЛЯ ТЕСТА
+                        if not cb.get('from', {}).get('username'):
+                            tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {
+                                'callback_query_id': cb['id'],
+                                'text': '❌ Вам нужно установить @username в настройках Telegram, чтобы получить тестовый ключ!',
+                                'show_alert': True
+                            })
+                            continue
                         handle_test(cfg, cb['message']['chat']['id'], cb_user_id, cb_first_name, cb['id'])
                     else:
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})

@@ -26,6 +26,8 @@ log = logging.getLogger()
 # КОНФИГ
 # ═══════════════════════════════════════════════════════════════
 
+LAST_MENU_MSGS = {}
+
 def load_config():
     cfg = {
         'BOT_TOKEN': '',
@@ -230,7 +232,10 @@ def handle_message(cfg, msg, token, admin_id):
         return
         
     if text in ('🏠 Старт', '🏠 Главное меню'):
-        welcome_client(cfg, chat_id, first_name)
+        if str(user_id) == str(admin_id):
+            show_admin_menu(cfg, chat_id)
+        else:
+            welcome_client(cfg, chat_id, first_name)
         return
         
     if text in ('🧠 ИИ', '🧠 Спросить у ИИ', '/ai'):
@@ -274,8 +279,10 @@ def handle_message(cfg, msg, token, admin_id):
                     f'Тикет #{_tid} остаётся открытым.',
                     'Клиент может писать — сообщения придут тебе.'
                 ]))
+                show_admin_menu(cfg, chat_id)
             else:
                 send(token, chat_id, '🚪 Ты не в режиме ответа')
+            show_admin_menu(cfg, chat_id)
             return
         reply = msg.get('reply_to_message')
         if reply:
@@ -297,11 +304,16 @@ def handle_message(cfg, msg, token, admin_id):
                     return
         # Если не reply — показываем статистику/меню админа
         if text.startswith('/start') or text.startswith('/admin'):
+            PENDING_TICKET_REPLY.pop(user_id, None)
+            try: tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg['message_id']})
+            except: pass
             show_admin_menu(cfg, chat_id)
         return
 
     # === КЛИЕНТ пишет ===
     if text.startswith('/start'):
+        try: tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg['message_id']})
+        except: pass
         welcome_client(cfg, chat_id, first_name)
         return
     if text.startswith('/help'):
@@ -517,7 +529,15 @@ def welcome_client(cfg, chat_id, first_name):
         'resize_keyboard': True,
         'is_persistent': True
     }
-    send(token, chat_id, text, reply_markup=reply_kb)
+    if chat_id in LAST_MENU_MSGS:
+        for mid in LAST_MENU_MSGS[chat_id]:
+            try: tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': mid})
+            except: pass
+        LAST_MENU_MSGS[chat_id] = []
+
+    rw = send(token, chat_id, text, reply_markup=reply_kb)
+    if rw and rw.get('ok'):
+        LAST_MENU_MSGS.setdefault(chat_id, []).append(rw['result']['message_id'])
 
 
 def forward_to_admin(cfg, ticket_id, user_id, first_name, username, text, is_followup=False):
@@ -553,21 +573,31 @@ def show_admin_menu(cfg, chat_id):
         f'👥 Юзеров: <b>{stats["total_users"]}</b>',
         f'🎫 Всего тикетов: <b>{stats["total_tickets"]}</b>',
         f'🟢 Открытых: <b>{stats["open_tickets"]}</b>',
-        f'✅ Закрытых: <b>{stats["closed_tickets"]}</b>',
+        f'✅  Закрытых: <b>{stats["closed_tickets"]}</b>',
         f'🤖 FAQ-ответов: <b>{stats["faq_hits"]}</b>',
         '',
         '━━━━━━━━━━━━━━━━━━━━',
         'Выбери раздел:'
     ])
-    kb = {'inline_keyboard': [
-        [{'text': f'📋 Активные тикеты ({stats["open_tickets"]})', 'callback_data': 'adm_tickets'}],
-        [{'text': '⏱ Статистика ответов', 'callback_data': 'adm_resp_stats'}],
-        [{'text': '📊 FAQ статистика', 'callback_data': 'adm_faq_stats'}],
-        [{'text': '📝 Управление FAQ', 'callback_data': 'adm_faq_edit'}],
-        [{'text': '🔄 Обновить', 'callback_data': 'adm_refresh'}]
-    ]}
-    send(token, chat_id, out, reply_markup=kb)
+    if chat_id in LAST_MENU_MSGS:
+        for mid in LAST_MENU_MSGS[chat_id]:
+            try: tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': mid})
+            except: pass
+        LAST_MENU_MSGS[chat_id] = []
 
+    r1 = send(token, chat_id, out, reply_markup={'remove_keyboard': True})
+    if r1 and r1.get('ok'):
+        LAST_MENU_MSGS.setdefault(chat_id, []).append(r1['result']['message_id'])
+
+    kb = {'inline_keyboard': [
+        [{'text': f'📋 Тикеты ({stats["open_tickets"]})', 'callback_data': 'adm_tickets'},
+         {'text': '⏱ Статистика', 'callback_data': 'adm_resp_stats'}],
+        [{'text': '📝 Управление FAQ', 'callback_data': 'adm_faq_edit'},
+         {'text': '🔄 Обновить', 'callback_data': 'adm_refresh'}]
+    ]}
+    r2 = send(token, chat_id, '👇 <b>Управление:</b>', reply_markup=kb)
+    if r2 and r2.get('ok'):
+        LAST_MENU_MSGS.setdefault(chat_id, []).append(r2['result']['message_id'])
 
 def handle_callback(cfg, cb, token, admin_id):
     """Обработка callback_query"""
@@ -583,6 +613,14 @@ def handle_callback(cfg, cb, token, admin_id):
             _tid = int(parts[1])
             PENDING_TICKET_REPLY[user_id] = _tid
             tg(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': 'Режим ответа включен'})
+
+            # Удаляем старые панели админа, чтобы не мешали
+            if chat_id in LAST_MENU_MSGS:
+                for mid in LAST_MENU_MSGS[chat_id]:
+                    try: tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': mid})
+                    except: pass
+                LAST_MENU_MSGS[chat_id] = []
+
             send(token, chat_id, f'✍️ <b>Режим ответа (Тикет #{_tid})</b>\n\nНапиши текст ответа. Он сразу улетит клиенту.\nДля выхода напиши /cancel.', parse_mode='HTML')
         return
 
@@ -880,6 +918,12 @@ def start_ticket_reply(cfg, chat_id, user_id, ticket_id):
         send(token, chat_id, '❌ Тикет не найден')
         return
     PENDING_TICKET_REPLY[user_id] = ticket_id
+    # Удаляем старые панели админа, чтобы не мешали
+    if chat_id in LAST_MENU_MSGS:
+        for mid in LAST_MENU_MSGS[chat_id]:
+            try: tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': mid})
+            except: pass
+        LAST_MENU_MSGS[chat_id] = []
     NL = chr(10)
     out = NL.join([
         f'💬 <b>ОТВЕТ В ТИКЕТ #{ticket_id}</b>',
@@ -1244,6 +1288,33 @@ def auto_close_loop(cfg):
             log.error(f"auto_close: {e}")
 
 
+
+def process_channel_post(cfg, msg):
+    chat_username = msg.get('chat', {}).get('username', '').lower()
+    if chat_username != 'arsenvipkeys': return
+    enabled = "0"
+    emoji = "🔥"
+    try:
+        with open('/etc/UDPCustom/reactions.conf') as f:
+            for line in f:
+                if line.startswith('ENABLED='): enabled = line.split('=')[1].strip()
+                if line.startswith('EMOJI='): emoji = line.split('=')[1].strip()
+    except: pass
+    
+    if enabled == "1":
+        import threading, random, time
+        def _delayed_react_sup(tok, cid, mid, emj):
+            delay = random.randint(10, 60)
+            time.sleep(delay)
+            try:
+                tg(tok, 'setMessageReaction', {
+                    'chat_id': cid,
+                    'message_id': mid,
+                    'reaction': [{'type': 'emoji', 'emoji': emj}]
+                })
+            except: pass
+        threading.Thread(target=_delayed_react_sup, args=(cfg['BOT_TOKEN'], msg['chat']['id'], msg['message_id'], emoji), daemon=True).start()
+
 def main():
     cfg = load_config()
     token = cfg.get('BOT_TOKEN', '')
@@ -1281,17 +1352,9 @@ def main():
     log.info(f"Admin: {admin_id}")
     tg(token, 'deleteWebhook')
     # Команды для ВСЕХ
-    tg(token, 'setMyCommands', {'commands': [
-        {'command': 'start', 'description': '👋 Начать'}
-    ]})
+    
     # Команды только для админа (scope: chat)
-    tg(token, 'setMyCommands', {
-        'commands': [
-            {'command': 'start', 'description': '👋 Начать'},
-            {'command': 'admin', 'description': '⚙️ Админ-панель'}
-        ],
-        'scope': {'type': 'chat', 'chat_id': int(admin_id)}
-    })
+    
     # Убираем старое глобальное меню (если было)
     try:
         tg(token, 'deleteMyCommands', {'scope': {'type': 'default'}})
@@ -1306,26 +1369,32 @@ def main():
         import urllib.request, json
         _token = cfg.get("BOT_TOKEN", "")
         if _token:
-            cmds = {"commands": [
-                {"command": "start", "description": "🏠 Главное меню"},
-                {"command": "faq", "description": "📖 Частые вопросы"},
-                {"command": "ai", "description": "🧠 Спросить у ИИ"}
-            ]}
+            cmds = {
+                "commands": [
+                    {"command": "start", "description": "🏠 Главное меню"},
+                    {"command": "faq", "description": "📖 Частые вопросы"},
+                    {"command": "ai", "description": "🧠 Спросить у ИИ"}
+                ],
+                "scope": {"type": "all_private_chats"}
+            }
             req = urllib.request.Request(f"https://api.telegram.org/bot{_token}/setMyCommands", data=json.dumps(cmds).encode(), headers={"Content-Type": "application/json"})
             urllib.request.urlopen(req, timeout=5)
-            req2 = urllib.request.Request(f"https://api.telegram.org/bot{_token}/setChatMenuButton", data=json.dumps({"menu_button": {"type": "commands"}}).encode(), headers={"Content-Type": "application/json"})
-            urllib.request.urlopen(req2, timeout=5)
+            # setChatMenuButton отключен для предотвращения появления меню в группах
     except Exception:
         pass
 
     while True:
         try:
             updates = tg(token, 'getUpdates', {'offset': offset, 'timeout': 30,
-                                               'allowed_updates': ['message', 'callback_query']})
+                                               'allowed_updates': ['message', 'callback_query', 'channel_post']})
             if not updates or not updates.get('ok'):
                 time.sleep(3); continue
             for upd in updates.get('result', []):
                 offset = upd['update_id'] + 1
+                
+                if 'channel_post' in upd:
+                    process_channel_post(cfg, upd['channel_post'])
+                    continue
                 try:
                     if 'callback_query' in upd:
                         handle_callback(cfg, upd['callback_query'], token, admin_id)
