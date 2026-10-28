@@ -904,100 +904,86 @@ _nodes_master_settings() {
 _nodes_auto_add() {
     clear
     echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
-    echo -e "        ${YELLOW}🚀  ПОЛНАЯ АВТОУСТАНОВКА НОВОЙ НОДЫ${NC}"
+    echo -e "        ${YELLOW}🚀  УСТАНОВКА / РЕМОНТ НОДЫ${NC}"
     echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
     echo ""
     echo -e "${RED}██████████████████████████████████████████████████${NC}"
     echo -e "${RED}  🚨 ВНИМАНИЕ! СНАЧАЛА ЗАКИНЬТЕ SSH-КЛЮЧ (ПУНКТ 4)!${NC}"
-    echo -e "${RED}  Без ключа и токена автоустановка не сможет подключиться!${NC}"
     echo -e "${RED}██████████████████████████████████████████████████${NC}"
     echo ""
-    echo -e "${YELLOW}⚠️  ТАКЖЕ УБЕДИТЕСЬ, ЧТО:${NC}"
-    echo -e "  1. В Cloudflare созданы А-записи (Оранжевая тучка) для WS и TLS доменов."
-    echo -e "  2. IP сервера пингуется и доступен по SSH."
-    echo -e "  3. Токен Мастера уже залит на новый сервер."
-    echo ""
-    echo -e "${CYAN}📝 ЧТО НУЖНО ВВЕСТИ:${NC}"
-    echo -e "  - Имя (например, 'Нидерланды 🇳🇱')"
-    echo -e "  - TLS-Домен (для 443, напр. nl.ruzone27.shop)"
-    echo -e "  - WS-Домен (для 80, напр. nl.cdnstore.shop)"
-    echo -e "  - IP-адрес сервера"
-    echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
-    echo ""
-    while true; do
-        read -p "Имя (например 'Нидерланды 🇳🇱', 0 - отмена): " name
-        [ "$name" = "0" ] && return
-        if [ -z "$name" ]; then echo -e "${RED}❌ Имя не может быть пустым!${NC}"; else break; fi
-    done
-    name=$(echo "$name" | tr ' ' '_')
 
-    while true; do
-        read -p "WS-Домен (напр. nl.cdnstore.shop, 0 - отмена): " host
-        [ "$host" = "0" ] && return
-        if [ -z "$host" ]; then echo -e "${RED}❌ WS-Домен не может быть пустым!${NC}"; else break; fi
-    done
+    read -p "Введите IP-адрес сервера (0 - отмена): " ip
+    [ "$ip" = "0" ] && return
+    [ -z "$ip" ] && return
 
-    while true; do
+    # Проверяем, есть ли уже такой IP в базе
+    local existing_row=$(python3 -c "
+import sqlite3
+db = sqlite3.connect('/etc/UDPCustom/vpn.db')
+r = db.execute('SELECT id, name, host, tls_host, ssh_port, ws_port FROM nodes WHERE ip=?', ('$ip',)).fetchone()
+if r: print('|'.join(str(x) for x in r))
+")
+
+    if [ -n "$existing_row" ]; then
+        IFS='|' read -r real_id name host tls_host sport wsport <<< "$existing_row"
+        echo ""
+        echo -e "${YELLOW}⚠️  Нода с таким IP уже существует в базе!${NC}"
+        echo -e "  Имя: ${GREEN}$name${NC}"
+        echo -e "  WS:  ${GREEN}$host${NC}"
+        echo -e "  TLS: ${GREEN}$tls_host${NC}"
+        echo ""
+        read -p "Вы хотите ПЕРЕУСТАНОВИТЬ/ПОЧИНИТЬ её? (y/n): " confirm
+        [[ "$confirm" != "y" && "$confirm" != "Y" ]] && return
+    else
+        # Если ноды нет, спрашиваем всё
+        while true; do
+            read -p "Имя (например 'Нидерланды 🇳🇱', 0 - отмена): " name
+            [ "$name" = "0" ] && return
+            if [ -z "$name" ]; then echo -e "${RED}❌ Имя не может быть пустым!${NC}"; else break; fi
+        done
+        name=$(echo "$name" | tr ' ' '_')
+
+        while true; do
+            read -p "WS-Домен (напр. nl.cdnstore.shop, 0 - отмена): " host
+            [ "$host" = "0" ] && return
+            if [ -z "$host" ]; then echo -e "${RED}❌ WS-Домен не может быть пустым!${NC}"; else break; fi
+        done
+
         read -p "TLS-Домен (напр. nl.ruzone27.shop, Enter = как WS): " tls_host
         [ -z "$tls_host" ] && tls_host="$host"
-        break
-    done
 
-    while true; do
-        read -p "IP адрес сервера (0 - отмена): " ip
-        [ "$ip" = "0" ] && return
-        if [ -z "$ip" ]; then echo -e "${RED}❌ IP не может быть пустым!${NC}"; else break; fi
-    done
+        read -p "SSH-порт (Enter=22): " sport
+        sport=${sport:-22}
+        read -p "WS-порт (Enter=80): " wsport
+        wsport=${wsport:-80}
 
-    read -p "SSH-порт (Enter=22): " sport
-    sport=${sport:-22}
-
-    read -p "WS-порт (Enter=80): " wsport
-    wsport=${wsport:-80}
-
-    echo ""
-    echo -e "${YELLOW}── ПРОВЕРЬТЕ ДАННЫЕ ──${NC}"
-    echo -e " Имя       : ${GREEN}$name${NC}"
-    echo -e " WS-Домен  : ${GREEN}$host${NC}"
-    echo -e " TLS-Домен : ${GREEN}$tls_host${NC}"
-    echo -e " IP        : ${GREEN}$ip${NC}"
-    echo -e " SSH порт  : ${GREEN}$sport${NC}"
-    echo -e " WS порт   : ${GREEN}$wsport${NC}"
-    echo ""
-    read -p "Всё верно? Начинаем установку? (y/n): " confirm
-    [[ "$confirm" != "y" && "$confirm" != "Y" ]] && return
+        echo ""
+        echo -e "${CYAN}[1/8] 📝 Добавление в базу данных...${NC}"
+        res=$(_nodes_py add "$name" "$host" "$tls_host" "$ip" "$sport" "$wsport")
+        if [[ "$res" == DUP:* ]]; then
+            echo -e "${RED}❌ Ошибка БД!${NC}"; read -p "Enter..."; return
+        fi
+        echo -e "      ${GREEN}✅ OK${NC}"
+    fi
 
     echo ""
     echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
-
-    # --- ШАГ 1: База данных ---
-    echo -ne "${CYAN}[1/8] 📝 Добавление в базу данных... ${NC}"
-    res=$(_nodes_py add "$name" "$host" "$tls_host" "$ip" "$sport" "$wsport")
-    if [[ "$res" == DUP:* ]]; then
-        IFS=':' read -r _ dup_id dup_name <<< "$res"
-        echo -e "${RED}❌ ОШИБКА! (ID: $dup_id, Имя: $dup_name)${NC}"
-        read -p "Нажмите Enter..."; return
-    fi
-    echo -e "${GREEN}✅ OK${NC}"
+    echo -e "${CYAN}  НАЧИНАЕМ УСТАНОВКУ ДЛЯ: $name ($ip)${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
 
     # --- ШАГ 2: SSH Ключ ---
-    echo -e "${CYAN}[2/8] 🔑 Копирование SSH-ключа... ${NC}"
+    echo -ne "${CYAN}[2/8] 🔑 Копирование SSH-ключа и токена... ${NC}"
     _nodes_sync_key "$ip" "$sport"
     echo -e "      ${GREEN}✅ OK${NC}"
 
-    # --- ШАГ 3: Установка WS ---
+    # --- ШАГ 3: Установка WS + скрипты юзеров ---
     echo -ne "${CYAN}[3/8] ⚙️  Установка WS-прокси... ${NC}"
     LOCAL_SCRIPT="/usr/local/share/vpn-panel/install-node.sh"
     [ ! -f "$LOCAL_SCRIPT" ] && LOCAL_SCRIPT="/root/vpn-panel-sync/install-node.sh"
-    
-    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" \
-        "[ -f /root/.vpn-panel.token ] || (echo '$(cat /root/.vpn-panel.token 2>/dev/null)' > /root/.vpn-panel.token && chmod 600 /root/.vpn-panel.token)" 2>/dev/null
     scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" "$LOCAL_SCRIPT" root@"$ip":/tmp/inst.sh >/dev/null 2>&1
     ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "printf '%s\n%s\n' '$wsport' '$sport' | bash /tmp/inst.sh > /dev/null 2>&1"
-    echo -e "${GREEN}✅ OK${NC}"
-
-    # Дополнительно копируем скрипты управления юзерами (чтобы не зависеть от приватного GitHub)
-    echo -ne "      Копирование node-user.sh и PAM... "
+    
+    # Копируем скрипты юзеров принудительно
     scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /root/vpn-panel-sync/scripts/node-user.sh root@"$ip":/usr/local/bin/node-user.sh >/dev/null 2>&1
     scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /root/vpn-panel-sync/scripts/check-device-limit-pam root@"$ip":/usr/local/bin/check-device-limit-pam >/dev/null 2>&1
     ssh -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "chmod +x /usr/local/bin/node-user.sh /usr/local/bin/check-device-limit-pam" >/dev/null 2>&1
@@ -1006,6 +992,7 @@ _nodes_auto_add() {
     # --- ШАГ 4: Оптимизация и UFW (порты 22, 80, 443, 53) ---
     echo -ne "${CYAN}[4/8] ⚡ Оптимизация (BBR, UFW, Swap)... ${NC}"
     REMOTE_CMD="export DEBIAN_FRONTEND=noninteractive; "
+    REMOTE_CMD+="apt-get update > /dev/null 2>&1; "
     REMOTE_CMD+="apt-get install -y ufw fail2ban > /dev/null 2>&1; "
     REMOTE_CMD+="sysctl -w net.core.default_qdisc=fq > /dev/null 2>&1; sysctl -w net.ipv4.tcp_congestion_control=bbr > /dev/null 2>&1; "
     REMOTE_CMD+="sysctl -w net.core.rmem_max=16777216 > /dev/null 2>&1; sysctl -w net.core.wmem_max=16777216 > /dev/null 2>&1; "
@@ -1071,9 +1058,6 @@ PYCODE
     echo -e "${GREEN}═══════════════════════════════════════════════${NC}"
     echo -e "${GREEN}  ✅  НОДА $name УСПЕШНО НАСТРОЕНА И ГОТОВА!${NC}"
     echo -e "${GREEN}═══════════════════════════════════════════════${NC}"
-    echo -e "${YELLOW}  Не забудьте проверить А-записи в Cloudflare:${NC}"
-    echo -e "  WS:  ${GREEN}$host${NC} -> $ip (Оранжевая тучка)"
-    echo -e "  TLS: ${GREEN}$tls_host${NC} -> $ip (Оранжевая тучка)"
     echo ""
     read -p "Нажмите Enter для выхода..."
 }
