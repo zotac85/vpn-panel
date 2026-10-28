@@ -1012,16 +1012,11 @@ if r: print('|'.join(str(x) for x in r))
     ssh -q -o LogLevel=QUIET -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "chmod +x /tmp/udpgw.sh && bash /tmp/udpgw.sh > /dev/null 2>&1"
     echo -e "${GREEN}✅ OK${NC}"
 
-    # --- ШАГ 6: Установка баннера ---
-    echo -ne "${CYAN}[6/8] 🎨 Установка баннера... ${NC}"
-    BANNER_SRC="/etc/UDPCustom/ssh_banner.txt"
-    TMP_BANNER="/tmp/banner_${name}.txt"
-    sed -E "s|(📍 Локация: ).*|\1${name}</font></b></h6>|" "$BANNER_SRC" > "$TMP_BANNER" 2>/dev/null
-    ssh -q -o LogLevel=QUIET -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "mkdir -p /etc/UDPCustom" 2>/dev/null
-    scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" "$TMP_BANNER" root@"$ip":/etc/UDPCustom/ssh_banner.txt >/dev/null 2>&1
-    ssh -q -o LogLevel=QUIET -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "sed -i '/^Banner/d' /etc/ssh/sshd_config; echo 'Banner /etc/UDPCustom/ssh_banner.txt' >> /etc/ssh/sshd_config; systemctl restart ssh" >/dev/null 2>&1
-    rm -f "$TMP_BANNER"
-    echo -e "${GREEN}✅ OK${NC}"
+    # --- ШАГ 6: Установка баннера (пропущено, используется динамический) ---
+    echo -ne "${CYAN}[6/8] 🎨 Настройка баннера... ${NC}"
+    # Удаляем статический баннер, если он был добавлен ранее
+    ssh -q -o LogLevel=QUIET -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "sed -i '/^Banner/d' /etc/ssh/sshd_config 2>/dev/null; systemctl restart ssh 2>/dev/null" >/dev/null 2>&1
+    echo -e "${GREEN}✅ OK (Динамический)${NC}"
 
     # --- ШАГ 7: Установка TLS (Nginx + Сертификаты) ---
     echo -ne "${CYAN}[7/8] 🔒 Настройка Nginx и TLS... ${NC}"
