@@ -635,18 +635,45 @@ _nodes_token_menu() {
             echo -e " Текущий токен: ${RED}Отсутствует!${NC}"
         fi
         echo ""
-        echo -e " 1) 🔄 Сгенерировать новый токен (для новых нод)"
+        echo -e " 1) 🔄 Сгенерировать новый токен (только на Мастере)"
+        echo -e " 2) 📡 Обновить токен на всех существующих нодах"
         echo -e " 0) ↩️  Назад"
         echo ""
-        read -p "Выберите [0-1]: " t_choice
+        read -p "Выберите [0-2]: " t_choice
         case "$t_choice" in
             1)
                 openssl rand -hex 16 > /root/.vpn-panel.token
                 chmod 600 /root/.vpn-panel.token
                 echo ""
-                echo -e "${GREEN}✅ Новый токен успешно сгенерирован!${NC}"
-                echo -e "${YELLOW}⚠️  Старые ноды продолжат работать (они уже авторизованы).${NC}"
-                echo -e "${YELLOW}⚠️  Новые ноды будут получать этот новый токен при добавлении.${NC}"
+                echo -e "${GREEN}✅ Новый токен успешно сгенерирован на Мастере!${NC}"
+                echo -e "${YELLOW}⚠️  Не забудьте нажать пункт 2, чтобы обновить его на нодах!${NC}"
+                read -p "Нажмите Enter..."
+                ;;
+            2)
+                echo ""
+                echo -e "${CYAN}Обновляю токен на всех нодах...${NC}"
+                local updated=0
+                local failed=0
+                while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
+                    [ -z "$_id" ] && continue
+                    [ "$_im" = "1" ] && continue # Пропускаем Мастер
+                    
+                    echo -ne "  $_name ($_ip)... "
+                    if scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$_sp" /root/.vpn-panel.token root@"$_ip":/root/.vpn-panel.token >/dev/null 2>&1; then
+                        ssh -o StrictHostKeyChecking=no -o BatchMode=yes -p "$_sp" root@"$_ip" "chmod 600 /root/.vpn-panel.token" >/dev/null 2>&1
+                        echo -e "${GREEN}✅ OK${NC}"
+                        updated=$((updated+1))
+                    else
+                        echo -e "${RED}❌ Ошибка (нет связи)${NC}"
+                        failed=$((failed+1))
+                    fi
+                done < <(_nodes_py list)
+                
+                echo ""
+                echo -e "${GREEN}✅ Успешно обновлено нод: $updated${NC}"
+                if [ "$failed" -gt 0 ]; then
+                    echo -e "${RED}❌ Ошибок (нода недоступна): $failed${NC}"
+                fi
                 read -p "Нажмите Enter..."
                 ;;
             0) return ;;
