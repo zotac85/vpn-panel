@@ -996,6 +996,13 @@ _nodes_auto_add() {
     ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "printf '%s\n%s\n' '$wsport' '$sport' | bash /tmp/inst.sh > /dev/null 2>&1"
     echo -e "${GREEN}✅ OK${NC}"
 
+    # Дополнительно копируем скрипты управления юзерами (чтобы не зависеть от приватного GitHub)
+    echo -ne "      Копирование node-user.sh и PAM... "
+    scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /root/vpn-panel-sync/scripts/node-user.sh root@"$ip":/usr/local/bin/node-user.sh >/dev/null 2>&1
+    scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /root/vpn-panel-sync/scripts/check-device-limit-pam root@"$ip":/usr/local/bin/check-device-limit-pam >/dev/null 2>&1
+    ssh -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "chmod +x /usr/local/bin/node-user.sh /usr/local/bin/check-device-limit-pam" >/dev/null 2>&1
+    echo -e "${GREEN}✅ OK${NC}"
+
     # --- ШАГ 4: Оптимизация и UFW (порты 22, 80, 443, 53) ---
     echo -ne "${CYAN}[4/8] ⚡ Оптимизация (BBR, UFW, Swap)... ${NC}"
     REMOTE_CMD="export DEBIAN_FRONTEND=noninteractive; "
