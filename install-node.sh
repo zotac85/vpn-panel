@@ -219,6 +219,7 @@ ufw default deny incoming >/dev/null 2>&1
 ufw default allow outgoing >/dev/null 2>&1
 ufw allow $SSH_PORT/tcp comment 'SSH' >/dev/null 2>&1
 ufw allow $WS_PORT/tcp comment 'WebSocket Proxy' >/dev/null 2>&1
+ufw allow 443/tcp comment 'TLS' >/dev/null 2>&1
 ufw --force enable >/dev/null 2>&1
 
 # 6. Итог

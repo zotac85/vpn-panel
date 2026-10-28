@@ -16,12 +16,31 @@ if cmd == 'list':
     for r in rows:
         print('|'.join(str(x) if x is not None else '' for x in r))
 elif cmd == 'add':
-    name, host, ip, sport, wsport = args[1], args[2], args[3], int(args[4]), int(args[5])
-    db.execute("INSERT INTO nodes (name,host,ip,ssh_port,ws_port,ssh_user,is_master,is_active,status) VALUES (?,?,?,?,?,?,0,1,'unknown')",
-               (name,host,ip,sport,wsport,'root'))
-    db.commit()
-    print('OK')
-elif cmd == 'del':
+        name, host, tls_host, ip, sport, wsport = args[1], args[2], args[3], args[4], int(args[5]), int(args[6])
+        if not tls_host: tls_host = host
+        existing = db.execute("SELECT id, name FROM nodes WHERE host=? OR ip=?", (host, ip)).fetchone()
+        if existing:
+            print(f"DUP:{existing[0]}:{existing[1]}")
+        else:
+            db.execute("INSERT INTO nodes (name,host,tls_host,ip,ssh_port,ws_port,ssh_user,is_master,is_active,status) VALUES (?,?,?,?,?,?,?,0,1,'unknown')",
+                       (name,host,tls_host,ip,sport,wsport,'root'))
+            db.commit()
+            print('OK')
+    elif cmd == 'update':
+        id_, name, host, tls_host, ip, sport, wsport = args[1], args[2], args[3], args[4], args[5], int(args[6]), int(args[7])
+        if not tls_host: tls_host = host
+        existing = db.execute("SELECT id, name FROM nodes WHERE (host=? OR ip=?) AND id!=?", (host, ip, id_)).fetchone()
+        if existing:
+            print(f"DUP:{existing[0]}:{existing[1]}")
+        else:
+            db.execute("UPDATE nodes SET name=?, host=?, tls_host=?, ip=?, ssh_port=?, ws_port=? WHERE id=?",
+                       (name, host, tls_host, ip, sport, wsport, id_))
+            db.commit()
+            print('OK')
+    elif cmd == 'get_full':
+        r = db.execute("SELECT name, host, tls_host, ip, ssh_port, ws_port FROM nodes WHERE id=?", (int(args[1]),)).fetchone()
+        if r: print('|'.join(str(x) if x is not None else '' for x in r))
+    elif cmd == 'del':
     db.execute("DELETE FROM nodes WHERE id=? AND is_master=0", (int(args[1]),))
     db.commit()
     print('OK')
@@ -548,9 +567,10 @@ menu_nodes() {
         echo -e " 13) 🔄 Обновить скрипты на нодах"
         echo -e " 14) 🔒 Установить TLS (Nginx) на ноду"
         echo -e " 15) 🚀 ПОДКЛЮЧИТЬ НОВУЮ НОДУ (Полный автомат)"
+        echo -e " 16) ✏️  Редактировать ноду"
         echo -e " 0) ↩️  Назад"
         echo ""
-        read -p "Выберите действие [0-15]: " n_choice
+        read -p "Выберите действие [0-16]: " n_choice
         case "$n_choice" in
             1) _nodes_add ;;
             2) _nodes_check_all ;;
@@ -567,6 +587,7 @@ menu_nodes() {
             13) _nodes_update_scripts ;;
             14) _nodes_install_tls ;;
             15) _nodes_auto_add ;;
+            16) _nodes_edit ;;
             0) return ;;
         esac
     done
@@ -721,24 +742,79 @@ _nodes_master_settings() {
         esac
     done
 }
+_nodes_edit() {
+    clear
+    echo -e "${YELLOW}── Редактирование ноды ──${NC}"
+    echo ""
+    while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
+        [ -z "$_id" ] && continue
+        [ "$_im" = "1" ] && continue
+        echo "  $_id) $_name ($_ip)"
+    done < <(_nodes_py list)
+    echo ""
+    read -p "Введите ID ноды: " nid
+    [ -z "$nid" ] && return
+    row=$(_nodes_py get_full "$nid")
+    [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
+    IFS='|' read -r cur_name cur_host cur_tls cur_ip cur_sport cur_wsport <<< "$row"
+    echo ""
+    echo -e "${CYAN}Текущие данные:${NC}"
+    echo -e "  Имя       : ${GREEN}$cur_name${NC}"
+    echo -e "  WS-домен  : ${GREEN}$cur_host${NC}"
+    echo -e "  TLS-домен : ${GREEN}$cur_tls${NC}"
+    echo -e "  IP        : ${GREEN}$cur_ip${NC}"
+    echo -e "  SSH порт  : ${GREEN}$cur_sport${NC}"
+    echo -e "  WS порт   : ${GREEN}$cur_wsport${NC}"
+    echo ""
+    echo -e "${YELLOW}Enter = оставить текущее значение.${NC}"
+    read -p "Имя [$cur_name]: " name; name=${name:-$cur_name}
+    read -p "WS-домен [$cur_host]: " host; host=${host:-$cur_host}
+    read -p "TLS-домен [$cur_tls]: " tls_host; tls_host=${tls_host:-$cur_tls}
+    read -p "IP [$cur_ip]: " ip; ip=${ip:-$cur_ip}
+    read -p "SSH-порт [$cur_sport]: " sport; sport=${sport:-$cur_sport}
+    read -p "WS-порт [$cur_wsport]: " wsport; wsport=${wsport:-$cur_wsport}
+    result=$(_nodes_py update "$nid" "$name" "$host" "$tls_host" "$ip" "$sport" "$wsport")
+    if [[ "$result" == DUP:* ]]; then
+        IFS=':' read -r _ dup_id dup_name <<< "$result"
+        echo ""
+        echo -e "${RED}❌ Конфликт: домен или IP уже занят!${NC}"
+        echo -e "${RED}   ID: $dup_id, Имя: $dup_name${NC}"
+    elif [ "$result" = "OK" ]; then
+        echo ""
+        echo -e "${GREEN}✅  Нода обновлена!${NC}"
+    else
+        echo ""
+        echo -e "${RED}❌ Ошибка: $result${NC}"
+    fi
+    read -p "Нажмите Enter..."
+}
 _nodes_add() {
     clear
     echo -e "${YELLOW}── Добавление ноды ──${NC}"
     read -p "Имя (например 'Латвия 🇱🇻'): " name
     [ -z "$name" ] && { echo "Отмена"; read -p "Enter..."; return; }
-    read -p "Домен (lit.tip-ud.top): " host
+    read -p "WS-Домен (для 80 порта, напр. lv.cdnstore.shop): " host
     [ -z "$host" ] && { echo "Отмена"; read -p "Enter..."; return; }
+    read -p "TLS-Домен (для 443 порта, напр. lv.ruzone27.shop): " tls_host
+    [ -z "$tls_host" ] && tls_host="$host"
     read -p "IP (46.8.70.249): " ip
     [ -z "$ip" ] && { echo "Отмена"; read -p "Enter..."; return; }
     read -p "SSH-порт (Enter=22): " sport
     sport=${sport:-22}
-    read -p "WS-порт (Enter=2052): " wsport
-    wsport=${wsport:-2052}
-    _nodes_py add "$name" "$host" "$ip" "$sport" "$wsport"
-    echo -e "${GREEN}✅ Нода добавлена${NC}"
+    read -p "WS-порт (Enter=80): " wsport
+    wsport=${wsport:-80}
+    result=$(_nodes_py add "$name" "$host" "$tls_host" "$ip" "$sport" "$wsport")
+    if [[ "$result" == DUP:* ]]; then
+        IFS=':' read -r _ dup_id dup_name <<< "$result"
+        echo ""
+        echo -e "${RED}❌ Ошибка: нода с таким доменом или IP уже есть!${NC}"
+        echo -e "${RED}   ID: $dup_id, Имя: $dup_name${NC}"
+        echo -e "${YELLOW}   Удалите (п.3) или отредактируйте (п.16).${NC}"
+    else
+        echo -e "${GREEN}✅  Нода добавлена${NC}"
+    fi
     read -p "Нажмите Enter..."
 }
-
 _nodes_del() {
     clear
     echo -e "${YELLOW}── Удаление ноды ──${NC}"
