@@ -973,7 +973,7 @@ if r: print('|'.join(str(x) for x in r))
 
     # --- ШАГ 2: SSH Ключ ---
     echo -ne "${CYAN}[2/8] 🔑 Копирование SSH-ключа и токена... ${NC}"
-    _nodes_sync_key "$ip" "$sport"
+    _nodes_sync_key "$ip" "$sport" > /dev/null 2>&1
     echo -e "      ${GREEN}✅ OK${NC}"
 
     # --- ШАГ 3: Установка WS + скрипты юзеров ---
@@ -981,12 +981,12 @@ if r: print('|'.join(str(x) for x in r))
     LOCAL_SCRIPT="/usr/local/share/vpn-panel/install-node.sh"
     [ ! -f "$LOCAL_SCRIPT" ] && LOCAL_SCRIPT="/root/vpn-panel-sync/install-node.sh"
     scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" "$LOCAL_SCRIPT" root@"$ip":/tmp/inst.sh >/dev/null 2>&1
-    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "printf '%s\n%s\n' '$wsport' '$sport' | bash /tmp/inst.sh > /dev/null 2>&1"
+    ssh -q -o LogLevel=QUIET -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "printf '%s\n%s\n' '$wsport' '$sport' | bash /tmp/inst.sh > /dev/null 2>&1"
     
     # Копируем скрипты юзеров принудительно
     scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /root/vpn-panel-sync/scripts/node-user.sh root@"$ip":/usr/local/bin/node-user.sh >/dev/null 2>&1
     scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /root/vpn-panel-sync/scripts/check-device-limit-pam root@"$ip":/usr/local/bin/check-device-limit-pam >/dev/null 2>&1
-    ssh -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "chmod +x /usr/local/bin/node-user.sh /usr/local/bin/check-device-limit-pam" >/dev/null 2>&1
+    ssh -q -o LogLevel=QUIET -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "chmod +x /usr/local/bin/node-user.sh /usr/local/bin/check-device-limit-pam" >/dev/null 2>&1
     echo -e "${GREEN}✅ OK${NC}"
 
     # --- ШАГ 4: Оптимизация и UFW (порты 22, 80, 443, 53) ---
@@ -1000,13 +1000,13 @@ if r: print('|'.join(str(x) for x in r))
     REMOTE_CMD+="ufw allow 22/tcp > /dev/null 2>&1; ufw allow 80/tcp > /dev/null 2>&1; ufw allow 443/tcp > /dev/null 2>&1; "
     REMOTE_CMD+="ufw allow 53/tcp > /dev/null 2>&1; ufw allow 53/udp > /dev/null 2>&1; ufw --force enable > /dev/null 2>&1; "
     REMOTE_CMD+="systemctl enable fail2ban > /dev/null 2>&1; systemctl restart fail2ban > /dev/null 2>&1; "
-    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "$REMOTE_CMD"
+    ssh -q -o LogLevel=QUIET -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "$REMOTE_CMD"
     echo -e "${GREEN}✅ OK${NC}"
 
     # --- ШАГ 5: Установка UDPGW ---
     echo -ne "${CYAN}[5/8] 📡 Установка UDPGW... ${NC}"
     scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /usr/local/share/vpn-panel/install-udpgw-node.sh root@"$ip":/tmp/udpgw.sh >/dev/null 2>&1
-    ssh -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "chmod +x /tmp/udpgw.sh && bash /tmp/udpgw.sh > /dev/null 2>&1"
+    ssh -q -o LogLevel=QUIET -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "chmod +x /tmp/udpgw.sh && bash /tmp/udpgw.sh > /dev/null 2>&1"
     echo -e "${GREEN}✅ OK${NC}"
 
     # --- ШАГ 6: Установка баннера ---
@@ -1014,19 +1014,19 @@ if r: print('|'.join(str(x) for x in r))
     BANNER_SRC="/etc/UDPCustom/ssh_banner.txt"
     TMP_BANNER="/tmp/banner_${name}.txt"
     sed -E "s|(📍 Локация: ).*|\1${name}</font></b></h6>|" "$BANNER_SRC" > "$TMP_BANNER" 2>/dev/null
-    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "mkdir -p /etc/UDPCustom" 2>/dev/null
+    ssh -q -o LogLevel=QUIET -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "mkdir -p /etc/UDPCustom" 2>/dev/null
     scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" "$TMP_BANNER" root@"$ip":/etc/UDPCustom/ssh_banner.txt >/dev/null 2>&1
-    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "sed -i '/^Banner/d' /etc/ssh/sshd_config; echo 'Banner /etc/UDPCustom/ssh_banner.txt' >> /etc/ssh/sshd_config; systemctl restart ssh" >/dev/null 2>&1
+    ssh -q -o LogLevel=QUIET -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "sed -i '/^Banner/d' /etc/ssh/sshd_config; echo 'Banner /etc/UDPCustom/ssh_banner.txt' >> /etc/ssh/sshd_config; systemctl restart ssh" >/dev/null 2>&1
     rm -f "$TMP_BANNER"
     echo -e "${GREEN}✅ OK${NC}"
 
     # --- ШАГ 7: Установка TLS (Nginx + Сертификаты) ---
     echo -ne "${CYAN}[7/8] 🔒 Настройка Nginx и TLS... ${NC}"
-    ssh -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "mkdir -p /etc/nginx/ssl" 2>/dev/null
+    ssh -q -o LogLevel=QUIET -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "mkdir -p /etc/nginx/ssl" 2>/dev/null
     scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /etc/nginx/ssl/ruzone.crt root@"$ip":/etc/nginx/ssl/ >/dev/null 2>&1
     scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /etc/nginx/ssl/ruzone.key root@"$ip":/etc/nginx/ssl/ >/dev/null 2>&1
     scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /usr/local/share/vpn-panel/setup-tls-node.sh root@"$ip":/tmp/tls.sh >/dev/null 2>&1
-    ssh -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "chmod +x /tmp/tls.sh && bash /tmp/tls.sh $tls_host > /dev/null 2>&1"
+    ssh -q -o LogLevel=QUIET -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "chmod +x /tmp/tls.sh && bash /tmp/tls.sh $tls_host > /dev/null 2>&1"
     echo -e "${GREEN}✅ OK${NC}"
 
     # --- ШАГ 8: Синхронизация пользователей ---
@@ -1043,7 +1043,7 @@ PYCODE
     OK=0; FAIL=0
     while IFS='|' read -r login pwd dev exp; do
         [ -z "$login" ] && continue
-        RES=$(timeout 15s ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 -p "$sport" root@"$ip" "node-user.sh add '$login' '$pwd' '$exp' && node-user.sh setlimit '$login' '$dev'" < /dev/null 2>/dev/null)
+        RES=$(timeout 15s ssh -q -o LogLevel=QUIET -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 -p "$sport" root@"$ip" "node-user.sh add '$login' '$pwd' '$exp' && node-user.sh setlimit '$login' '$dev'" < /dev/null 2>/dev/null)
         if echo "$RES" | grep -q "OK"; then OK=$((OK+1)); else FAIL=$((FAIL+1)); fi
         sleep 0.1
     done < "$TMP_FILE"
