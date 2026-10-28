@@ -1,3 +1,7 @@
+import os
+SMART_FILES_DIR = "/etc/UDPCustom/smart_files"
+os.makedirs(SMART_FILES_DIR, exist_ok=True)
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """Модуль личного кабинета пользователя"""
@@ -323,68 +327,36 @@ def _format_config_name(username, loc='VPN'):
     return f"⭐  {username}"
 
 def make_darktunnel_url(username, password, domain, ws_port, proxy, loc='VPN'):
-    """Генерирует darktunnel:// ссылку"""
     if not (username and password and domain):
         return None
-    
+        
     import sqlite3
+    sport = 80; pport = 80; proxy_host = proxy; sni = ""; mode = "PROXY"; pcfg = get_payload()
+    
     try:
         _db = sqlite3.connect('/etc/UDPCustom/vpn.db')
         _m = _db.execute("SELECT value FROM settings WHERE key='MODE'").fetchone()
         current_mode = _m[0] if _m else 'WS'
         
         if current_mode == 'TLS':
-            # Ищем TLS домен по старому (жесткий маппинг)
-            _map = {
-                "de.cdnstore.shop": "de.ruzone27.shop",
-                "us.cdnstore.shop": "us.ruzone27.shop",
-                "fr.cdnstore.shop": "fr.ruzone27.shop",
-                "fin.cdnstore.shop": "fin.ruzone27.shop"
-            }
-            domain = _map.get(domain, "de.ruzone27.shop")
-            
-            sport = 443
-            pport = 443
-            proxy_host = "104.18.0.3"
-            sni = "ruzone27.shop"
-            mode = "PROXY_SNI"
+            _tls_dom = _db.execute("SELECT tls_host FROM nodes WHERE host=? OR name=?", (domain, loc)).fetchone()
+            if _tls_dom and _tls_dom[0]:
+                domain = _tls_dom[0]
+            sport = 443; pport = 443; proxy_host = "104.18.0.3"; sni = "ruzone27.shop"; mode = "PROXY_SNI"
             _pl = _db.execute("SELECT value FROM settings WHERE key='TLS_PAYLOAD'").fetchone()
             pcfg = _pl[0] if _pl else "HEAD / HTTP/1.1[crlf]Host: cdnstore.scia.net[crlf]User-Agent: Mozilla/5.0[crlf][crlf]POST / HTTP/1.1[crlf]Host: [host][crlf]Connection: upgrade[crlf]Upgrade: websocket[crlf][crlf]"
         else:
-            sport = int(ws_port) if str(ws_port).isdigit() else 80
-            pport = sport
-            proxy_host = proxy if proxy else ""
-            sni = ""
-            mode = "PROXY"
             _pl = _db.execute("SELECT value FROM settings WHERE key='WS_PAYLOAD'").fetchone()
             pcfg = _pl[0] if _pl else "CONNECT / HTTP/1.1[crlf]Host: ya.ru[crlf]User-Agent: Mozilla/5.0[crlf][crlf]POST / HTTP/1.1[crlf]Host: [host][crlf]Connection: upgrade[crlf]Upgrade: websocket[crlf][crlf]"
         _db.close()
-    except Exception as e:
-        cab_log.error(f"DB error in make_darktunnel_url: {e}")
-        sport = int(ws_port) if str(ws_port).isdigit() else 80
-        pport = sport
-        proxy_host = proxy if proxy else ""
-        sni = ""
-        mode = "PROXY"
-        pcfg = get_payload()
+    except: pass
 
     config = {
         "type": "SSH",
         "name": _format_config_name(username, loc),
         "sshTunnelConfig": {
-            "sshConfig": {
-                "host": domain,
-                "port": sport,
-                "username": username,
-                "password": password
-            },
-            "injectConfig": {
-                "mode": mode,
-                "serverNameIndication": sni,
-                "proxyHost": proxy_host,
-                "proxyPort": pport,
-                "payload": pcfg
-            }
+            "sshConfig": {"host": domain, "port": sport, "username": username, "password": password},
+            "injectConfig": {"mode": mode, "serverNameIndication": sni, "proxyHost": proxy_host, "proxyPort": pport, "payload": pcfg}
         }
     }
     try:
@@ -392,9 +364,8 @@ def make_darktunnel_url(username, password, domain, ws_port, proxy, loc='VPN'):
         b = base64.urlsafe_b64encode(j.encode("utf-8")).decode("ascii").rstrip("=")
         return "darktunnel://" + b
     except Exception as e:
-        cab_log.error(f"make_darktunnel_url: {e}")
+        cab_log.error(f"make_darktunnel_url error: {e}")
         return None
-
 def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
     """Главное меню кабинета — данные из БД"""
     token = cfg['BOT_TOKEN']
@@ -1376,123 +1347,65 @@ def show_key_detail(cfg, chat_id, user_id, key_name, msg_id=None):
             pass
 
 def _build_dark_url_for_key(cfg, key_name, domain=None, ws_port=None, location_name=None):
-    """Возвращает darktunnel:// или None."""
     key = db.get_test_key(key_name) or db.get_vip_key(key_name)
-    if not key:
-        return None, None
+    if not key: return None, None
     password = key['password']
-    if not password:
-        return None, None
-    # Проверяем режим (TLS или WS) из БД
-    mode = "WS"
-    try:
-        import sqlite3
-        _db_c = sqlite3.connect('/etc/UDPCustom/vpn.db')
-        _row = _db_c.execute("SELECT value FROM settings WHERE key='MODE'").fetchone()
-        if _row and _row[0] == 'TLS': mode = "TLS"
-        _db_c.close()
-    except: pass
-            
-    if mode == "TLS":
-        if domain is None:
-            domain = get_domain()
-        ws_port = 443
-    else:
-        if domain is None:
-            domain = get_domain()
-        if ws_port is None:
-            ws_port = get_ws_port()
+    if not password: return None, None
+
+    _loc = location_name if location_name else cfg.get("SERVER_LOCATION", "VPN")
+    if domain is None: domain = get_domain()
+    if ws_port is None: ws_port = get_ws_port()
+    
     proxy = get_random_proxy()
-    try:
-        _hwid = key['hwid']
-    except (KeyError, IndexError, TypeError):
-        _hwid = None
-    # VIP: если hwid_locked=0 — принудительно открытый конфиг
-    # Для тестов флаг не применяется
+
+    # Формируем красивое имя
+    if key_name.startswith('vip_'): _cfg_name = f"\U0001F48E VIP {_loc} {key_name[4:]}"
+    elif key_name.startswith('test'): _cfg_name = f"\U0001F381 TEST {_loc} {key_name[4:]}"
+    else: _cfg_name = f"\u2B50  {key_name}"
+
+    try: _hwid = key['hwid']
+    except: _hwid = None
+    
     if key_name.startswith('vip_'):
         try:
-            if not db.is_vip_hwid_locked(key_name):
-                _hwid = None
-        except Exception:
-            pass
-    _loc = location_name if location_name else cfg.get("SERVER_LOCATION", "VPN")
+            if not db.is_vip_hwid_locked(key_name): _hwid = None
+        except: pass
+
+    # Если есть HWID - используем шифрованный генератор dark_gen
     if _hwid:
         try:
             from bot_modules import dark_gen
             import sqlite3
+            _db = sqlite3.connect('/etc/UDPCustom/vpn.db')
+            _m = _db.execute("SELECT value FROM settings WHERE key='MODE'").fetchone()
+            mode = _m[0] if _m else 'WS'
             
-            # 1. Читаем режим из БД
-            _db_fix = sqlite3.connect('/etc/UDPCustom/vpn.db')
-            _m_row = _db_fix.execute("SELECT value FROM settings WHERE key='MODE'").fetchone()
-            _current_mode = _m_row[0] if _m_row else 'WS'
-            _db_fix.close()
+            sport = 80; pport = 80; _proxyhost = proxy.split(':')[0] if proxy else ""; _sni = ""; _dt_mode = "PROXY"; _payload = get_payload()
             
-            if _current_mode == 'TLS':
-                # ХАРДКОД МАППИНГ (чтобы 100% сработало)
-                _map = {
-                    "de.cdnstore.shop": "de.ruzone27.shop",
-                    "us.cdnstore.shop": "us.ruzone27.shop",
-                    "fr.cdnstore.shop": "fr.ruzone27.shop",
-                    "fin.cdnstore.shop": "fin.ruzone27.shop"
-                }
-                if domain in _map:
-                    domain = _map[domain]
-                else:
-                    domain = "de.ruzone27.shop" # Дефолт, если не нашли
-                
-                ws_port = 443
-                _proxyhost = "104.18.0.3"
-                _proxyport = "443"
-                _sni = "ruzone27.shop"
-                _dt_mode = "PROXY_SNI"
-                _payload = "HEAD / HTTP/1.1[crlf]Host: cdnstore.scia.net[crlf]User-Agent: Mozilla/5.0[crlf][crlf]POST / HTTP/1.1[crlf]Host: [host][crlf]Connection: upgrade[crlf]Upgrade: websocket[crlf][crlf]"
+            if mode == 'TLS':
+                _tls_dom = _db.execute("SELECT tls_host FROM nodes WHERE host=? OR name=?", (domain, _loc)).fetchone()
+                if _tls_dom and _tls_dom[0]: domain = _tls_dom[0]
+                sport = 443; pport = 443; _proxyhost = "104.18.0.3"; _sni = "ruzone27.shop"; _dt_mode = "PROXY_SNI"
+                _pl = _db.execute("SELECT value FROM settings WHERE key='TLS_PAYLOAD'").fetchone()
+                _payload = _pl[0] if _pl else "HEAD / HTTP/1.1[crlf]Host: cdnstore.scia.net[crlf]User-Agent: Mozilla/5.0[crlf][crlf]POST / HTTP/1.1[crlf]Host: [host][crlf]Connection: upgrade[crlf]Upgrade: websocket[crlf][crlf]"
             else:
-                ws_port = 80
-                _proxy_str = proxy or '162.159.228.0'
-                _proxyhost = _proxy_str.split(':')[0] if ':' in _proxy_str else _proxy_str
-                _proxyport = str(ws_port)
-                _sni = ""
-                _dt_mode = "PROXY"
-                _payload = "CONNECT / HTTP/1.1[crlf]Host: ya.ru[crlf]User-Agent: Mozilla/5.0[crlf][crlf]POST / HTTP/1.1[crlf]Host: [host][crlf]Connection: upgrade[crlf]Upgrade: websocket[crlf][crlf]"
+                _pl = _db.execute("SELECT value FROM settings WHERE key='WS_PAYLOAD'").fetchone()
+                _payload = _pl[0] if _pl else "CONNECT / HTTP/1.1[crlf]Host: ya.ru[crlf]User-Agent: Mozilla/5.0[crlf][crlf]POST / HTTP/1.1[crlf]Host: [host][crlf]Connection: upgrade[crlf]Upgrade: websocket[crlf][crlf]"
+            _db.close()
 
-            # 3. Формируем имя конфига
-            if key_name.startswith('vip_'):
-                _cfg_name = f"\U0001F48E VIP {_loc} {key_name[4:]}"
-            elif key_name.startswith('test'):
-                _cfg_name = f"\U0001F381 TEST {_loc} {key_name[4:]}"
-            else:
-                _cfg_name = f"\u2B50  {key_name}"
-            
-            # 4. Вызываем генератор
             dt_url = dark_gen.generate(
-                hwid=_hwid, host=domain, port=str(ws_port),
-                user=key_name, pw=password,
-                proxyhost=_proxyhost, proxyport=_proxyport,
-                name=_cfg_name, payload=_payload,
+                hwid=_hwid, host=domain, port=str(sport), user=key_name, pw=password,
+                proxyhost=_proxyhost, proxyport=str(pport), name=_cfg_name, payload=_payload,
                 sni=_sni, mode=_dt_mode
             )
             return dt_url, _cfg_name
         except Exception as e:
-            cab_log.error(f"_build_dark_url: {e}")
+            cab_log.error(f"dark_gen error: {e}")
             return None, None
+            
+    # Если нет HWID - используем обычный генератор
     else:
-        # Открытый конфиг (без HWID)
-        try:
-            if key_name.startswith('vip_'):
-                _cfg_name = f"\U0001F48E VIP {_loc} {key_name[4:]}"
-            elif key_name.startswith('test'):
-                _cfg_name = f"\U0001F381 TEST {_loc} {key_name[4:]}"
-            else:
-                _cfg_name = f"\u2B50  {key_name}"
-            dt_url = make_darktunnel_url(key_name, password, domain, ws_port, proxy, _loc)
-            return dt_url, _cfg_name
-        except Exception as e:
-            cab_log.error(f"_build_dark_url_for_key open: {e}")
-            return None, None
-    return None, None
-
-
-SMART_FILES_DIR = "/etc/UDPCustom/smart_files"
+        return make_darktunnel_url(key_name, password, domain, ws_port, proxy, _loc), _cfg_name
 
 def _smart_files_clear(token, chat_id):
     """Удаляет все ранее отправленные .dark файлы бота в этом чате."""
