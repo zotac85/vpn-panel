@@ -5,7 +5,7 @@ NODES_DB="/etc/UDPCustom/vpn.db"
 SSH_KEY="/root/.ssh/id_ed25519"
 
 _nodes_py() {
-    python3 - "$@" << 'PYEOF'
+    python3 - "$@" << 'PYEOF_INNER'
 import sqlite3, sys
 db = sqlite3.connect('/etc/UDPCustom/vpn.db')
 args = sys.argv[1:]
@@ -16,31 +16,28 @@ if cmd == 'list':
     for r in rows:
         print('|'.join(str(x) if x is not None else '' for x in r))
 elif cmd == 'add':
-        name, host, tls_host, ip, sport, wsport = args[1], args[2], args[3], args[4], int(args[5]), int(args[6])
-        if not tls_host: tls_host = host
-        existing = db.execute("SELECT id, name FROM nodes WHERE host=? OR ip=?", (host, ip)).fetchone()
-        if existing:
-            print(f"DUP:{existing[0]}:{existing[1]}")
-        else:
-            db.execute("INSERT INTO nodes (name,host,tls_host,ip,ssh_port,ws_port,ssh_user,is_master,is_active,status) VALUES (?,?,?,?,?,?,?,0,1,'unknown')",
-                       (name,host,tls_host,ip,sport,wsport,'root'))
-            db.commit()
-            print('OK')
-    elif cmd == 'update':
-        id_, name, host, tls_host, ip, sport, wsport = args[1], args[2], args[3], args[4], args[5], int(args[6]), int(args[7])
-        if not tls_host: tls_host = host
-        existing = db.execute("SELECT id, name FROM nodes WHERE (host=? OR ip=?) AND id!=?", (host, ip, id_)).fetchone()
-        if existing:
-            print(f"DUP:{existing[0]}:{existing[1]}")
-        else:
-            db.execute("UPDATE nodes SET name=?, host=?, tls_host=?, ip=?, ssh_port=?, ws_port=? WHERE id=?",
-                       (name, host, tls_host, ip, sport, wsport, id_))
-            db.commit()
-            print('OK')
-    elif cmd == 'get_full':
-        r = db.execute("SELECT name, host, tls_host, ip, ssh_port, ws_port FROM nodes WHERE id=?", (int(args[1]),)).fetchone()
-        if r: print('|'.join(str(x) if x is not None else '' for x in r))
-    elif cmd == 'del':
+    name, host, tls_host, ip, sport, wsport = args[1], args[2], args[3], args[4], int(args[5]), int(args[6])
+    if not tls_host: tls_host = host
+    existing = db.execute("SELECT id, name FROM nodes WHERE host=? OR ip=?", (host, ip)).fetchone()
+    if existing:
+        print(f"DUP:{existing[0]}:{existing[1]}")
+    else:
+        db.execute("INSERT INTO nodes (name,host,tls_host,ip,ssh_port,ws_port,ssh_user,is_master,is_active,status) VALUES (?,?,?,?,?,?,?,0,1,'unknown')",
+                   (name,host,tls_host,ip,sport,wsport,'root'))
+        db.commit()
+        print('OK')
+elif cmd == 'update':
+    id_, name, host, tls_host, ip, sport, wsport = args[1], args[2], args[3], args[4], args[5], int(args[6]), int(args[7])
+    if not tls_host: tls_host = host
+    existing = db.execute("SELECT id, name FROM nodes WHERE (host=? OR ip=?) AND id!=?", (host, ip, id_)).fetchone()
+    if existing:
+        print(f"DUP:{existing[0]}:{existing[1]}")
+    else:
+        db.execute("UPDATE nodes SET name=?, host=?, tls_host=?, ip=?, ssh_port=?, ws_port=? WHERE id=?",
+                   (name, host, tls_host, ip, sport, wsport, id_))
+        db.commit()
+        print('OK')
+elif cmd == 'del':
     db.execute("DELETE FROM nodes WHERE id=? AND is_master=0", (int(args[1]),))
     db.commit()
     print('OK')
@@ -50,9 +47,11 @@ elif cmd == 'set_status':
 elif cmd == 'get':
     r = db.execute("SELECT name,host,ip,ssh_port,ws_port,ssh_user FROM nodes WHERE id=?", (int(args[1]),)).fetchone()
     if r: print('|'.join(str(x) for x in r))
-PYEOF
+elif cmd == 'get_full':
+    r = db.execute("SELECT name, host, tls_host, ip, ssh_port, ws_port FROM nodes WHERE id=?", (int(args[1]),)).fetchone()
+    if r: print('|'.join(str(x) if x is not None else '' for x in r))
+PYEOF_INNER
 }
-
 _nodes_check() {
     local ip="$1" sport="$2"
     local start=$(date +%s%N)
