@@ -978,15 +978,18 @@ if r: print('|'.join(str(x) for x in r))
 
     # --- ШАГ 3: Установка WS + скрипты юзеров ---
     echo -ne "${CYAN}[3/8] ⚙️  Установка WS-прокси... ${NC}"
-    LOCAL_SCRIPT="/usr/local/share/vpn-panel/install-node.sh"
-    [ ! -f "$LOCAL_SCRIPT" ] && LOCAL_SCRIPT="/root/vpn-panel-sync/install-node.sh"
-    scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" "$LOCAL_SCRIPT" root@"$ip":/tmp/inst.sh >/dev/null 2>&1
-    ssh -q -o LogLevel=QUIET -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "printf '%s\n%s\n' '$wsport' '$sport' | bash /tmp/inst.sh > /dev/null 2>&1"
     
+    # Копируем готовый рабочий скрипт и сервис с Мастера (без install-node.sh)
+    scp -q -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /usr/local/bin/ws-proxy.py root@"$ip":/usr/local/bin/ws-proxy.py >/dev/null 2>&1
+    scp -q -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /etc/systemd/system/ws-proxy.service root@"$ip":/etc/systemd/system/ws-proxy.service >/dev/null 2>&1
+    
+    # Запускаем сервис на ноде
+    ssh -q -o LogLevel=QUIET -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "chmod +x /usr/local/bin/ws-proxy.py; systemctl daemon-reload; systemctl enable ws-proxy >/dev/null 2>&1; systemctl restart ws-proxy" >/dev/null 2>&1
+
     # Копируем скрипты юзеров принудительно
-    scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /root/vpn-panel-sync/scripts/node-user.sh root@"$ip":/usr/local/bin/node-user.sh >/dev/null 2>&1
-    scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /root/vpn-panel-sync/scripts/check-device-limit-pam root@"$ip":/usr/local/bin/check-device-limit-pam >/dev/null 2>&1
-    ssh -q -o LogLevel=QUIET -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "chmod +x /usr/local/bin/node-user.sh /usr/local/bin/check-device-limit-pam" >/dev/null 2>&1
+    scp -q -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /root/vpn-panel-sync/scripts/node-user.sh root@"$ip":/usr/local/bin/node-user.sh >/dev/null 2>&1
+    scp -q -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /root/vpn-panel-sync/scripts/check-device-limit-pam root@"$ip":/usr/local/bin/check-device-limit-pam >/dev/null 2>&1
+    ssh -q -o LogLevel=QUIET -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "chmod +x /usr/local/bin/node-user.sh /usr/local/bin/check-device-limit-pam" >/dev/null 2>&1
     echo -e "${GREEN}✅ OK${NC}"
 
     # --- ШАГ 4: Оптимизация и UFW (порты 22, 80, 443, 53) ---
