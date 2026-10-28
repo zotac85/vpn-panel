@@ -236,7 +236,7 @@ PYCODE
         FAIL=0
         while IFS='|' read -r login pwd dev exp; do
             [ -z "$login" ] && continue
-            RES=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -p "$_sp" root@"$_ip" "node-user.sh add '$login' '$pwd' '$exp' && node-user.sh setlimit '$login' '$dev'" < /dev/null 2>/dev/null)
+            RES=$(timeout 15s ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o ServerAliveInterval=5 -o ServerAliveCountMax=2 -p "$_sp" root@"$_ip" "node-user.sh add '$login' '$pwd' '$exp' && node-user.sh setlimit '$login' '$dev'" < /dev/null 2>/dev/null)
             if echo "$RES" | grep -q "OK"; then
                 OK=$((OK+1))
             else
