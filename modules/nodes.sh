@@ -194,6 +194,7 @@ _nodes_install_banner() {
     ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "
         chmod 644 /etc/UDPCustom/ssh_banner.txt
         sed -i '/^Banner/d' /etc/ssh/sshd_config 2>/dev/null || true
+        echo "Banner /etc/UDPCustom/ssh_banner.txt" >> /etc/ssh/sshd_config
         rm -f /etc/ssh/sshd_config.d/*banner* 2>/dev/null || true
         systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
         echo 'BANNER SET on '\$(hostname)
@@ -315,7 +316,7 @@ _nodes_optimize() {
         echo " - Создание Swap 1GB"
         echo " - Установка AdGuard DNS (блокировка рекламы)"
         echo " - Ускорение SSH (DNS/GSSAPI)"
-        echo " - Настройка UFW (порты $sport, $wsport)"
+        echo " - Настройка UFW (порты $sport, $wsport, 443, 53/tcp, 53/udp)"
         echo ""
         read -p "Продолжить? (y/n): " confirm
         [[ "$confirm" != "y" && "$confirm" != "Y" ]] && return
@@ -348,6 +349,8 @@ _nodes_optimize() {
         REMOTE_CMD+="ufw allow $sport/tcp > /dev/null 2>&1; "
         REMOTE_CMD+="ufw allow $wsport/tcp > /dev/null 2>&1; "
         REMOTE_CMD+="ufw allow 443/tcp > /dev/null 2>&1; "
+        REMOTE_CMD+="ufw allow 53/tcp > /dev/null 2>&1; "
+        REMOTE_CMD+="ufw allow 53/udp > /dev/null 2>&1; "
         REMOTE_CMD+="ufw --force enable > /dev/null 2>&1; "
         REMOTE_CMD+="echo '--> Настройка Fail2ban...'; "
         REMOTE_CMD+="systemctl enable fail2ban > /dev/null 2>&1; systemctl restart fail2ban; "
