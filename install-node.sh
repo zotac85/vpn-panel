@@ -37,8 +37,8 @@ echo ""
 # 1. Базовые пакеты
 echo -e "${YELLOW}[1/6] Устанавливаю базовые пакеты...${NC}"
 export DEBIAN_FRONTEND=noninteractive
-apt update -y -qq
-apt install -y -qq python3 ufw curl git ca-certificates >/dev/null 2>&1
+apt-get update -y -qq
+apt-get install -y -qq python3 ufw curl git ca-certificates >/dev/null 2>&1
 
 # 2. Порты
 echo ""

@@ -12,7 +12,8 @@ args = sys.argv[1:]
 cmd = args[0] if args else 'list'
 
 if cmd == 'list':
-    rows = db.execute("SELECT id,name,host,ip,ssh_port,ws_port,is_master,is_active,status FROM nodes ORDER BY id").fetchall()
+    # Выводим ВСЕХ (включая мастера) для таблицы
+    rows = db.execute("SELECT id,name,host,ip,ssh_port,ws_port,is_master,is_active,status FROM nodes ORDER BY is_master DESC, id").fetchall()
     for r in rows:
         print('|'.join(str(x) if x is not None else '' for x in r))
 elif cmd == 'add':
@@ -45,11 +46,27 @@ elif cmd == 'set_status':
     db.execute("UPDATE nodes SET status=?, last_check=datetime('now') WHERE id=?", (args[1], int(args[2])))
     db.commit()
 elif cmd == 'get':
-    r = db.execute("SELECT name,host,ip,ssh_port,ws_port,ssh_user FROM nodes WHERE id=?", (int(args[1]),)).fetchone()
-    if r: print('|'.join(str(x) for x in r))
+    # Игнорируем мастера, сортируем по ID
+    rows = db.execute("SELECT id,name,host,ip,ssh_port,ws_port,ssh_user FROM nodes WHERE is_master=0 ORDER BY id").fetchall()
+    try:
+        idx = int(args[1]) - 1
+        if 0 <= idx < len(rows):
+            r = rows[idx]
+            print('|'.join(str(x) for x in r[1:]))
+    except: pass
 elif cmd == 'get_full':
-    r = db.execute("SELECT name, host, tls_host, ip, ssh_port, ws_port FROM nodes WHERE id=?", (int(args[1]),)).fetchone()
-    if r: print('|'.join(str(x) if x is not None else '' for x in r))
+    # Игнорируем мастера, сортируем по ID
+    rows = db.execute("SELECT id,name,host,tls_host,ip,ssh_port,ws_port FROM nodes WHERE is_master=0 ORDER BY id").fetchall()
+    try:
+        idx = int(args[1]) - 1
+        if 0 <= idx < len(rows):
+            r = rows[idx]
+            print(f"{r[0]}|" + '|'.join(str(x) if x is not None else '' for x in r[1:]))
+    except: pass
+elif cmd == 'list_all':
+    rows = db.execute("SELECT id,name,host,ip,ssh_port,ws_port,is_master,is_active,status FROM nodes ORDER BY is_master DESC, id").fetchall()
+    for r in rows:
+        print('|'.join(str(x) if x is not None else '' for x in r))
 PYEOF_INNER
 }
 _nodes_check() {
@@ -86,17 +103,21 @@ _nodes_install_ws() {
     clear
     echo -e "${YELLOW}── Установка WS на ноду ──${NC}"
     echo ""
+    local num=0
     while IFS='|' read -r id name host ip sport wsport is_master is_active status; do
         [ -z "$id" ] && continue
         [ "$is_master" = "1" ] && continue
-        echo "  $id) $name ($ip)"
+        num=$((num+1))
+        echo "  $num) $name ($ip)"
     done < <(_nodes_py list)
     echo ""
     read -p "Введите ID ноды: " nid
     [ -z "$nid" ] && return
-    row=$(_nodes_py get "$nid")
+    # Используем get_full, который понимает порядковые номера
+    row=$(_nodes_py get_full "$nid")
     [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
-    IFS='|' read -r name host ip sport wsport suser <<< "$row"
+    # get_full возвращает: real_id|name|host|tls_host|ip|ssh_port|ws_port
+    IFS='|' read -r real_id name host tls_host ip sport wsport <<< "$row"
     
     # Защита от сброса порта в 0 или пустоту
     if [ -z "$wsport" ] || [ "$wsport" = "0" ]; then
@@ -137,17 +158,20 @@ _nodes_install_banner() {
     clear
     echo -e "${YELLOW}── Установка баннера на ноду ──${NC}"
     echo ""
+    local num=0
     while IFS='|' read -r id name host ip sport wsport is_master is_active status; do
         [ -z "$id" ] && continue
         [ "$is_master" = "1" ] && continue
-        echo "  $id) $name ($ip)"
+        num=$((num+1))
+        echo "  $num) $name ($ip)"
     done < <(_nodes_py list)
     echo ""
     read -p "Введите ID ноды: " nid
     [ -z "$nid" ] && return
-    row=$(_nodes_py get "$nid")
+    row=$(_nodes_py get_full "$nid")
     [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
-    IFS='|' read -r name host ip sport wsport suser <<< "$row"
+    IFS='|' read -r real_id name host tls_host ip sport wsport <<< "$row"
+    suser="root"
     
     # Защита от сброса порта в 0 или пустоту
     if [ -z "$wsport" ] || [ "$wsport" = "0" ]; then
@@ -259,17 +283,19 @@ _nodes_optimize() {
     clear
     echo -e "${YELLOW}── Оптимизация ноды ──${NC}"
     echo ""
+    local num=0
     while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
         [ -z "$_id" ] && continue
         [ "$_im" = "1" ] && continue
-        echo "  $_id) $_name ($_ip)"
+        num=$((num+1))
+        echo "  $num) $_name ($_ip)"
     done < <(_nodes_py list)
     echo ""
     read -p "Введите ID ноды: " nid
     [ -z "$nid" ] && return
-    row=$(_nodes_py get "$nid")
+    row=$(_nodes_py get_full "$nid")
     [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
-    IFS='|' read -r name host ip sport wsport suser <<< "$row"
+    IFS='|' read -r real_id name host tls_host ip sport wsport <<< "$row"
     if [ -z "$wsport" ] || [ "$wsport" = "0" ]; then wsport=80; fi
 
     echo ""
@@ -369,17 +395,19 @@ _nodes_reboot() {
     clear
     echo -e "${YELLOW}── Перезагрузка ноды ──${NC}"
     echo ""
+    local num=0
     while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
         [ -z "$_id" ] && continue
         [ "$_im" = "1" ] && continue
-        echo "  $_id) $_name ($_ip)"
+        num=$((num+1))
+        echo "  $num) $_name ($_ip)"
     done < <(_nodes_py list)
     echo ""
     read -p "Введите ID ноды: " nid
     [ -z "$nid" ] && return
-    row=$(_nodes_py get "$nid")
+    row=$(_nodes_py get_full "$nid")
     [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
-    IFS='|' read -r name host ip sport wsport suser <<< "$row"
+    IFS='|' read -r real_id name host tls_host ip sport wsport <<< "$row"
     
     # Защита от сброса порта в 0 или пустоту
     if [ -z "$wsport" ] || [ "$wsport" = "0" ]; then
@@ -407,67 +435,63 @@ _nodes_change_domain() {
     clear
     echo -e "${YELLOW}── Изменить домен ноды ──${NC}"
     echo ""
+    local num=0
     while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
         [ -z "$_id" ] && continue
         [ "$_im" = "1" ] && continue
-        echo "  $_id) $_name ($_ip) — домен: $_host"
+        num=$((num+1))
+        echo "  $num) $_name ($_ip) — домен: $_host"
     done < <(_nodes_py list)
     echo ""
-    read -p "Введите ID ноды: " nid
+    read -p "Введите номер ноды: " nid
     [ -z "$nid" ] && return
-    row=$(_nodes_py get "$nid")
-    [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
-    IFS='|' read -r name host ip sport wsport suser <<< "$row"
     
-    # Защита от сброса порта в 0 или пустоту
-    if [ -z "$wsport" ] || [ "$wsport" = "0" ]; then
-        wsport=80
-    fi
+    # Получаем реальные данные по порядковому номеру
+    row=$(_nodes_py get_full "$nid")
+    [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
+    
+    # get_full возвращает: real_id|name|host|tls_host|ip|ssh_port|ws_port
+    IFS='|' read -r real_id name host tls_host ip sport wsport <<< "$row"
+    
     echo ""
-    echo -e "  Текущий домен: ${GREEN}$host${NC}"
-    read -p "  Новый домен (без http://): " new_domain
-    [ -z "$new_domain" ] && return
-
-    # Валидация
-    new_domain=$(echo "$new_domain" | sed 's|https\?://||; s|/.*||; s|:.*||' | tr -d ' ')
-    if [ -z "$new_domain" ] || [[ "$new_domain" != *.* ]]; then
-        echo -e "${RED}Неверный формат. Пример: new.domain.com${NC}"
-        read -p "Enter..."
-        return
-    fi
-
-    # Обновляем в БД мастера
-    python3 -c "
-import sqlite3
-db = sqlite3.connect('/etc/UDPCustom/vpn.db')
-db.execute(\"UPDATE nodes SET host='$new_domain' WHERE id=$nid\")
-db.commit()
-print('OK')
-"
-
+    echo -e "${CYAN}Текущие данные для $name:${NC}"
+    echo -e "  WS-домен  : ${GREEN}$host${NC}"
+    echo -e "  TLS-домен : ${GREEN}$tls_host${NC}"
     echo ""
-    echo -e "${GREEN}✅ Домен ноды обновлён: $new_domain${NC}"
+    
+    read -p "Новый WS-домен [$host]: " new_ws
+    [ -z "$new_ws" ] && new_ws="$host"
+    
+    read -p "Новый TLS-домен [$tls_host]: " new_tls
+    [ -z "$new_tls" ] && new_tls="$tls_host"
+    
+    # Обновляем в базе (используя реальный ID)
+    _nodes_py update "$real_id" "$name" "$new_ws" "$new_tls" "$ip" "$sport" "$wsport" > /dev/null
+    
+    echo ""
+    echo -e "${GREEN}✅  Домены ноды обновлены!${NC}"
     echo -e "${YELLOW}⚠️  Клиентам нужно пересоздать .dark для этой ноды${NC}"
     echo ""
     read -p "Нажмите Enter..."
 }
 
-
 _nodes_install_udpgw() {
     clear
     echo -e "${YELLOW}── Установка UDPGW на ноду ──${NC}"
     echo ""
+    local num=0
     while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
         [ -z "$_id" ] && continue
         [ "$_im" = "1" ] && continue
-        echo "  $_id) $_name ($_ip)"
+        num=$((num+1))
+        echo "  $num) $_name ($_ip)"
     done < <(_nodes_py list)
     echo ""
     read -p "Введите ID ноды: " nid
     [ -z "$nid" ] && return
-    row=$(_nodes_py get "$nid")
+    row=$(_nodes_py get_full "$nid")
     [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
-    IFS='|' read -r name host ip sport wsport suser <<< "$row"
+    IFS='|' read -r real_id name host tls_host ip sport wsport <<< "$row"
     
     # Защита от сброса порта в 0 или пустоту
     if [ -z "$wsport" ] || [ "$wsport" = "0" ]; then
@@ -492,17 +516,19 @@ _nodes_install_tls() {
     clear
     echo -e "${YELLOW}── Установка TLS (Nginx + Сертификаты) на ноду ──${NC}"
     echo ""
+    local num=0
     while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
         [ -z "$_id" ] && continue
         [ "$_im" = "1" ] && continue
-        echo "  $_id) $_name ($_ip)"
+        num=$((num+1))
+        echo "  $num) $_name ($_ip)"
     done < <(_nodes_py list)
     echo ""
     read -p "Введите ID ноды: " nid
     [ -z "$nid" ] && return
-    row=$(_nodes_py get "$nid")
+    row=$(_nodes_py get_full "$nid")
     [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
-    IFS='|' read -r name host ip sport wsport suser <<< "$row"
+    IFS='|' read -r real_id name host tls_host ip sport wsport <<< "$row"
     
     # Для TLS всегда берем домен из колонки tls_host
     TLS_DOMAIN=$(_nodes_py tls_host "$nid" 2>/dev/null)
@@ -539,8 +565,10 @@ menu_nodes() {
         echo ""
         printf "  %-3s %-18s %-18s %-16s %-8s\n" "ID" "Имя" "Домен" "IP" "Статус"
         echo "  ────────────────────────────────────────────────────────────────"
+        local num=0
         while IFS='|' read -r id name host ip sport wsport is_master is_active status; do
             [ -z "$id" ] && continue
+            num=$((num+1))
             local mark="🌍"
             [ "$is_master" = "1" ] && mark="👑"
             local st_color="${NC}"
@@ -549,7 +577,8 @@ menu_nodes() {
                 offline) st_color="${RED}" ;;
                 *) st_color="${YELLOW}" ;;
             esac
-            printf "  %-3s %-18s %-18s %-16s ${st_color}%-8s${NC} %s\n" "$id" "$name" "$host" "$ip" "$status" "$mark"
+            # Выводим маркер в начале строки, чтобы он не съезжал
+            printf "  %s %-3s %-18s %-18s %-16s ${st_color}%-8s${NC}\n" "$mark" "$num" "$name" "$host" "$ip" "$status"
         done < <(_nodes_py list)
         echo ""
         echo -e " 1) ➕ Добавить ноду"
@@ -597,10 +626,12 @@ _nodes_update_scripts() {
     clear
     echo -e "${YELLOW}── Обновление скриптов на нодах ──${NC}"
     echo ""
+    local num=0
     while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
         [ -z "$_id" ] && continue
         [ "$_im" = "1" ] && continue
-        echo "  $_id) $_name ($_ip)"
+        num=$((num+1))
+        echo "  $num) $_name ($_ip)"
     done < <(_nodes_py list)
     echo "  all) Все ноды"
     echo ""
@@ -635,9 +666,10 @@ _nodes_update_scripts() {
     [ ! -f "$src_pam" ] && { echo -e "${RED}Не найден $src_pam${NC}"; read -p "Enter..."; return; }
 
     for id in "${nodes_to_update[@]}"; do
-        local row=$(_nodes_py get "$id")
+        local row=$(_nodes_py get_full "$id")
         [ -z "$row" ] && { echo -e "${RED}Нода $id не найдена${NC}"; continue; }
-        IFS='|' read -r name host ip sport wsport suser <<< "$row"
+        IFS='|' read -r real_id name host tls_host ip sport wsport <<< "$row"
+        suser="root"
     
     # Защита от сброса порта в 0 или пустоту
     if [ -z "$wsport" ] || [ "$wsport" = "0" ]; then
@@ -856,10 +888,12 @@ _nodes_edit() {
     clear
     echo -e "${YELLOW}── Редактирование ноды ──${NC}"
     echo ""
+    local num=0
     while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
         [ -z "$_id" ] && continue
         [ "$_im" = "1" ] && continue
-        echo "  $_id) $_name ($_ip)"
+        num=$((num+1))
+        echo "  $num) $_name ($_ip)"
     done < <(_nodes_py list)
     echo ""
     read -p "Введите ID ноды: " nid
@@ -929,10 +963,12 @@ _nodes_del() {
     clear
     echo -e "${YELLOW}── Удаление ноды ──${NC}"
     echo ""
+    local num=0
     while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
         [ -z "$_id" ] && continue
         [ "$_im" = "1" ] && continue
-        echo "  $_id) $_name ($_ip) [$_st]"
+        num=$((num+1))
+        echo "  $num) $_name ($_ip) [$_st]"
     done < <(_nodes_py list)
     echo ""
     read -p "Введите ID ноды для удаления: " nid
@@ -945,10 +981,12 @@ _nodes_del() {
 _nodes_check_all() {
     clear
     echo -e "${YELLOW}── Проверка нод по SSH ──${NC}"
+    local num=0
     while IFS='|' read -r id name host ip sport wsport is_master is_active status; do
         [ -z "$id" ] && continue
+        num=$((num+1))
         [ "$is_master" = "1" ] && { echo "👑 $name — локально"; continue; }
-        echo -n "  $name ($ip) — "
+        echo -n "  [$num] $name ($ip) — "
         res=$(_nodes_check "$ip" "$sport")
         st=${res%%:*}
         ms=${res##*:}
@@ -967,17 +1005,20 @@ _nodes_key() {
     clear
     echo -e "${YELLOW}── Закинуть SSH-ключ мастера на ноду ──${NC}"
     echo ""
+    local num=0
     while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
         [ -z "$_id" ] && continue
         [ "$_im" = "1" ] && continue
-        echo "  $_id) $_name ($_ip)"
+        num=$((num+1))
+        echo "  $num) $_name ($_ip)"
     done < <(_nodes_py list)
     echo ""
     read -p "Введите ID ноды: " nid
     [ -z "$nid" ] && return
-    row=$(_nodes_py get "$nid")
+    row=$(_nodes_py get_full "$nid")
     [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
-    IFS='|' read -r name host ip sport wsport suser <<< "$row"
+    IFS='|' read -r real_id name host tls_host ip sport wsport <<< "$row"
+    suser="root"
     
     # Защита от сброса порта в 0 или пустоту
     if [ -z "$wsport" ] || [ "$wsport" = "0" ]; then
