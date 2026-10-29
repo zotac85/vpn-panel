@@ -226,9 +226,22 @@ menu_subscriptions() {
                 echo -e "${YELLOW}Выпуск сертификата для $DOMAIN...${NC}"
                 echo -e "Останавливаю WS Proxy на 10 секунд для проверки домена..."
                 systemctl stop ws-proxy
-                certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos -m admin@$DOMAIN
+                
+                # Удаляем битые папки, если они остались от прошлых ошибок
+                if [ -d "/etc/letsencrypt/live/$DOMAIN" ] && [ ! -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+                    rm -rf "/etc/letsencrypt/live/$DOMAIN"
+                    rm -rf "/etc/letsencrypt/archive/$DOMAIN"
+                    rm -f "/etc/letsencrypt/renewal/$DOMAIN.conf"
+                fi
+                
+                # Пытаемся выпустить и проверяем результат
+                if certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos -m admin@$DOMAIN; then
+                    echo -e "${GREEN}✅ Сертификат успешно выпущен!${NC}"
+                else
+                    echo -e "${RED}❌ ОШИБКА: Не удалось выпустить сертификат!${NC}"
+                    echo -e "${YELLOW}Убедитесь, что домен $DOMAIN указывает на IP этого сервера (A-запись).${NC}"
+                fi
                 systemctl start ws-proxy
-                echo -e "${GREEN}✅ Сертификат обновлен!${NC}"
                 read -p "Нажмите Enter..."
                 ;;
             3)
