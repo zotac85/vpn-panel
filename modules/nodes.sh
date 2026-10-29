@@ -170,11 +170,12 @@ _nodes_install_banner() {
     echo -e "${YELLOW}── Установка баннера на ноду ──${NC}"
     echo ""
     local num=0
-    while IFS='|' read -r id name host ip sport wsport is_master is_active status; do
-        [ -z "$id" ] && continue
-        # [ "$is_master" = "1" ] && continue
+    while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
+        [ -z "$_id" ] && continue
         num=$((num+1))
-        echo "  $num) $name ($ip)"
+        local mark="🌍"
+        [ "$_im" = "1" ] && mark="👑"
+        echo "  $num) $mark $_name ($_ip)"
     done < <(_nodes_py list)
     echo ""
     read -p "Введите ID ноды: " nid
@@ -182,41 +183,48 @@ _nodes_install_banner() {
     row=$(_nodes_py get_full "$nid")
     [ -z "$row" ] && { echo "Нода не найдена"; read -p "Enter..."; return; }
     IFS='|' read -r real_id name host tls_host ip sport wsport <<< "$row"
-    suser="root"
     
     # Защита от сброса порта в 0 или пустоту
-    if [ -z "$wsport" ] || [ "$wsport" = "0" ]; then
-        wsport=80
-    fi
-
-    # Генерируем баннер из шаблона мастера, подменяя локацию
+    if [ -z "$wsport" ] || [ "$wsport" = "0" ]; then wsport=80; fi
+    
     BANNER_SRC="/etc/UDPCustom/ssh_banner.txt"
     [ ! -f "$BANNER_SRC" ] && { echo -e "${RED}Нет /etc/UDPCustom/ssh_banner.txt на мастере${NC}"; read -p "Enter..."; return; }
-
-    # Заменяем "Локация: <старое>" на "Локация: <name>"
-    TMP="/tmp/banner_${nid}.txt"
+    
+    TMP="/tmp/banner_${real_id}.txt"
     sed -E "s|(📍 Локация: ).*|\1${name}</font></b></h6>|" "$BANNER_SRC" > "$TMP"
 
     echo ""
     echo -e "${CYAN}Копирую баннер на $name ($ip)...${NC}"
 
-    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "mkdir -p /etc/UDPCustom"
-    scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" "$TMP" root@"$ip":/etc/UDPCustom/ssh_banner.txt >/dev/null 2>&1
-    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "
+    if [ "$real_id" = "1" ] || [ "$ip" = "127.0.0.1" ] || [ "$ip" = "$(hostname -I | awk '{print $1}')" ]; then
+        # Локальная установка для Мастера
+        cp "$TMP" /etc/UDPCustom/ssh_banner.txt
         chmod 644 /etc/UDPCustom/ssh_banner.txt
         sed -i '/^Banner/d' /etc/ssh/sshd_config 2>/dev/null || true
-        echo "Banner /etc/UDPCustom/ssh_banner.txt" >> /etc/ssh/sshd_config
         rm -f /etc/ssh/sshd_config.d/*banner* 2>/dev/null || true
+        echo "Banner /etc/UDPCustom/ssh_banner.txt" >> /etc/ssh/sshd_config
         systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
-        echo 'BANNER SET on '\$(hostname)
-    " >/dev/null 2>&1
+        echo -e "${GREEN}✅  Баннер установлен ЛОКАЛЬНО на $name${NC}"
+    else
+        # Удаленная установка для нод
+        ssh -q -o LogLevel=QUIET -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "mkdir -p /etc/UDPCustom" 2>/dev/null
+        if scp -q -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" "$TMP" root@"$ip":/etc/UDPCustom/ssh_banner.txt >/dev/null 2>&1; then
+            ssh -q -o LogLevel=QUIET -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "
+                chmod 644 /etc/UDPCustom/ssh_banner.txt
+                sed -i '/^Banner/d' /etc/ssh/sshd_config 2>/dev/null || true
+                rm -f /etc/ssh/sshd_config.d/*banner* 2>/dev/null || true
+                echo 'Banner /etc/UDPCustom/ssh_banner.txt' >> /etc/ssh/sshd_config
+                systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+            " >/dev/null 2>&1
+            echo -e "${GREEN}✅  Баннер установлен на $name${NC}"
+        else
+            echo -e "${RED}❌  Ошибка подключения к $name! Баннер не установлен.${NC}"
+        fi
+    fi
     rm -f "$TMP"
-    echo -e "${GREEN}✅ Баннер установлен на $name${NC}"
     echo ""
     read -p "Нажмите Enter..."
 }
-
-
 _nodes_sync_all_users() {
     clear
     echo -e "${YELLOW}── Синхронизация всех юзеров на ноды ──${NC}"
