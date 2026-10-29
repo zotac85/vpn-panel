@@ -167,8 +167,7 @@ _nodes_install_ws() {
 
 _nodes_install_banner() {
     clear
-    echo -e "${YELLOW}── Установка / Починка баннера на ноду ──${NC}"
-    echo -e "${CYAN}(Ставит скрипт динамического баннера с лимитами)${NC}"
+    echo -e "${YELLOW}── Установка / Починка баннера (с лимитами) ──${NC}"
     echo ""
     local num=0
     while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
@@ -187,32 +186,36 @@ _nodes_install_banner() {
     
     if [ -z "$wsport" ] || [ "$wsport" = "0" ]; then wsport=80; fi
 
-    echo ""
-    echo -e "${CYAN}Устанавливаю динамический баннер на $name ($ip)...${NC}"
+    BANNER_SRC="/etc/UDPCustom/ssh_banner.txt"
+    [ ! -f "$BANNER_SRC" ] && { echo -e "${RED}Нет /etc/UDPCustom/ssh_banner.txt на мастере${NC}"; read -p "Enter..."; return; }
 
-    # 1. Копируем скрипт генерации баннера и шаблон
-    scp -q -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /root/vpn-panel-sync/scripts/vpn-expiry-check.sh root@"$ip":/usr/local/bin/vpn-expiry-check.sh >/dev/null 2>&1
-    scp -q -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /etc/UDPCustom/ssh_banner.txt root@"$ip":/etc/UDPCustom/ssh_banner.txt >/dev/null 2>&1
-    
-    # 2. Настраиваем конфиг SSH и запускаем скрипт
-    REMOTE_CMD="chmod +x /usr/local/bin/vpn-expiry-check.sh; "
-    REMOTE_CMD+="bash /usr/local/bin/vpn-expiry-check.sh > /dev/null 2>&1; "
+    TMP="/tmp/banner_${real_id}.txt"
+    sed -E "s|(📍 Локация: ).*|\1${name}</font></b></h6>|" "$BANNER_SRC" > "$TMP"
+
+    echo ""
+    echo -e "${CYAN}Настраиваю баннер и лимиты на $name ($ip)...${NC}"
+
+    REMOTE_CMD="mkdir -p /etc/UDPCustom; "
+    REMOTE_CMD+="cp /etc/UDPCustom/ssh_banner.txt /etc/UDPCustom/ssh_banner.txt.bak 2>/dev/null; "
+    REMOTE_CMD+="chmod 644 /etc/UDPCustom/ssh_banner.txt; "
+    REMOTE_CMD+="chmod +x /usr/local/bin/vpn-expiry-check.sh; "
     REMOTE_CMD+="sed -i '/^Banner/d' /etc/ssh/sshd_config 2>/dev/null || true; "
     REMOTE_CMD+="echo 'Banner /etc/UDPCustom/ssh_banner.txt' >> /etc/ssh/sshd_config; "
+    # Прописываем запуск скрипта лимитов в PAM (чтобы работали дни и трафик)
+    REMOTE_CMD+="grep -q 'vpn-expiry-check.sh' /etc/pam.d/sshd || sed -i '1i session optional pam_exec.so quiet /usr/local/bin/vpn-expiry-check.sh' /etc/pam.d/sshd; "
     REMOTE_CMD+="systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null"
 
     if [ "$real_id" = "1" ] || [ "$ip" = "127.0.0.1" ] || [ "$ip" = "$(hostname -I | awk '{print $1}')" ]; then
-        # Локальная установка для Мастера
-        bash /usr/local/bin/vpn-expiry-check.sh > /dev/null 2>&1
-        sed -i '/^Banner/d' /etc/ssh/sshd_config 2>/dev/null || true
-        echo 'Banner /etc/UDPCustom/ssh_banner.txt' >> /etc/ssh/sshd_config
-        systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
-        echo -e "${GREEN}✅  Динамический баннер установлен ЛОКАЛЬНО на $name${NC}"
+        cp "$TMP" /etc/UDPCustom/ssh_banner.txt
+        bash -c "$REMOTE_CMD" >/dev/null 2>&1
+        echo -e "${GREEN}✅  Баннер и лимиты установлены ЛОКАЛЬНО на $name${NC}"
     else
-        # Удаленная установка для нод
+        scp -q -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" "$TMP" root@"$ip":/etc/UDPCustom/ssh_banner.txt >/dev/null 2>&1
+        scp -q -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /usr/local/bin/vpn-expiry-check.sh root@"$ip":/usr/local/bin/vpn-expiry-check.sh >/dev/null 2>&1
         ssh -q -o LogLevel=QUIET -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "$REMOTE_CMD" >/dev/null 2>&1
-        echo -e "${GREEN}✅  Динамический баннер установлен на $name${NC}"
+        echo -e "${GREEN}✅  Баннер и лимиты установлены на $name${NC}"
     fi
+    rm -f "$TMP"
     echo ""
     read -p "Нажмите Enter..."
 }
