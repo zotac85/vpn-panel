@@ -240,6 +240,9 @@ if [ -d "$PANEL_DIR" ] || [ -f "/usr/local/bin/vpn" ]; then
             echo "   ✓ OK"
             bash "$REPO_DIR/modules/setup_ssh_banner.sh" 2>/dev/null || true
             echo "→ Перезапуск vpn-tg-bot.service..."
+            # Жесткое убийство перед перезапуском (защита от 409 Conflict)
+            pkill -9 -f vpn-tg-bot.py 2>/dev/null || true
+            sleep 1
             systemctl restart vpn-tg-bot 2>/dev/null || true
             sleep 2
             if systemctl is-active --quiet vpn-tg-bot; then
@@ -799,6 +802,9 @@ python3 -c "import sys; sys.path.insert(0, '/usr/local/bin'); from bot_modules i
 # Автозапуск (если токен задан)
 if [ -f /etc/UDPCustom/support_bot.conf ] && grep -q "^BOT_TOKEN=\"[^\"]" /etc/UDPCustom/support_bot.conf 2>/dev/null; then
     systemctl enable support-bot 2>/dev/null
+    # Жесткое убийство перед перезапуском (защита от 409 Conflict)
+    pkill -9 -f support-bot.py 2>/dev/null || true
+    sleep 1
     systemctl restart support-bot 2>/dev/null
     echo -e "\033[0;32m✅  Support Bot запущен\033[0m"
 else
@@ -841,6 +847,9 @@ if [ "$PAM_OK" -eq 1 ]; then
     echo -e "\033[0;32m✅ PAM в порядке. Перезапускаем sshd...\033[0m"
     sleep 2
     systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+    # Жесткое убийство перед перезапуском (защита от 409 Conflict)
+    pkill -9 -f vpn-tg-bot.py 2>/dev/null || true
+    sleep 1
     systemctl restart vpn-tg-bot 2>/dev/null
     [ -f /etc/default/dropbear ] && systemctl restart dropbear 2>/dev/null
 else
