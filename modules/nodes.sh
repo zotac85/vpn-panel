@@ -683,6 +683,47 @@ _nodes_token_menu() {
         esac
     done
 }
+_nodes_install_xray() {
+    clear
+    echo -e "${YELLOW}── Установка Xray (Trojan WS) на ноду ──${NC}"
+    echo ""
+    local num=0
+    while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
+        [ -z "$_id" ] && continue
+        num=$((num+1))
+        local mark="🌍"
+        [ "$_im" = "1" ] && mark="👑"
+        echo "  $mark $num) $_name ($_ip)"
+    done < <(_nodes_py list)
+    echo ""
+    read -p "Введите ID ноды (Enter — отмена): " nid
+    [ -z "$nid" ] && return
+
+    local row=$(_nodes_py get_full "$nid")
+    [ -z "$row" ] && { echo -e "${RED}Нода не найдена${NC}"; read -p "Enter..."; return; }
+    IFS='|' read -r real_id name host tls_host ip sport wsport <<< "$row"
+
+    local XRAY_PASS=$(python3 -c "import json; print(json.load(open('/usr/local/etc/xray/config.json'))['inbounds'][0]['settings']['clients'][0]['password'])" 2>/dev/null)
+    if [ -z "$XRAY_PASS" ]; then
+        echo -e "${RED}❌  Пароль Xray не найден на мастере${NC}"; read -p "Enter..."; return
+    fi
+    if [ ! -f /usr/local/share/vpn-panel/install-xray-node.sh ]; then
+        echo -e "${RED}❌  install-xray-node.sh не найден на мастере${NC}"; read -p "Enter..."; return
+    fi
+
+    echo ""
+    echo -e "${CYAN}→ Ставлю Xray на $name ($ip)...${NC}"
+    scp -q -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /usr/local/share/vpn-panel/install-xray-node.sh root@"$ip":/tmp/xray.sh >/dev/null 2>&1
+    ssh -q -o LogLevel=QUIET -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "chmod +x /tmp/xray.sh && bash /tmp/xray.sh '$XRAY_PASS'" 2>&1 | sed 's/^/  /'
+
+    if ssh -q -o LogLevel=QUIET -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "systemctl is-active --quiet xray && systemctl is-active --quiet nginx" >/dev/null 2>&1; then
+        echo -e "${GREEN}✅  Xray установлен и работает${NC}"
+    else
+        echo -e "${RED}❌  Ошибка: xray/nginx не активны на ноде${NC}"
+    fi
+    read -p "Нажмите Enter..."
+}
+
 menu_nodes() {
     while true; do
         clear
@@ -726,9 +767,10 @@ menu_nodes() {
         echo -e " 14) 🚀 УСТАНОВКА / РЕМОНТ НОДЫ (Полный автомат)"
         echo -e " 15) ✏️  Редактировать ноду"
         echo -e " 16) 🔑 Управление токеном для нод"
+        echo -e " 17) 🚀 Установить Xray (Trojan) на ноду"
         echo -e " 0) ↩️  Назад"
         echo ""
-        read -p "Выберите действие [0-16]: " n_choice
+        read -p "Выберите действие [0-17]: " n_choice
         case "$n_choice" in
             1) _nodes_add ;;
             2) _nodes_check_all ;;
@@ -746,6 +788,7 @@ menu_nodes() {
             14) _nodes_auto_add ;;
             15) _nodes_edit ;;
             16) _nodes_token_menu ;;
+            17) _nodes_install_xray ;;
             0) return ;;
         esac
     done
