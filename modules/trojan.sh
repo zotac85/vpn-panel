@@ -25,10 +25,11 @@ menu_trojan() {
         echo -e " 3) 🔑 Загрузить сертификаты (crt/key)"
         echo -e " 4) 🧪 Тестовая ссылка"
         echo -e " 5) 📜 Логи ошибок"
+        echo -e " 6) 🧹 Очистить тестовых юзеров (оставить только из бота)"
         echo ""
         echo -e " 0) ↩️  Назад"
         echo ""
-        read -p "Выберите действие [0-5]: " t_choice
+        read -p "Выберите действие [0-6]: " t_choice
         case "$t_choice" in
             1)
                 echo ""
@@ -120,6 +121,27 @@ NGINXCFG
             5)
                 echo ""
                 journalctl -u xray -n 20 --no-pager
+                read -p "Enter..."
+                ;;
+            6)
+                echo -e "\n${YELLOW}Внимание! Это удалит ВСЕХ юзеров из Xray.${NC}"
+                echo -e "После этого запустите синхронизацию в боте, чтобы вернуть VIP-клиентов."
+                read -p "Вы уверены? (y/n): " confirm
+                if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
+                    # Очищаем массив clients в JSON (ставим пустой массив)
+                    python3 -c "
+import json
+with open('/usr/local/etc/xray/config.json', 'r') as f:
+    cfg = json.load(f)
+cfg['inbounds'][0]['settings']['clients'] = []
+with open('/usr/local/etc/xray/config.json', 'w') as f:
+    json.dump(cfg, f, indent=2)
+"
+                    systemctl restart xray
+                    echo -e "${GREEN}✅ Все юзеры удалены! Xray перезапущен.${NC}"
+                else
+                    echo "Отменено."
+                fi
                 read -p "Enter..."
                 ;;
             0) return ;;
