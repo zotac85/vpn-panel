@@ -148,10 +148,9 @@ menu_ws() {
         echo -e " 6) 📦 Управление payload"
         echo -e " 7) 📡 Управление UDPGW (порт 7300)"
         echo -e " 8) 🗑️  Удалить с сервера"
-        echo -e " 9) 📦 Управление подписками (Домен, SSL)"
         echo -e " 0) ↩️  Назад в главное меню"
         echo ""
-        read -p "Выберите действие [0-9]: " ws_choice
+        read -p "Выберите действие [0-8]: " ws_choice
         case $ws_choice in
             1) install_ws ;;
             2) systemctl restart ws-proxy; echo -e "${GREEN}Перезапущено.${NC}"; sleep 1 ;;
@@ -167,7 +166,7 @@ menu_ws() {
                 [[ "$dp" != "Не установлен" ]] && ufw delete allow $dp/tcp 2>/dev/null
                 rm -f /etc/systemd/system/ws-proxy.service /usr/local/bin/ws-proxy.py
                 echo -e "${GREEN}Удалено.${NC}"; sleep 1 ;;
-            9) menu_subscriptions ;;
+            9) echo "Управление подписками перенесено в главное меню (п. 6)"; sleep 2 ;;
             0) break ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
         esac
