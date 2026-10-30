@@ -2351,39 +2351,47 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         return True
     if cb_data.startswith('cab_gen_trojan:'):
         key_name = cb_data.split(':', 1)[1]
-        # Удаляем старые сообщения/файлы перед отправкой нового
         try: _smart_files_clear(token, chat_id)
         except: pass
-        
-        import subprocess
-        try:
-            res = subprocess.run(['/usr/local/bin/gen_trojan.py', key_name], capture_output=True, text=True)
-            link = res.stdout.strip()
-            if link and link.startswith('trojan://'):
-                _text = "🚀 <b>Ключ Trojan (WS)</b>" + chr(10) + chr(10) + \
-                        "1. Скопируй ссылку ниже" + chr(10) + \
-                        "2. Вставь в NekoBox или v2rayNG" + chr(10) + chr(10) + \
-                        f"<code>{link}</code>"
-                _kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
-            elif link == "NOT_FOUND":
-                _text = "🚀 <b>Протокол Trojan (WebSocket)</b>" + chr(10) + chr(10) + \
-                        "🔒 <b>Внимание!</b> Trojan доступен только для VIP-ключей." + chr(10) + \
-                        "Оформите подписку, чтобы получить доступ к самым быстрым и защищенным серверам." + chr(10) + chr(10) + \
-                        "💡 <b>Как использовать:</b>" + chr(10) + \
-                        "1. Приобретите VIP-ключ." + chr(10) + \
-                        "2. Нажмите кнопку «Trojan» в меню ключа." + chr(10) + \
-                        "3. Скопируйте ссылку и вставьте в NekoBox или v2rayNG."
-                _kb = {'inline_keyboard': [
-                    [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'}],
-                    [{'text': '👤 В кабинет', 'callback_data': 'cab_main'}]
-                ]}
-            else:
-                _text = f"❌  Ошибка генерации: {link}"
-                _kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
-        except Exception as e:
-            _text = f"❌  Ошибка выполнения: {e}"
-            _kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
 
+        # Проверка: только VIP
+        _vk = db.get_vip_key(key_name) if hasattr(db, 'get_vip_key') else None
+        if not _vk:
+            _text = "🚀 <b>Протокол Trojan (WebSocket)</b>" + chr(10) + chr(10) + \
+                    "🔒 <b>Внимание!</b> Trojan доступен только для VIP-ключей." + chr(10) + \
+                    "Оформите подписку, чтобы получить доступ к самым быстрым и защищенным серверам." + chr(10) + chr(10) + \
+                    "💡 <b>Как использовать:</b>" + chr(10) + \
+                    "1. Приобретите VIP-ключ." + chr(10) + \
+                    "2. Нажмите кнопку «Trojan» в меню ключа." + chr(10) + \
+                    "3. Вставьте ссылку-подписку в NekoBox или v2rayNG."
+            _kb = {'inline_keyboard': [
+                [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'}],
+                [{'text': '👤 В кабинет', 'callback_data': 'cab_main'}]
+            ]}
+            _send_instr(token, chat_id, _text, _kb)
+            return True
+
+        # Определяем домен для подписки
+        sub_domain = "sub.ruzone27.shop"
+        try:
+            with open('/etc/UDPCustom/domain.conf') as _f:
+                for _l in _f:
+                    if 'DOMAIN=' in _l:
+                        sub_domain = _l.split('=', 1)[1].strip().strip('"').strip("'")
+                        break
+        except: pass
+        sub_url = f"https://{sub_domain}/trojan/{key_name}"
+
+        _text = "🚀 <b>Trojan (WebSocket) — все ноды</b>" + chr(10) + chr(10) + \
+                "📥 <b>Ссылка-подписка:</b>" + chr(10) + \
+                f"<code>{sub_url}</code>" + chr(10) + chr(10) + \
+                "💡 <b>Как использовать:</b>" + chr(10) + \
+                "1. Скопируй ссылку выше." + chr(10) + \
+                "2. В NekoBox/v2rayNG выбери «Добавить подписку»." + chr(10) + \
+                "3. Вставь ссылку и сохрани." + chr(10) + chr(10) + \
+                "• В списке появятся все доступные страны" + chr(10) + \
+                "• Обновление ключей — в один клик"
+        _kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
         _send_instr(token, chat_id, _text, _kb)
         return True
 
