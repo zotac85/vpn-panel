@@ -960,7 +960,7 @@ if r: print('|'.join(str(x) for x in r))
         wsport=${wsport:-80}
 
         echo ""
-        echo -e "${CYAN}[1/8] 📝 Добавление в базу данных...${NC}"
+        echo -e "${CYAN}[1/9] 📝 Добавление в базу данных...${NC}"
         res=$(_nodes_py add "$name" "$host" "$tls_host" "$ip" "$sport" "$wsport")
         if [[ "$res" == DUP:* ]]; then
             echo -e "${RED}❌ Ошибка БД!${NC}"; read -p "Enter..."; return
@@ -974,12 +974,12 @@ if r: print('|'.join(str(x) for x in r))
     echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
 
     # --- ШАГ 2: SSH Ключ ---
-    echo -ne "${CYAN}[2/8] 🔑 Копирование SSH-ключа и токена... ${NC}"
+    echo -ne "${CYAN}[2/9] 🔑 Копирование SSH-ключа и токена... ${NC}"
     _nodes_sync_key "$ip" "$sport" > /dev/null 2>&1
     echo -e "      ${GREEN}✅ OK${NC}"
 
     # --- ШАГ 3: Установка WS + скрипты юзеров ---
-    echo -ne "${CYAN}[3/8] ⚙️  Установка WS-прокси... ${NC}"
+    echo -ne "${CYAN}[3/9] ⚙️  Установка WS-прокси... ${NC}"
     
     # Копируем готовый рабочий скрипт и сервис с Мастера (без install-node.sh)
     scp -q -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /usr/local/bin/ws-proxy.py root@"$ip":/usr/local/bin/ws-proxy.py >/dev/null 2>&1
@@ -995,7 +995,7 @@ if r: print('|'.join(str(x) for x in r))
     echo -e "${GREEN}✅ OK${NC}"
 
     # --- ШАГ 4: Оптимизация и UFW (порты 22, 80, 443, 53) ---
-    echo -ne "${CYAN}[4/8] ⚡ Оптимизация (BBR, UFW, Swap)... ${NC}"
+    echo -ne "${CYAN}[4/9] ⚡ Оптимизация (BBR, UFW, Swap)... ${NC}"
     REMOTE_CMD="export DEBIAN_FRONTEND=noninteractive; "
     REMOTE_CMD+="apt-get update > /dev/null 2>&1; "
     REMOTE_CMD+="apt-get install -y ufw fail2ban > /dev/null 2>&1; "
@@ -1009,19 +1009,19 @@ if r: print('|'.join(str(x) for x in r))
     echo -e "${GREEN}✅ OK${NC}"
 
     # --- ШАГ 5: Установка UDPGW ---
-    echo -ne "${CYAN}[5/8] 📡 Установка UDPGW... ${NC}"
+    echo -ne "${CYAN}[5/9] 📡 Установка UDPGW... ${NC}"
     scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /usr/local/share/vpn-panel/install-udpgw-node.sh root@"$ip":/tmp/udpgw.sh >/dev/null 2>&1
     ssh -q -o LogLevel=QUIET -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "chmod +x /tmp/udpgw.sh && bash /tmp/udpgw.sh > /dev/null 2>&1"
     echo -e "${GREEN}✅ OK${NC}"
 
     # --- ШАГ 6: Установка баннера (пропущено, используется динамический) ---
-    echo -ne "${CYAN}[6/8] 🎨 Настройка баннера... ${NC}"
+    echo -ne "${CYAN}[6/9] 🎨 Настройка баннера... ${NC}"
     # Удаляем статический баннер, если он был добавлен ранее
     ssh -q -o LogLevel=QUIET -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "sed -i '/^Banner/d' /etc/ssh/sshd_config 2>/dev/null; systemctl restart ssh 2>/dev/null" >/dev/null 2>&1
     echo -e "${GREEN}✅ OK (Динамический)${NC}"
 
     # --- ШАГ 7: Установка TLS (Nginx + Сертификаты) ---
-    echo -ne "${CYAN}[7/8] 🔒 Настройка Nginx и TLS... ${NC}"
+    echo -ne "${CYAN}[7/9] 🔒 Настройка Nginx и TLS... ${NC}"
     ssh -q -o LogLevel=QUIET -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "mkdir -p /etc/nginx/ssl" 2>/dev/null
     scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /etc/nginx/ssl/ruzone.crt root@"$ip":/etc/nginx/ssl/ >/dev/null 2>&1
     scp -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /etc/nginx/ssl/ruzone.key root@"$ip":/etc/nginx/ssl/ >/dev/null 2>&1
@@ -1029,8 +1029,25 @@ if r: print('|'.join(str(x) for x in r))
     ssh -q -o LogLevel=QUIET -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "chmod +x /tmp/tls.sh && bash /tmp/tls.sh $tls_host > /dev/null 2>&1"
     echo -e "${GREEN}✅ OK${NC}"
 
-    # --- ШАГ 8: Синхронизация пользователей ---
-    echo -ne "${CYAN}[8/8] 🔄 Синхронизация пользователей... ${NC}"
+    # --- ШАГ 8: Установка Xray (Trojan WS) ---
+    echo -ne "${CYAN}[8/9] 🚀 Установка Xray (Trojan WS)... ${NC}"
+    XRAY_PASS=$(python3 -c "import json; print(json.load(open('/usr/local/etc/xray/config.json'))['inbounds'][0]['settings']['clients'][0]['password'])" 2>/dev/null)
+    if [ -z "$XRAY_PASS" ]; then
+        echo -e "${YELLOW}⚠️  Пароль Xray не найден на мастере — пропускаю шаг${NC}"
+    elif [ ! -f /usr/local/share/vpn-panel/install-xray-node.sh ]; then
+        echo -e "${YELLOW}⚠️  install-xray-node.sh не найден на мастере — пропускаю${NC}"
+    else
+        scp -q -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /usr/local/share/vpn-panel/install-xray-node.sh root@"$ip":/tmp/xray.sh >/dev/null 2>&1
+        ssh -q -o LogLevel=QUIET -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "chmod +x /tmp/xray.sh && bash /tmp/xray.sh '$XRAY_PASS'" 2>&1 | sed 's/^/  /'
+        if ssh -q -o LogLevel=QUIET -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "systemctl is-active --quiet xray" >/dev/null 2>&1; then
+            echo -e "${GREEN}✅  OK${NC}"
+        else
+            echo -e "${RED}❌  Xray не запустился${NC}"
+        fi
+    fi
+
+    # --- ШАГ 9: Синхронизация пользователей ---
+    echo -ne "${CYAN}[9/9] 🔄 Синхронизация пользователей... ${NC}"
     TMP_FILE="/tmp/_auto_sync.$$"
     python3 - > "$TMP_FILE" << 'PYCODE'
 import sqlite3, time
