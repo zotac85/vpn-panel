@@ -196,10 +196,11 @@ menu_subscriptions() {
         echo -e " 2) 🔒 Выпустить/Обновить SSL сертификат"
         echo -e " 3) 🕸️ Ссылка для DarkTunnel"
         echo -e " 4) 🍏 Ссылка для NPV Tunnel"
-        echo -e " 5) 🔄 Перезапустить сервис подписок"
+        echo -e " 5) 🚀 Подписка Trojan (NekoBox/v2rayNG)"
+        echo -e " 6) 🔄 Перезапустить сервис подписок"
         echo -e " 0) ⬅️ Назад"
         echo -e "${CYAN}──────────────────────────────────────────────${NC}"
-        read -p "Выберите пункт [0-5]: " sub_choice
+        read -p "Выберите пункт [0-6]: " sub_choice
         
         case $sub_choice in
             1)
@@ -268,6 +269,33 @@ menu_subscriptions() {
                 read -p "Нажмите Enter..."
                 ;;
             5)
+                read -p "Введите логин ключа (например, vip_arsen): " key_name
+                check=$(cd /usr/local/bin && python3 -c "from bot_modules import db; print('OK' if (db.get_test_key('$key_name') or db.get_vip_key('$key_name')) else 'NO')" 2>/dev/null)
+                if [ "$check" != "OK" ]; then
+                    echo -e "\n${RED}❌  Ключ '$key_name' не найден в базе!${NC}"
+                    read -p "Нажмите Enter..."; continue
+                fi
+                echo ""
+                echo -e "${CYAN}Доступные ноды:${NC}"
+                python3 -c "
+import sqlite3
+db = sqlite3.connect('/etc/UDPCustom/vpn.db')
+for i, r in enumerate(db.execute('SELECT id, name, is_master FROM nodes ORDER BY is_master DESC, id').fetchall(), 1):
+    mark = '👑' if r[2] == 1 else '🌍'
+    print(f'  {i}) {mark} {r[1]}')
+"
+                read -p "Номер ноды (Enter = 1, мастер): " node_num
+                node_num=${node_num:-1}
+                url="https://$DOMAIN/trojan/$key_name?node=$node_num"
+                echo ""
+                echo -e "${CYAN}══════════════════════════════════════════════${NC}"
+                echo -e "${GREEN}$url${NC}"
+                echo -e "${CYAN}══════════════════════════════════════════════${NC}"
+                echo -e "${YELLOW}Скопируйте ссылку в NekoBox / v2rayNG / Streisand${NC}"
+                echo -e "${YELLOW}(подписка обновит ключ в один клик)${NC}"
+                read -p "Нажмите Enter..."
+                ;;
+            6)
                 systemctl restart npvt-sub.service
                 echo -e "${GREEN}✅ Сервис подписок перезапущен!${NC}"
                 sleep 1

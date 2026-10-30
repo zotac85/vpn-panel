@@ -7,6 +7,8 @@ import sqlite3
 import os
 import sys
 import ssl
+import subprocess
+import urllib.parse
 
 sys.path.append('/usr/local/bin')
 from bot_modules import db as bdb
@@ -63,6 +65,9 @@ def generate_npvt(username, password, host, remark, port=80, payload=None, sni="
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
+    def do_HEAD(self):
+        self.do_GET()
+
     def do_GET(self):
         if self.path.startswith('/sub_dark/'):
             key_name = self.path.split('/sub_dark/')[1].split('?')[0]
@@ -97,6 +102,56 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write("\n".join(links).encode('utf-8'))
             return
             
+        if self.path.startswith('/trojan/'):
+            parsed = urllib.parse.urlparse(self.path)
+            key_name = parsed.path.split('/trojan/')[1].split('/')[0]
+            qs = urllib.parse.parse_qs(parsed.query)
+            node = qs.get('node', ['master'])[0]
+
+            key = bdb.get_test_key(key_name) or bdb.get_vip_key(key_name)
+            if not key:
+                self.send_response(404)
+                self.end_headers()
+                self.wfile.write(b"Key not found")
+                return
+
+            try:
+                result = subprocess.run(
+                    ['/usr/local/bin/gen_trojan.py', key_name, node],
+                    capture_output=True, text=True, timeout=60
+                )
+                link = result.stdout.strip()
+            except Exception as e:
+                link = f"ERROR: {e}"
+
+            if not link or link.startswith("NOT_FOUND") or link.startswith("NODE_NOT_FOUND") or link.startswith("ERROR"):
+                self.send_response(404)
+                self.send_header('Content-type', 'text/plain; charset=utf-8')
+                self.end_headers()
+                self.wfile.write((link or "ERROR: empty").encode())
+                return
+
+            # base64 от ссылки (одна строка — по спецификации V2Ray subscription)
+            body = base64.b64encode((link + "\n").encode()).decode()
+
+            expires = 0
+            used = 0
+            limit = 0
+            try:
+                expires = int(key.get('expires_at') or 0)
+                used = int(key.get('traffic_used') or 0)
+                limit = int(key.get('traffic_limit') or 0)
+            except: pass
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.send_header('Profile-Title', f'VPN {key_name}')
+            self.send_header('Subscription-Userinfo', f'upload=0; download={used}; total={limit}; expire={expires}')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body.encode())
+            return
+
         if self.path.startswith('/sub/'):
             key_name = self.path.split('/sub/')[1].split('?')[0]
             key = bdb.get_test_key(key_name) or bdb.get_vip_key(key_name)

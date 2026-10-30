@@ -213,6 +213,16 @@ if [ -d "$PANEL_DIR" ] || [ -f "/usr/local/bin/vpn" ]; then
                 chmod +x "$PANEL_DIR/install-node.sh"
                 echo "   ✓ install-node.sh"
             fi
+            if [ -f "$REPO_DIR/install-xray-node.sh" ]; then
+                cp "$REPO_DIR/install-xray-node.sh" "$PANEL_DIR/install-xray-node.sh"
+                chmod +x "$PANEL_DIR/install-xray-node.sh"
+                echo "   ✓ install-xray-node.sh"
+            fi
+            if [ -f "$REPO_DIR/xray-push-password.sh" ]; then
+                cp "$REPO_DIR/xray-push-password.sh" /usr/local/bin/xray-push-password.sh
+                chmod +x /usr/local/bin/xray-push-password.sh
+                echo "   ✓ xray-push-password.sh"
+            fi
             for f in "$REPO_DIR/modules/"*.sh; do
                 if [ -f "$f" ]; then
                     base=$(basename "$f")
@@ -349,6 +359,8 @@ FILES_CORE=(
     "core.sh:$PANEL_DIR/core.sh"
     "vpn:/usr/local/bin/vpn"
     "install-node.sh:$PANEL_DIR/install-node.sh"
+    "install-xray-node.sh:$PANEL_DIR/install-xray-node.sh"
+    "xray-push-password.sh:/usr/local/bin/xray-push-password.sh"
 )
 
 FILES_MODULES=(
