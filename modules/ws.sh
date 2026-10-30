@@ -275,24 +275,14 @@ menu_subscriptions() {
                     echo -e "\n${RED}❌  Ключ '$key_name' не найден в базе!${NC}"
                     read -p "Нажмите Enter..."; continue
                 fi
-                echo ""
-                echo -e "${CYAN}Доступные ноды:${NC}"
-                python3 -c "
-import sqlite3
-db = sqlite3.connect('/etc/UDPCustom/vpn.db')
-for i, r in enumerate(db.execute('SELECT id, name, is_master FROM nodes ORDER BY is_master DESC, id').fetchall(), 1):
-    mark = '👑' if r[2] == 1 else '🌍'
-    print(f'  {i}) {mark} {r[1]}')
-"
-                read -p "Номер ноды (Enter = 1, мастер): " node_num
-                node_num=${node_num:-1}
-                url="https://$DOMAIN/trojan/$key_name?node=$node_num"
+                url="https://$DOMAIN/trojan/$key_name"
                 echo ""
                 echo -e "${CYAN}══════════════════════════════════════════════${NC}"
                 echo -e "${GREEN}$url${NC}"
                 echo -e "${CYAN}══════════════════════════════════════════════${NC}"
-                echo -e "${YELLOW}Скопируйте ссылку в NekoBox / v2rayNG / Streisand${NC}"
-                echo -e "${YELLOW}(подписка обновит ключ в один клик)${NC}"
+                echo -e "${YELLOW}Подписка включает ВСЕ ноды (мастер + все активные).${NC}"
+                echo -e "${YELLOW}Скопируйте ссылку в NekoBox / v2rayNG / Streisand.${NC}"
+                echo -e "${YELLOW}Обновление ключа — в один клик.${NC}"
                 read -p "Нажмите Enter..."
                 ;;
             6)

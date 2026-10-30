@@ -106,7 +106,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             parsed = urllib.parse.urlparse(self.path)
             key_name = parsed.path.split('/trojan/')[1].split('/')[0]
             qs = urllib.parse.parse_qs(parsed.query)
-            node = qs.get('node', ['master'])[0]
+            node = qs.get('node', ['all'])[0]
 
             key = bdb.get_test_key(key_name) or bdb.get_vip_key(key_name)
             if not key:
