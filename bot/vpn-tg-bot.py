@@ -5209,11 +5209,29 @@ def main():
                         else:
                             mode_str = f"⏰ Каждые {ap.get('INTERVAL_HOURS', '12')}ч"
                         
+                        # Вычисляем время следующего поста
+                        import time
+                        import datetime as _dt
+                        _next_str = "—"
+                        _now = time.time()
+                        if ap.get('ENABLED') == '1':
+                            if mode == 'interval':
+                                _last = int(ap.get('LAST_POST', '0'))
+                                _int_h = int(ap.get('INTERVAL_HOURS', '12'))
+                                _next = _last + (_int_h * 3600)
+                                if _next < _now: _next = _now # Если просрочен, выйдет сейчас
+                                _next_str = _dt.datetime.fromtimestamp(_next).strftime('%d.%m в %H:%M')
+                            elif mode == 'time':
+                                _times = ap.get('TIMES', '')
+                                if _times:
+                                    _next_str = f"в {_times} (МСК)" # Просто показываем заданные слоты
+                        
                         text = (
                             f"📢 <b>УПРАВЛЕНИЕ ПОСТОМ</b>\n"
                             f"━━━━━━━━━━━━━━━━━━━━\n\n"
                             f"Автопостинг: <b>{status}</b>\n"
-                            f"Режим: <b>{mode_str}</b>\n\n"
+                            f"Режим: <b>{mode_str}</b>\n"
+                            f"⏳ Следующий пост: <b>{_next_str}</b>\n\n"
                             f"Выбери действие 👇"
                         )
                         keyboard = {'inline_keyboard': [
@@ -6619,7 +6637,10 @@ def main():
                 elif text == '\u2699\uFE0F Админка' or text.startswith('/admin'): show_admin_panel(cfg, chat_id, user_id)
                 elif text == '\U0001F381 Помощь' or text.startswith('/help'): handle_help(cfg, chat_id)
         except KeyboardInterrupt: log.info("Остановка"); break
-        except Exception as e: log.error(f"Ошибка в main loop: {e}"); time.sleep(5)
+        except Exception as e:
+            import time
+            log.error(f"Ошибка в main loop: {e}")
+            time.sleep(5)
 
 if __name__ == '__main__':
     main()

@@ -331,8 +331,6 @@ def make_darktunnel_url(username, password, domain, ws_port, proxy, loc='VPN'):
         return None
         
     import sqlite3
-    sport = 80; pport = 80; proxy_host = proxy; sni = ""; mode = "PROXY"; pcfg = get_payload()
-    
     try:
         _db = sqlite3.connect('/etc/UDPCustom/vpn.db')
         _m = _db.execute("SELECT value FROM settings WHERE key='MODE'").fetchone()
@@ -342,21 +340,36 @@ def make_darktunnel_url(username, password, domain, ws_port, proxy, loc='VPN'):
             _tls_dom = _db.execute("SELECT tls_host FROM nodes WHERE host=? OR name=?", (domain, loc)).fetchone()
             if _tls_dom and _tls_dom[0]:
                 domain = _tls_dom[0]
-            sport = 443; pport = 443; proxy_host = "104.18.0.3"; sni = "ruzone27.shop"; mode = "PROXY_SNI"
+            sport = 443
+            pport = 443
+            proxy_host = "104.18.0.3"
+            sni = "ruzone27.shop"
+            mode = "PROXY_SNI"
             _pl = _db.execute("SELECT value FROM settings WHERE key='TLS_PAYLOAD'").fetchone()
             pcfg = _pl[0] if _pl else "HEAD / HTTP/1.1[crlf]Host: cdnstore.scia.net[crlf]User-Agent: Mozilla/5.0[crlf][crlf]POST / HTTP/1.1[crlf]Host: [host][crlf]Connection: upgrade[crlf]Upgrade: websocket[crlf][crlf]"
         else:
+            sport = int(ws_port) if str(ws_port).isdigit() else 80
+            pport = sport
+            proxy_host = proxy if proxy else ""
+            sni = ""
+            mode = "PROXY"
             _pl = _db.execute("SELECT value FROM settings WHERE key='WS_PAYLOAD'").fetchone()
             pcfg = _pl[0] if _pl else "CONNECT / HTTP/1.1[crlf]Host: ya.ru[crlf]User-Agent: Mozilla/5.0[crlf][crlf]POST / HTTP/1.1[crlf]Host: [host][crlf]Connection: upgrade[crlf]Upgrade: websocket[crlf][crlf]"
         _db.close()
-    except: pass
+    except Exception:
+        sport = 80; pport = 80; proxy_host = proxy; sni = ""; mode = "PROXY"; pcfg = get_payload()
 
     config = {
         "type": "SSH",
         "name": _format_config_name(username, loc),
         "sshTunnelConfig": {
-            "sshConfig": {"host": domain, "port": sport, "username": username, "password": password},
-            "injectConfig": {"mode": mode, "serverNameIndication": sni, "proxyHost": proxy_host, "proxyPort": pport, "payload": pcfg}
+            "sshConfig": {
+                "host": domain, "port": sport, "username": username, "password": password
+            },
+            "injectConfig": {
+                "mode": mode, "serverNameIndication": sni, "proxyHost": proxy_host,
+                "proxyPort": pport, "payload": pcfg
+            }
         }
     }
     try:
@@ -364,8 +377,9 @@ def make_darktunnel_url(username, password, domain, ws_port, proxy, loc='VPN'):
         b = base64.urlsafe_b64encode(j.encode("utf-8")).decode("ascii").rstrip("=")
         return "darktunnel://" + b
     except Exception as e:
-        cab_log.error(f"make_darktunnel_url error: {e}")
+        cab_log.error(f"make_darktunnel_url: {e}")
         return None
+
 def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
     """Главное меню кабинета — данные из БД"""
     token = cfg['BOT_TOKEN']
@@ -1211,8 +1225,11 @@ def format_key_card(cfg, key_name):
         
     kb['inline_keyboard'].append([
         {'text': '📱 Android', 'callback_data': f'cab_darkfile:{key_name}'},
-        {'text': '🍏 iPhone', 'callback_data': f'cab_npvt:{key_name}'},
-        {'text': '💻 ПК', 'callback_data': f'cab_pcsub:{key_name}'}
+        {'text': '🍏 iPhone', 'callback_data': f'cab_npvt:{key_name}'}
+    ])
+    kb['inline_keyboard'].append([
+        {'text': '💻 ПК', 'callback_data': f'cab_pcsub:{key_name}'},
+        {'text': '🚀 Trojan', 'callback_data': f'cab_gen_trojan:{key_name}'}
     ])
     
     kb['inline_keyboard'].append([
@@ -1352,46 +1369,61 @@ def _build_dark_url_for_key(cfg, key_name, domain=None, ws_port=None, location_n
     password = key['password']
     if not password: return None, None
 
+    import sqlite3
+    mode = "WS"
+    try:
+        _db = sqlite3.connect('/etc/UDPCustom/vpn.db')
+        _m = _db.execute("SELECT value FROM settings WHERE key='MODE'").fetchone()
+        if _m and _m[0] == 'TLS': mode = "TLS"
+        _db.close()
+    except: pass
+    
     _loc = location_name if location_name else cfg.get("SERVER_LOCATION", "VPN")
     if domain is None: domain = get_domain()
-    if ws_port is None: ws_port = get_ws_port()
-    
+
     proxy = get_random_proxy()
-
-    # Формируем красивое имя
-    if key_name.startswith('vip_'): _cfg_name = f"\U0001F48E VIP {_loc} {key_name[4:]}"
-    elif key_name.startswith('test'): _cfg_name = f"\U0001F381 TEST {_loc} {key_name[4:]}"
-    else: _cfg_name = f"\u2B50  {key_name}"
-
-    try: _hwid = key['hwid']
+    try: _hwid = key.get('hwid')
     except: _hwid = None
+    
+    # Защита от пустого HWID (чтобы не падало)
+    if not _hwid or _hwid == "":
+        _hwid = None
     
     if key_name.startswith('vip_'):
         try:
             if not db.is_vip_hwid_locked(key_name): _hwid = None
         except: pass
 
-    # Если есть HWID - используем шифрованный генератор dark_gen
     if _hwid:
         try:
             from bot_modules import dark_gen
             import sqlite3
-            _db = sqlite3.connect('/etc/UDPCustom/vpn.db')
-            _m = _db.execute("SELECT value FROM settings WHERE key='MODE'").fetchone()
-            mode = _m[0] if _m else 'WS'
             
-            sport = 80; pport = 80; _proxyhost = proxy.split(':')[0] if proxy else ""; _sni = ""; _dt_mode = "PROXY"; _payload = get_payload()
+            _db = sqlite3.connect('/etc/UDPCustom/vpn.db')
             
             if mode == 'TLS':
                 _tls_dom = _db.execute("SELECT tls_host FROM nodes WHERE host=? OR name=?", (domain, _loc)).fetchone()
                 if _tls_dom and _tls_dom[0]: domain = _tls_dom[0]
-                sport = 443; pport = 443; _proxyhost = "104.18.0.3"; _sni = "ruzone27.shop"; _dt_mode = "PROXY_SNI"
+                sport = 443
+                pport = 443
+                _proxyhost = "104.18.0.3"
+                _sni = "ruzone27.shop"
+                _dt_mode = "PROXY_SNI"
                 _pl = _db.execute("SELECT value FROM settings WHERE key='TLS_PAYLOAD'").fetchone()
                 _payload = _pl[0] if _pl else "HEAD / HTTP/1.1[crlf]Host: cdnstore.scia.net[crlf]User-Agent: Mozilla/5.0[crlf][crlf]POST / HTTP/1.1[crlf]Host: [host][crlf]Connection: upgrade[crlf]Upgrade: websocket[crlf][crlf]"
             else:
+                sport = 80
+                pport = 80
+                _proxyhost = proxy.split(':')[0] if proxy else ""
+                _sni = ""
+                _dt_mode = "PROXY"
                 _pl = _db.execute("SELECT value FROM settings WHERE key='WS_PAYLOAD'").fetchone()
                 _payload = _pl[0] if _pl else "CONNECT / HTTP/1.1[crlf]Host: ya.ru[crlf]User-Agent: Mozilla/5.0[crlf][crlf]POST / HTTP/1.1[crlf]Host: [host][crlf]Connection: upgrade[crlf]Upgrade: websocket[crlf][crlf]"
             _db.close()
+
+            if key_name.startswith('vip_'): _cfg_name = f"\U0001F48E VIP {_loc} {key_name[4:]}"
+            elif key_name.startswith('test'): _cfg_name = f"\U0001F381 TEST {_loc} {key_name[4:]}"
+            else: _cfg_name = f"\u2B50  {key_name}"
 
             dt_url = dark_gen.generate(
                 hwid=_hwid, host=domain, port=str(sport), user=key_name, pw=password,
@@ -1402,10 +1434,12 @@ def _build_dark_url_for_key(cfg, key_name, domain=None, ws_port=None, location_n
         except Exception as e:
             cab_log.error(f"dark_gen error: {e}")
             return None, None
-            
-    # Если нет HWID - используем обычный генератор
     else:
-        return make_darktunnel_url(key_name, password, domain, ws_port, proxy, _loc), _cfg_name
+        from bot_modules.cabinet import make_darktunnel_url
+        dt_url = make_darktunnel_url(key_name, password, domain, ws_port, proxy, _loc)
+        _cfg_name = f"VIP {_loc} {key_name[4:]}" if key_name.startswith('vip_') else f"TEST {_loc} {key_name[4:]}" if key_name.startswith('test') else key_name
+        return dt_url, _cfg_name
+    return None, None
 
 def _smart_files_clear(token, chat_id):
     """Удаляет все ранее отправленные .dark файлы бота в этом чате."""
@@ -2315,10 +2349,49 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         
         _send_instr(token, chat_id, _text, _kb)
         return True
-    if cb_data.startswith('cab_darkfile:'):
+    if cb_data.startswith('cab_gen_trojan:'):
         key_name = cb_data.split(':', 1)[1]
+        # Удаляем старые сообщения/файлы перед отправкой нового
         try: _smart_files_clear(token, chat_id)
         except: pass
+        
+        import subprocess
+        try:
+            res = subprocess.run(['/usr/local/bin/gen_trojan.py', key_name], capture_output=True, text=True)
+            link = res.stdout.strip()
+            if link and link.startswith('trojan://'):
+                _text = "🚀 <b>Ключ Trojan (WS)</b>" + chr(10) + chr(10) + \
+                        "1. Скопируй ссылку ниже" + chr(10) + \
+                        "2. Вставь в NekoBox или v2rayNG" + chr(10) + chr(10) + \
+                        f"<code>{link}</code>"
+                _kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
+            elif link == "NOT_FOUND":
+                _text = "🚀 <b>Протокол Trojan (WebSocket)</b>" + chr(10) + chr(10) + \
+                        "🔒 <b>Внимание!</b> Trojan доступен только для VIP-ключей." + chr(10) + \
+                        "Оформите подписку, чтобы получить доступ к самым быстрым и защищенным серверам." + chr(10) + chr(10) + \
+                        "💡 <b>Как использовать:</b>" + chr(10) + \
+                        "1. Приобретите VIP-ключ." + chr(10) + \
+                        "2. Нажмите кнопку «Trojan» в меню ключа." + chr(10) + \
+                        "3. Скопируйте ссылку и вставьте в NekoBox или v2rayNG."
+                _kb = {'inline_keyboard': [
+                    [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'}],
+                    [{'text': '👤 В кабинет', 'callback_data': 'cab_main'}]
+                ]}
+            else:
+                _text = f"❌  Ошибка генерации: {link}"
+                _kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
+        except Exception as e:
+            _text = f"❌  Ошибка выполнения: {e}"
+            _kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
+
+        _send_instr(token, chat_id, _text, _kb)
+        return True
+
+    if cb_data.startswith('cab_darkfile:'):
+        key_name = cb_data.split(':', 1)[1]
+        # Удаляем старые сообщения/файлы
+        try: _smart_files_clear(token, chat_id)
+        except Exception as e: pass
         
         _inst_text = "📱 <b>Ключи для Android (DarkTunnel)</b>" + chr(10) + chr(10) + \
                      "1. Скачай приложение: <a href='https://play.google.com/store/apps/details?id=net.darktunnel.app'>Google Play</a>" + chr(10) + \

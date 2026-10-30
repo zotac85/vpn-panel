@@ -115,7 +115,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             except: pass
 
             conn = sqlite3.connect('/etc/UDPCustom/vpn.db')
-            if mode == "TLS":
+            if False: # Блок TLS принудительно отключен для NPV
                 nodes = conn.execute("SELECT name, tls_host FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
                 port = 443
                 payload = "HEAD / HTTP/1.1[crlf]Host: cdnstore.scia.net[crlf]User-Agent: Mozilla/5.0[crlf][crlf]POST / HTTP/1.1[crlf]Host: [host][crlf]Connection: upgrade[crlf]Upgrade: websocket[crlf][crlf]"
