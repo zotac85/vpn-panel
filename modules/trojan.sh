@@ -7,12 +7,14 @@ menu_trojan() {
         local xray_status=$(systemctl is-active xray 2>/dev/null)
         local color="${RED}"
         [ "$xray_status" = "active" ] && color="${GREEN}"
+        local xray_ver=$(xray version 2>/dev/null | head -1 | awk '{print $2}')
 
         echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
         echo -e "        ${YELLOW}🚀  УПРАВЛЕНИЕ TROJAN (XRAY)${NC}"
         echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
         echo ""
         echo -e " Статус сервиса Xray : ${color}${xray_status}${NC}"
+        echo -e " Версия Xray         : ${GREEN}${xray_ver:-не установлен}${NC}"
         
         local cert_status="${RED}Нет${NC}"
         if [ -f "/etc/nginx/ssl/ruzone.crt" ]; then
@@ -20,7 +22,7 @@ menu_trojan() {
         fi
         echo -e " Сертификаты Cloudflare: ${cert_status}"
         echo ""
-        echo -e " 1) 🟢 Включить / Настроить Trojan"
+        echo -e " 1) 🟢 Установить / Обновить / Перенастроить"
         echo -e " 2) 🔴 Выключить Trojan"
         echo -e " 3) 🔑 Загрузить сертификаты (crt/key)"
         echo -e " 4) 🧪 Тестовая ссылка"
@@ -33,20 +35,34 @@ menu_trojan() {
         case "$t_choice" in
             1)
                 echo ""
-                if [ ! -f "/etc/nginx/ssl/ruzone.crt" ]; then
-                    echo -e "${RED}❌ Нет сертификатов в /etc/nginx/ssl/. Сначала загрузите их (пункт 3).${NC}"
+                # 1a. Сертификаты
+                if [ ! -f "/etc/nginx/ssl/ruzone.crt" ] || [ ! -f "/etc/nginx/ssl/ruzone.key" ]; then
+                    echo -e "${RED}❌  Нет сертификатов в /etc/nginx/ssl/. Сначала загрузите их (пункт 3).${NC}"
                     read -p "Enter..."; continue
                 fi
-                
+
+                # 1b. Установка/обновление Xray
+                local old_ver=$(xray version 2>/dev/null | head -1 | awk '{print $2}')
+                echo -e "→ Устанавливаю/обновляю Xray (текущая: ${YELLOW}${old_ver:-нет}${NC})..."
+                if ! bash -c "$(curl -fsSL https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install > /tmp/xray-install.log 2>&1; then
+                    echo -e "${RED}❌  Ошибка установки Xray. Логи:${NC}"
+                    tail -5 /tmp/xray-install.log | sed 's/^/  /'
+                    read -p "Enter..."; continue
+                fi
+                local new_ver=$(xray version 2>/dev/null | head -1 | awk '{print $2}')
+                echo -e "  ✓ Xray: ${old_ver:-?} → ${new_ver:-?}"
+
+                # 1c. Сертификаты в Xray
                 echo -e "→ Копирую сертификаты в Xray..."
                 mkdir -p /usr/local/etc/xray/ssl
                 cp /etc/nginx/ssl/ruzone.crt /usr/local/etc/xray/ssl/
                 cp /etc/nginx/ssl/ruzone.key /usr/local/etc/xray/ssl/
-                chown -R xray:xray /usr/local/etc/xray/ssl/
+                chown -R xray:xray /usr/local/etc/xray/ssl/ 2>/dev/null || true
                 chmod 600 /usr/local/etc/xray/ssl/ruzone.key
 
-                echo -e "→ Проверяю конфиг Xray..."
+                # 1d. Конфиг (только если нет)
                 if [ ! -f "/usr/local/etc/xray/config.json" ]; then
+                    echo -e "→ Создаю конфиг Xray..."
                     cat << 'XRAYCFG' > /usr/local/etc/xray/config.json
 {
   "log": {"loglevel": "warning"},
@@ -62,7 +78,8 @@ menu_trojan() {
 XRAYCFG
                 fi
 
-                echo -e "→ Добавляю маршрут в Nginx..."
+                # 1e. Nginx маршрут
+                echo -e "→ Проверяю маршрут в Nginx..."
                 if ! grep -q "location /trojan-ws" /etc/nginx/conf.d/tls-tunnel.conf 2>/dev/null; then
                     cat << 'NGINXCFG' >> /etc/nginx/conf.d/tls-tunnel.conf
     location /trojan-ws {
@@ -76,16 +93,25 @@ XRAYCFG
 NGINXCFG
                 fi
 
-                echo -e "→ Открываю порт 8443 в UFW..."
+                # 1f. UFW + запуск
                 ufw allow 8443/tcp > /dev/null 2>&1
-
-                echo -e "→ Запускаю сервисы..."
                 systemctl daemon-reload
                 systemctl enable xray > /dev/null 2>&1
                 systemctl restart xray
-                nginx -t && systemctl restart nginx
-                
-                echo -e "${GREEN}✅ Trojan успешно включен и настроен!${NC}"
+
+                if ! nginx -t >/dev/null 2>&1; then
+                    echo -e "${RED}❌  nginx -t упал. Не перезапускаю.${NC}"
+                    read -p "Enter..."; continue
+                fi
+                systemctl restart nginx
+
+                # 1g. Итог
+                if systemctl is-active --quiet xray; then
+                    local cur_ver=$(xray version 2>/dev/null | head -1 | awk '{print $2}')
+                    echo -e "${GREEN}✅  Готово. Xray v${cur_ver:-?} работает, Trojan включён.${NC}"
+                else
+                    echo -e "${RED}❌  Xray не запустился. journalctl -u xray -n 30${NC}"
+                fi
                 read -p "Enter..."
                 ;;
             2)

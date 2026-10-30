@@ -712,12 +712,17 @@ _nodes_install_xray() {
     fi
 
     echo ""
-    echo -e "${CYAN}→ Ставлю Xray на $name ($ip)...${NC}"
+    echo -e "${CYAN}→ Проверяю текущую версию Xray на ноде...${NC}"
+    local OLD_VER=$(ssh -q -o LogLevel=QUIET -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "xray version 2>/dev/null | head -1 | awk '{print \$2}'")
+    echo -e "  Текущая версия: ${YELLOW}${OLD_VER:-не установлен}${NC}"
+
+    echo -e "${CYAN}→ Устанавливаю/обновляю Xray на $name ($ip)...${NC}"
     scp -q -o StrictHostKeyChecking=no -o BatchMode=yes -P "$sport" /usr/local/share/vpn-panel/install-xray-node.sh root@"$ip":/tmp/xray.sh >/dev/null 2>&1
     ssh -q -o LogLevel=QUIET -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "chmod +x /tmp/xray.sh && bash /tmp/xray.sh '$XRAY_PASS'" 2>&1 | sed 's/^/  /'
 
     if ssh -q -o LogLevel=QUIET -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "systemctl is-active --quiet xray && systemctl is-active --quiet nginx" >/dev/null 2>&1; then
-        echo -e "${GREEN}✅  Xray установлен и работает${NC}"
+        local NEW_VER=$(ssh -q -o LogLevel=QUIET -o StrictHostKeyChecking=no -o BatchMode=yes -p "$sport" root@"$ip" "xray version 2>/dev/null | head -1 | awk '{print \$2}'")
+        echo -e "${GREEN}✅  Успешно. Версия: ${NEW_VER:-?}${NC}"
     else
         echo -e "${RED}❌  Ошибка: xray/nginx не активны на ноде${NC}"
     fi
@@ -767,7 +772,7 @@ menu_nodes() {
         echo -e " 14) 🚀 УСТАНОВКА / РЕМОНТ НОДЫ (Полный автомат)"
         echo -e " 15) ✏️  Редактировать ноду"
         echo -e " 16) 🔑 Управление токеном для нод"
-        echo -e " 17) 🚀 Установить Xray (Trojan) на ноду"
+        echo -e " 17) 🚀 Xray (Trojan) на нодах — установить/обновить"
         echo -e " 0) ↩️  Назад"
         echo ""
         read -p "Выберите действие [0-17]: " n_choice
