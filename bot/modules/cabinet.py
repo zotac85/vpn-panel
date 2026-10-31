@@ -3003,7 +3003,8 @@ def show_whitedns_menu(cfg, chat_id, user_id, msg_id=None):
             "",
             "📥 <b>Скачать WhiteDNS (GitHub):</b>",
             "📱 <b>Android:</b> <a href='https://github.com/WhiteDNS/WhiteDNS-Android'>Скачать</a>",
-            "💻 <b>ПК (Windows/macOS/Linux):</b> <a href='https://github.com/WhiteDNS/WhiteDNS-Desktop'>Скачать</a>",
+            "💻 <b>ПК (Windows):</b> <a href='https://github.com/WhiteDNS/WhiteDNS-Desktop'>Скачать</a>",
+            "🍏 <b>iOS (CoreForge):</b> <a href='https://whitedns.online/tools/coreforge/'>Скачать</a>",
             "",
             "━━ 🌐 <b>СЕРВЕРЫ</b> ━━",
         ] + _srv_lines + [
