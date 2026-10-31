@@ -2838,8 +2838,11 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
                 "2️⃣ Нажми на свой <b>VIP-ключ</b>." + chr(10) +
                 "3️⃣ Нажми кнопку <b>💻 ПК</b>." + chr(10) +
                 "4️⃣ Скопируй ссылку и вставь её в приложение." + chr(10) + chr(10) + \
-                "🚀 <b>Также доступен Trojan (WS) для NekoBox / v2rayNG (универсальный протокол).</b>" + chr(10) + chr(10) +
-                "💾 <b>Скачать приложение:</b> <a href='https://github.com/zotac85/ArsenVpn'>GitHub</a>"
+                "🚀 <b>Также доступен Trojan (WS) для Happ, Nekoray и других клиентов.</b>" + chr(10) + chr(10) +
+                "📥 <b>Скачать приложения:</b>" + chr(10) +
+                "🖥 <b>ArsenVPN:</b> <a href='https://github.com/zotac85/ArsenVpn'>GitHub</a>" + chr(10) +
+                "🌐 <b>Happ:</b> <a href='https://www.happ.su/main/ru'>Официальный сайт</a>" + chr(10) +
+                "🐈 <b>Nekoray:</b> <a href='https://github.com/Matsuridayo/nekoray/releases'>GitHub</a>"
             )
             _pc_kb = {'inline_keyboard': [
                 [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'}],
