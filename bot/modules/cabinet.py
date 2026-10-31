@@ -1406,8 +1406,11 @@ def _build_dark_url_for_key(cfg, key_name, domain=None, ws_port=None, location_n
                 if _tls_dom and _tls_dom[0]: domain = _tls_dom[0]
                 sport = 443
                 pport = 443
-                _proxyhost = "104.18.0.3"
-                _sni = "ruzone27.shop"
+                # Читаем актуальный прокси и SNI из БД
+                _tls_p = _db.execute("SELECT value FROM settings WHERE key='TLS_PROXY'").fetchone()
+                _proxyhost = _tls_p[0].split(':')[0] if _tls_p and _tls_p[0] else "104.18.0.3"
+                _sni_row = _db.execute("SELECT value FROM settings WHERE key='TLS_SNI'").fetchone()
+                _sni = _sni_row[0] if _sni_row and _sni_row[0] else "ruzone27.shop"
                 _dt_mode = "PROXY_SNI"
                 _pl = _db.execute("SELECT value FROM settings WHERE key='TLS_PAYLOAD'").fetchone()
                 _payload = _pl[0] if _pl else "HEAD / HTTP/1.1[crlf]Host: cdnstore.scia.net[crlf]User-Agent: Mozilla/5.0[crlf][crlf]POST / HTTP/1.1[crlf]Host: [host][crlf]Connection: upgrade[crlf]Upgrade: websocket[crlf][crlf]"
