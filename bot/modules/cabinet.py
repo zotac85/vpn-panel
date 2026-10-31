@@ -2353,7 +2353,11 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
                 "2. Открой приложение и нажми кнопку <b>«Подписка»</b> (внизу)." + chr(10) + \
                 "3. Вставь ссылку ниже в поле и нажми <b>«Загрузить»</b>." + chr(10) + \
                 "4. Закрой окно, выбери сервер и нажми <b>CONNECT</b>." + chr(10) + chr(10) + \
-                "🚀 <b>Также доступен Trojan (WS) для NekoBox / v2rayNG.</b>" + chr(10) + chr(10) + \
+                "🚀 <b>Также доступен Trojan (WS) для Happ, Nekoray и других клиентов.</b>" + chr(10) + chr(10) + \
+                "📥 <b>Скачать приложения:</b>" + chr(10) + \
+                "🖥 <b>ArsenVPN:</b> <a href='https://github.com/zotac85/ArsenVpn'>GitHub</a>" + chr(10) + \
+                "🌐 <b>Happ:</b> <a href='https://www.happ.su/main/ru'>Официальный сайт</a>" + chr(10) + \
+                "🐈 <b>Nekoray:</b> <a href='https://github.com/Matsuridayo/nekoray/releases'>GitHub</a>" + chr(10) + chr(10) + \
                 f"<code>{_sub_url}</code>"
         _kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
         
