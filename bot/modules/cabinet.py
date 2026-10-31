@@ -2876,6 +2876,7 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
                 "2️⃣ Нажми на свой <b>VIP-ключ</b>." + chr(10) +
                 "3️⃣ Выбери кнопку <b>🍏 Ключ для iPhone</b>." + chr(10) + chr(10) +
                 "📲 <i>Ссылка на подписку автоматически подтянет все ваши локации!</i>" + chr(10) + chr(10) + \
+                "📱 <b>Альтернатива:</b> <a href='https://play.google.com/store/apps/details?id=com.napsternetlabs.napsternetv'>NapsternetV (Google Play)</a>" + chr(10) + chr(10) + \
                 "🚀 <b>Также доступен Trojan (WS) для NekoBox / v2rayNG (альтернатива, если NPV не подходит).</b>"
             )
             _udp_kb = {'inline_keyboard': [
