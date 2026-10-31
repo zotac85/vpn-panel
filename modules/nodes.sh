@@ -703,6 +703,14 @@ _nodes_install_xray() {
     [ -z "$row" ] && { echo -e "${RED}Нода не найдена${NC}"; read -p "Enter..."; return; }
     IFS='|' read -r real_id name host tls_host ip sport wsport <<< "$row"
 
+    if [ "$real_id" = "1" ]; then
+        echo -e "\n${RED}❌  Это МАСТЕР!${NC}"
+        echo -e "${YELLOW}Установка/обновление Xray на мастере делается в Главном меню:${NC}"
+        echo -e "${GREEN}  5) 🚀 Trojan (Xray) → 1) Установить / Обновить / Перенастроить${NC}"
+        read -p "Нажмите Enter..."
+        return
+    fi
+
     local XRAY_PASS=$(python3 -c "import json; print(json.load(open('/usr/local/etc/xray/config.json'))['inbounds'][0]['settings']['clients'][0]['password'])" 2>/dev/null)
     if [ -z "$XRAY_PASS" ]; then
         echo -e "${RED}❌  Пароль Xray не найден на мастере${NC}"; read -p "Enter..."; return
