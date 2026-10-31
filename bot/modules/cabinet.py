@@ -2977,21 +2977,27 @@ def show_whitedns_menu(cfg, chat_id, user_id, msg_id=None):
             _ok = bool(_srv[_i]) and bool(_wd_c_read_file(WD_RES_PATHS[_i]))
             _srv_lines.append(WD_SRV_NAMES[_i] + (' — ✅ активен' if _ok else ' — ⏳ настройка'))
         text = NL.join([
-            "📡 <b>WHITEDNS ДОСТУП</b>",
+            "🌐 <b>WhiteDNS (Резервный доступ)</b>",
             "━━━━━━━━━━━━━━━━━━━━",
             "",
-            "✅  Твой VIP активен",
+            "Вы VIP клиент! Теперь вам доступен резервный VPN для мобильного интернета и обхода жестких блокировок.",
             "",
-            "📌 <b>КАК ПОЛУЧИТЬ:</b>",
+            "👉 <b>Как получить:</b>",
             "1️⃣ Выбери сервер",
             "2️⃣ Выбери профиль",
             "3️⃣ Подтверди и получи файлы",
+            "",
+            "🛡️ <i>Работает даже при полном локдауне сети!</i>",
+            "",
+            "📥 <b>Скачать WhiteDNS:</b>",
+            "📱 <b>Android:</b> <a href='https://github.com/WhiteDNS/WhiteDNS-Android'>Скачать</a>",
+            "💻 <b>ПК (Windows/macOS/Linux):</b> <a href='https://github.com/WhiteDNS/WhiteDNS-Desktop'>Скачать</a>",
             "",
             "━━ 🌐 <b>СЕРВЕРЫ</b> ━━",
         ] + _srv_lines + [
             "",
             "━━━━━━━━━━━━━━━━━━━━",
-            "1️⃣ <b>ВЫБЕРИ СЕРВЕР:</b>",
+            "👇 <b>Выбери сервер для получения ключа:</b>",
         ])
         kb = {'inline_keyboard': [
             [{'text': '🇩🇪 Германия', 'callback_data': 'cab_wd_de'},
