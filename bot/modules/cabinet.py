@@ -1262,7 +1262,8 @@ def send_npvt_file(cfg, chat_id, user_id, key_name):
         "1. Скачай приложение: <a href='https://apps.apple.com/us/app/npv-tunnel/id1629465476'>App Store</a>",
         "2. Перейди во вкладку <b>Configs</b> (внизу по центру)",
         "3. Нажми на кнопку <b>➕</b> в правом нижнем углу",
-        "4. Выбери <b>Add subscription</b> и вставь ссылку ниже",
+        "4. Выбери <b>Add subscription</b> и вставь ссылку ниже" + chr(10) + chr(10) + \
+                "🚀 <b>Также доступен Trojan (WS) для NekoBox / v2rayNG.</b>",
         "",
         f"<code>{sub_url}</code>"
     ])
@@ -2350,6 +2351,7 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
                 "2. Открой приложение и нажми кнопку <b>«Подписка»</b> (внизу)." + chr(10) + \
                 "3. Вставь ссылку ниже в поле и нажми <b>«Загрузить»</b>." + chr(10) + \
                 "4. Закрой окно, выбери сервер и нажми <b>CONNECT</b>." + chr(10) + chr(10) + \
+                "🚀 <b>Также доступен Trojan (WS) для NekoBox / v2rayNG.</b>" + chr(10) + chr(10) + \
                 f"<code>{_sub_url}</code>"
         _kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
         
