@@ -2391,14 +2391,14 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         sub_url = f"https://{sub_domain}/trojan/{key_name}"
 
         _text = "🚀 <b>Trojan (WebSocket) — все ноды</b>" + chr(10) + chr(10) + \
-                "📥 <b>Ссылка-подписка:</b>" + chr(10) + \
-                f"<code>{sub_url}</code>" + chr(10) + chr(10) + \
                 "💡 <b>Как использовать:</b>" + chr(10) + \
-                "1. Скопируй ссылку выше." + chr(10) + \
+                "1. Скопируй ссылку ниже." + chr(10) + \
                 "2. В NekoBox/v2rayNG выбери «Добавить подписку»." + chr(10) + \
                 "3. Вставь ссылку и сохрани." + chr(10) + chr(10) + \
                 "• В списке появятся все доступные страны" + chr(10) + \
-                "• Обновление ключей — в один клик"
+                "• Обновление ключей — в один клик" + chr(10) + chr(10) + \
+                "📥 <b>Ссылка-подписка:</b>" + chr(10) + \
+                f"<code>{sub_url}</code>"
         _kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
         _send_instr(token, chat_id, _text, _kb)
         return True
@@ -2547,6 +2547,7 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
                 "Купите VIP ключ, чтобы получить доступ к резервному VPN для мобильного интернета и обхода жестких блокировок." + chr(10) + chr(10) +
                 "✅ 3 сервера на выбор: 🇩🇪 Германия · 🇫🇮 Финляндия · 🇫🇷 Франция" + chr(10) +
                 "✅ 3 профиля: 3G, WiFi, ADSL." + chr(10) + chr(10) +
+                "🛡️ <b>Работает даже при полном локдауне сети, когда всё остальное бессильно!</b>" + chr(10) + chr(10) +
                 "💾 <b>Скачать WhiteDNS:</b> https://github.com/WhiteDNS/WhiteDNS-Android/releases" + chr(10) + chr(10) +
                 "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
             )
