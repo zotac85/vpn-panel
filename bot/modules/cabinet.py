@@ -414,7 +414,7 @@ def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
         "💰 <b>Баланс</b> — пополнение Stars, tmcell, CRYPTO и история.",
         "🔑 <b>Мои ключи</b> — твои ключи для Android, ПК и iOS.",
         "",
-        "🔒 <i>Разделы для ПК, iPhone и WhiteDns доступны только после покупки VIP ключа.</i>"
+        "🔒 <i>Все разделы (ПК, iPhone, WhiteDns) доступны после покупки VIP.</i>"
     ]
     text = NL.join(lines)
 
@@ -426,7 +426,7 @@ def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
         _buy_text = "💎 КУПИТЬ VIP-КЛЮЧ"
 
     keyboard = {'inline_keyboard': [
-        [{'text': '💎 Купить VIP ключ (DarkTunnel)', 'callback_data': 'cab_buy_vip'}],
+        [{'text': '💎 Купить VIP доступ (Все разделы)', 'callback_data': 'cab_buy_vip'}],
         [{'text': f'🔑 Мои ключи ({active_count})', 'callback_data': 'cab_keys'},
          {'text': '💰 Баланс', 'callback_data': 'cab_balance'},
          {'text': '🎫 Промокод', 'callback_data': 'cab_promo'}],
@@ -2547,7 +2547,7 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
                 "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
             )
             _wd_kb = {'inline_keyboard': [
-                [{'text': '💎 Купить VIP ключ (DarkTunnel)', 'callback_data': 'cab_buy_vip'}],
+                [{'text': '💎 Купить VIP доступ (Все разделы)', 'callback_data': 'cab_buy_vip'}],
                 [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
             ]}
             _send_new(token, chat_id, _wd_text, _wd_kb)
@@ -2843,7 +2843,7 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
                 "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
             )
             _pc_kb = {'inline_keyboard': [
-                [{'text': '💎 Купить VIP ключ (DarkTunnel)', 'callback_data': 'cab_buy_vip'}],
+                [{'text': '💎 Купить VIP доступ (Все разделы)', 'callback_data': 'cab_buy_vip'}],
                 [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
             ]}
         _send_new(token, chat_id, _pc_text, _pc_kb)
@@ -2883,7 +2883,7 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
                 "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
             )
             _udp_kb = {'inline_keyboard': [
-                [{'text': '💎 Купить VIP ключ (DarkTunnel)', 'callback_data': 'cab_buy_vip'}],
+                [{'text': '💎 Купить VIP доступ (Все разделы)', 'callback_data': 'cab_buy_vip'}],
                 [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
             ]}
             
