@@ -2338,6 +2338,8 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
 
     if cb_data.startswith('cab_pcsub:'):
         key_name = cb_data.split(':', 1)[1]
+        try: _smart_files_clear(token, chat_id)
+        except: pass
             
         _dom = "de.cdnstore.shop"
         try:
