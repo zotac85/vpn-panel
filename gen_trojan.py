@@ -8,9 +8,45 @@ import urllib.parse
 
 DB_PATH = '/etc/UDPCustom/vpn.db'
 XRAY_CONFIG = '/usr/local/etc/xray/config.json'
-CF_IP = "104.18.0.3"
 WS_PATH = "/trojan-ws"
-SNI = "ruzone27.shop"
+
+def get_cf_settings():
+    """Читает актуальные настройки из БД и proxies.txt"""
+    cf_ip = "104.18.0.3"
+    sni = "ruzone27.shop"
+    port = 443
+
+    try:
+        db = sqlite3.connect(DB_PATH)
+        settings = dict(db.execute("SELECT key, value FROM settings").fetchall())
+        db.close()
+    except:
+        settings = {}
+
+    # 1. Прокси (IP) из proxies.txt (первая строка)
+    try:
+        with open('/etc/UDPCustom/proxies.txt', 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    cf_ip = line.split(':')[0]
+                    break
+    except:
+        if 'TLS_PROXY' in settings:
+            cf_ip = settings['TLS_PROXY'].split(':')[0]
+
+    # 2. SNI из settings
+    if 'TLS_SNI' in settings:
+        sni = settings['TLS_SNI']
+
+    # 3. Порт из settings (по умолчанию 443)
+    if 'TLS_PROXY' in settings and ':' in settings['TLS_PROXY']:
+        try:
+            port = int(settings['TLS_PROXY'].split(':')[1])
+        except:
+            pass
+
+    return cf_ip, sni, port
 
 def get_trojan_link(login, node_selector="master"):
     """
@@ -81,8 +117,9 @@ def get_trojan_link(login, node_selector="master"):
     except Exception:
         pass
 
+    cf_ip, sni, port = get_cf_settings()
     remark = urllib.parse.quote(f"VIP {login}")
-    link = f"trojan://{password}@{CF_IP}:443?security=tls&type=ws&path={WS_PATH}&host={node_host}&sni={SNI}#{remark}"
+    link = f"trojan://{password}@{cf_ip}:{port}?security=tls&type=ws&path={WS_PATH}&host={node_host}&sni={sni}#{remark}"
     return link
 
 def get_all_trojan_links(login):
@@ -143,12 +180,13 @@ def get_all_trojan_links(login):
     except Exception:
         pass
 
+    cf_ip, sni, port = get_cf_settings()
     links = []
     for r in rows:
         _id, name, host, tls_host, ip, is_master = r
         node_host = tls_host or host or "de.ruzone27.shop"
         remark = urllib.parse.quote(f"VIP {login} · {name}")
-        link = f"trojan://{password}@{CF_IP}:443?security=tls&type=ws&path={WS_PATH}&host={node_host}&sni={SNI}#{remark}"
+        link = f"trojan://{password}@{cf_ip}:{port}?security=tls&type=ws&path={WS_PATH}&host={node_host}&sni={sni}#{remark}"
         links.append(link)
 
     return "\n".join(links)

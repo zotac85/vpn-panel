@@ -176,13 +176,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 payload = "HEAD / HTTP/1.1[crlf]Host: cdnstore.scia.net[crlf]User-Agent: Mozilla/5.0[crlf][crlf]POST / HTTP/1.1[crlf]Host: [host][crlf]Connection: upgrade[crlf]Upgrade: websocket[crlf][crlf]"
                 _sni_row = conn.execute("SELECT value FROM settings WHERE key='TLS_SNI'").fetchone()
                 sni = _sni_row[0] if _sni_row else "ruzone27.shop"
-                proxy = "104.18.0.3:443"
+                _tls_proxy = conn.execute("SELECT value FROM settings WHERE key='TLS_PROXY'").fetchone()
+                proxy = _tls_proxy[0] if _tls_proxy and _tls_proxy[0] else "104.18.0.3:443"
             else:
                 nodes = conn.execute("SELECT name, host FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
                 port = 80
                 payload = None
                 sni = ""
-                proxy = "104.18.0.3:80"
+                _ws_proxy = conn.execute("SELECT value FROM settings WHERE key='WS_PROXY'").fetchone()
+                proxy = _ws_proxy[0] if _ws_proxy and _ws_proxy[0] else "104.18.0.3:80"
             conn.close()
 
             links = [generate_npvt(key['login'], key['password'], host, name, port, payload, sni, proxy) for name, host in nodes if host]

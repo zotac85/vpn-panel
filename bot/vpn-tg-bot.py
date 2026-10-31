@@ -3649,6 +3649,28 @@ PAYLOAD_FILE = "/etc/UDPCustom/payload.txt"
 
 
 
+def _sync_proxies_to_db():
+    """Синхронизирует первый прокси из файла в БД (TLS_PROXY и WS_PROXY)"""
+    import sqlite3
+    try:
+        if not os.path.exists(PROXIES_FILE):
+            return
+        with open(PROXIES_FILE, 'r') as f:
+            ips = [l.strip() for l in f if l.strip() and not l.startswith('#')]
+        if not ips:
+            return
+        first_ip = ips[0].split(':')[0]
+        db_path = '/etc/UDPCustom/vpn.db'
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ('TLS_PROXY', f'{first_ip}:443'))
+        cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ('WS_PROXY', f'{first_ip}:80'))
+        conn.commit()
+        conn.close()
+        log.info(f"Synced proxy to DB: {first_ip}")
+    except Exception as e:
+        log.error(f"Failed to sync proxies to DB: {e}")
+
 def handle_addproxy(cfg, chat_id, user_id, args):
     """Добавить прокси: /addproxy 1.2.3.4"""
     token = cfg['BOT_TOKEN']
@@ -3666,6 +3688,7 @@ def handle_addproxy(cfg, chat_id, user_id, args):
         ips = sorted(set(l.strip() for l in open(PROXIES_FILE) if l.strip()))
         with open(PROXIES_FILE, 'w') as f:
             f.write(chr(10).join(ips) + chr(10))
+            _sync_proxies_to_db()
         send_message(token, chat_id, f"✅  Прокси добавлен: <code>{ip}</code>" + chr(10) + f"Всего: <b>{len(ips)}</b>", parse_mode='HTML')
     except Exception as e:
         send_message(token, chat_id, f"❌  Ошибка: {e}")
@@ -3687,6 +3710,7 @@ def handle_delproxy(cfg, chat_id, user_id, args):
         removed = ips.pop(n-1)
         with open(PROXIES_FILE, 'w') as f:
             f.write("\n".join(ips) + "\n" if ips else "")
+            _sync_proxies_to_db()
         send_message(token, chat_id, f"✅ Удалён: <code>{removed}</code>\nОсталось: <b>{len(ips)}</b>", parse_mode='HTML')
     except Exception as e:
         send_message(token, chat_id, f"❌ Ошибка: {e}")
@@ -5916,6 +5940,7 @@ def main():
                                 _f.write(chr(10).join(_lines) + (chr(10) if _lines else ''))
                         except Exception as _e:
                             log.error(f'proxies_edit: {_e}')
+                    _sync_proxies_to_db()
                     NLx = chr(10)
                     _ok = NLx.join([
                         '✅  <b>ПРОКСИ СОХРАНЕНЫ</b>',
