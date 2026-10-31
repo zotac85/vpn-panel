@@ -1214,6 +1214,7 @@ def format_key_card(cfg, key_name):
         "📱 <b>Android</b>: файл <code>.dark</code>",
         "🍏 <b>iPhone</b>: подписка NPV",
         "💻 <b>ПК</b>: подписка ArsenVPN",
+        "🚀 <b>Trojan</b>: для всех устройств",
         "",
         "<i>Нажми на кнопку ниже.</i>"
     ]
