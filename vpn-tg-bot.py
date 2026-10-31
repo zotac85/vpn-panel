@@ -1385,7 +1385,7 @@ def _do_vip_purchase(cfg, cb, tg_id, idx):
         f"💰 Баланс: <b>{_db.get_balance(tg_id):.2f} USDT</b>",
         "",
         "━━━━━━━━━━━━━━━━━━━━",
-        "📲 Конфиг — в <b>Личном кабинете</b>"
+        "📲 Конфиги — в <b>Личном кабинете</b> в разделе <b>Мои ключи</b>"
     ])
     kb = {'inline_keyboard': [
         [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'}, {'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]
