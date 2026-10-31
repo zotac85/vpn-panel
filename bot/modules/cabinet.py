@@ -2410,7 +2410,8 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         _inst_text = "📱 <b>Ключи для Android (DarkTunnel)</b>" + chr(10) + chr(10) + \
                      "1. Скачай приложение: <a href='https://play.google.com/store/apps/details?id=net.darktunnel.app'>Google Play</a>" + chr(10) + \
                      "2. Нажми на файл ключа ниже" + chr(10) + \
-                     "3. Выбери <b>Открыть с помощью DarkTunnel</b>" + chr(10)
+                     "3. Выбери <b>Открыть с помощью DarkTunnel</b>" + chr(10) + chr(10) + \
+                     "🚀 <b>Также доступен Trojan (WS) для NekoBox / v2rayNG — работает на любых устройствах.</b>"
         _inst_kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
         
         _send_instr(token, chat_id, _inst_text, _inst_kb)
@@ -2826,7 +2827,8 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
                 "1️⃣ Перейди в раздел <b>🔑 Мои ключи</b>." + chr(10) +
                 "2️⃣ Нажми на свой <b>VIP-ключ</b>." + chr(10) +
                 "3️⃣ Нажми кнопку <b>💻 ПК</b>." + chr(10) +
-                "4️⃣ Скопируй ссылку и вставь её в приложение." + chr(10) + chr(10) +
+                "4️⃣ Скопируй ссылку и вставь её в приложение." + chr(10) + chr(10) + \
+                "🚀 <b>Также доступен Trojan (WS) для NekoBox / v2rayNG (универсальный протокол).</b>" + chr(10) + chr(10) +
                 "💾 <b>Скачать приложение:</b> https://github.com/zotac85/ArsenVpn"
             )
             _pc_kb = {'inline_keyboard': [
@@ -2867,7 +2869,8 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
                 "1️⃣ Перейди в раздел <b>🔑 Мои ключи</b>." + chr(10) +
                 "2️⃣ Нажми на свой <b>VIP-ключ</b>." + chr(10) +
                 "3️⃣ Выбери кнопку <b>🍏 Ключ для iPhone</b>." + chr(10) + chr(10) +
-                "📲 <i>Ссылка на подписку автоматически подтянет все ваши локации!</i>"
+                "📲 <i>Ссылка на подписку автоматически подтянет все ваши локации!</i>" + chr(10) + chr(10) + \
+                "🚀 <b>Также доступен Trojan (WS) для NekoBox / v2rayNG (альтернатива, если NPV не подходит).</b>"
             )
             _udp_kb = {'inline_keyboard': [
                 [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'}],
