@@ -2549,20 +2549,16 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
             show_whitedns_menu(cfg, chat_id, user_id, msg_id)
         else:
             _wd_text = (
-                "🌐 <b>WhiteDNS (Резервный доступ)</b>" + chr(10) + chr(10) +
+                "🌐 <b>Ключ для WhiteDNS</b>" + chr(10) + chr(10) +
                 "🔒 <i>Раздел доступен только VIP клиентам.</i>" + chr(10) + chr(10) +
                 "Купите VIP ключ, чтобы получить доступ к резервному VPN для мобильного интернета и обхода жестких блокировок." + chr(10) + chr(10) +
-                "👉 <b>Как получить:</b>" + chr(10) +
-                "1️⃣ Выбери сервер" + chr(10) +
-                "2️⃣ Выбери профиль" + chr(10) +
-                "3️⃣ Подтверди и получи файлы" + chr(10) + chr(10) +
-                "🛡️ <i>Работает даже при полном локдауне сети!</i>" + chr(10) + chr(10) +
-                "📥 <b>Скачать приложения:</b>" + chr(10) +
-                "📱 <b>Android:</b> <a href='https://github.com/WhiteDNS/WhiteDNS-Android/releases'>GitHub</a>" + chr(10) +
-                "🍏 <b>iOS (CoreForge):</b> <a href='https://whitedns.online/tools/coreforge/'>Сайт</a>" + chr(10) +
-                "💻 <b>ПК (Windows):</b> <a href='https://github.com/WhiteDNS/WhiteDNS-Desktop'>GitHub</a>" + chr(10) + chr(10) +
+                "✅ 3 сервера на выбор: 🇩🇪 Германия · 🇫🇮 Финляндия · 🇫🇷 Франция" + chr(10) +
+                "✅ 3 профиля: 3G, WiFi, ADSL." + chr(10) + chr(10) +
+                "🛡️ <b>Работает даже при полном локдауне сети, когда всё остальное бессильно!</b>" + chr(10) + chr(10) +
+                "💾 <b>Скачать WhiteDNS:</b> <a href='https://github.com/WhiteDNS/WhiteDNS-Android/releases'>Android</a> | <a href='https://whitedns.online/tools/coreforge/'>iOS (CoreForge)</a>" + chr(10) + chr(10) +
                 "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
-            )            _wd_kb = {'inline_keyboard': [
+            )
+            _wd_kb = {'inline_keyboard': [
                 [{'text': '💎 Купить VIP доступ (Все разделы)', 'callback_data': 'cab_buy_vip'}],
                 [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
             ]}
