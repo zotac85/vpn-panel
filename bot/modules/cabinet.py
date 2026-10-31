@@ -342,8 +342,10 @@ def make_darktunnel_url(username, password, domain, ws_port, proxy, loc='VPN'):
                 domain = _tls_dom[0]
             sport = 443
             pport = 443
-            proxy_host = "104.18.0.3"
-            sni = "ruzone27.shop"
+            _tls_p = _db.execute("SELECT value FROM settings WHERE key='TLS_PROXY'").fetchone()
+            proxy_host = _tls_p[0].split(':')[0] if _tls_p and _tls_p[0] else "104.18.0.3"
+            _sni_row = _db.execute("SELECT value FROM settings WHERE key='TLS_SNI'").fetchone()
+            sni = _sni_row[0] if _sni_row and _sni_row[0] else "ruzone27.shop"
             mode = "PROXY_SNI"
             _pl = _db.execute("SELECT value FROM settings WHERE key='TLS_PAYLOAD'").fetchone()
             pcfg = _pl[0] if _pl else "HEAD / HTTP/1.1[crlf]Host: cdnstore.scia.net[crlf]User-Agent: Mozilla/5.0[crlf][crlf]POST / HTTP/1.1[crlf]Host: [host][crlf]Connection: upgrade[crlf]Upgrade: websocket[crlf][crlf]"
