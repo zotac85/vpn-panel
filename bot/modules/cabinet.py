@@ -2855,7 +2855,9 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
                 "Купите VIP ключ, чтобы получить доступ к быстрому и стабильному VPN для вашего компьютера (Windows, macOS, Linux)." + chr(10) + chr(10) +
                 "✅ Высокая скорость и стабильность." + chr(10) +
                 "✅ Поддержка всех ПК-платформ." + chr(10) + chr(10) +
-                "💾 <b>Скачать ArsenVPN:</b> <a href='https://github.com/zotac85/ArsenVpn'>GitHub</a>" + chr(10) + chr(10) +
+                "💾 <b>Скачать ArsenVPN:</b> <a href='https://github.com/zotac85/ArsenVpn'>GitHub</a> <i>(DarkTunnel)</i>" + chr(10) +
+                "🌐 <b>Скачать Happ:</b> <a href='https://www.happ.su/main/ru'>Сайт</a> <i>(Trojan)</i>" + chr(10) +
+                "🐈 <b>Скачать Nekoray:</b> <a href='https://github.com/Matsuridayo/nekoray/releases'>GitHub</a> <i>(Trojan)</i>" + chr(10) + chr(10) +
                 "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
             )
             _pc_kb = {'inline_keyboard': [
