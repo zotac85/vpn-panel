@@ -2555,7 +2555,7 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
                 "✅ 3 сервера на выбор: 🇩🇪 Германия · 🇫🇮 Финляндия · 🇫🇷 Франция" + chr(10) +
                 "✅ 3 профиля: 3G, WiFi, ADSL." + chr(10) + chr(10) +
                 "🛡️ <b>Работает даже при полном локдауне сети, когда всё остальное бессильно!</b>" + chr(10) + chr(10) +
-                "💾 <b>Скачать WhiteDNS:</b> https://github.com/WhiteDNS/WhiteDNS-Android/releases" + chr(10) + chr(10) +
+                "💾 <b>Скачать WhiteDNS:</b> <a href='https://github.com/WhiteDNS/WhiteDNS-Android/releases'>Android</a> | <a href='https://whitedns.online/tools/coreforge/'>iOS (CoreForge)</a>" + chr(10) + chr(10) +
                 "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
             )
             _wd_kb = {'inline_keyboard': [
@@ -3001,7 +3001,7 @@ def show_whitedns_menu(cfg, chat_id, user_id, msg_id=None):
             "",
             "🛡️ <i>Работает даже при полном локдауне сети!</i>",
             "",
-            "📥 <b>Скачать WhiteDNS:</b>",
+            "📥 <b>Скачать WhiteDNS (GitHub):</b>",
             "📱 <b>Android:</b> <a href='https://github.com/WhiteDNS/WhiteDNS-Android'>Скачать</a>",
             "💻 <b>ПК (Windows/macOS/Linux):</b> <a href='https://github.com/WhiteDNS/WhiteDNS-Desktop'>Скачать</a>",
             "",
