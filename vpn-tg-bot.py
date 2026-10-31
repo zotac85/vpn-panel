@@ -1371,6 +1371,9 @@ def _do_vip_purchase(cfg, cb, tg_id, idx):
     text = NL.join([
         "🎉 <b>VIP-КЛЮЧ СОЗДАН!</b>",
         "━━━━━━━━━━━━━━━━━━━━",
+        "💎 <b>Теперь вам доступны ВСЕ разделы:</b>",
+        "📱 Android | 🍏 iPhone | 💻 ПК | 🚀 Trojan | 🌐 WhiteDNS",
+        "━━━━━━━━━━━━━━━━━━━━",
         "",
         f"💎 Логин: <code>{username}</code>",
         "",
@@ -6093,51 +6096,16 @@ def main():
                         except: pass
                         continue
                     name = result
-                    # NEW: запрашиваем HWID (обязательно для клиента)
+                    # VIP: пропускаем шаг HWID, сразу к подтверждению
                     try:
-                        from bot_modules.admin import is_admin as _is_adm
-                        _adm = _is_adm(cfg, user_id)
-                    except Exception:
-                        _adm = False
-                    _hw_kb = None
-                    if _adm:
-                        _hw_msg = chr(10).join([
-                            "📱 <b>ВВЕДИ HWID</b>",
-                            "━━━━━━━━━━━━━━━━━━━━",
-                            "",
-                            "Ты админ. Выбери:",
-                            "• <b>Ввести HWID</b> — зашифрованный с привязкой",
-                            "• <b>Пропустить</b> — открытый конфиг",
-                            "",
-                            "Введи HWID или нажми кнопку:",
-                        ])
-                        _hw_kb = {'inline_keyboard': [
-                            [{'text': '➡️ Пропустить',
-                              'callback_data': f'vip_hwid_skip:{tariff_idx}:{name}'}]
-                        ]}
-                    else:
-                        _hw_msg = chr(10).join([
-                            "📱 <b>ВВЕДИ HWID</b>",
-                            "━━━━━━━━━━━━━━━━━━━━",
-                            "",
-                            "HWID — это ID устройства.",
-                            "Ключ будет работать только на этом устройстве.",
-                            "",
-                            "Как узнать:",
-                            "DarkTunnel → ⚙️ Settings → внизу <b>Hardware ID</b>",
-                            "",
-                            "📋 Скопируй и отправь сюда:",
-                        ])
-                    if _hw_kb:
-                        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
-                            'chat_id': chat_id, 'text': _hw_msg,
-                            'parse_mode': 'HTML', 'reply_markup': _hw_kb
-                        })
-                    else:
-                        send_message(cfg['BOT_TOKEN'], chat_id, _hw_msg, parse_mode='HTML')
-                    try:
-                        _db.set_pending(user_id, f'vip_hwid:{tariff_idx}:{name}')
+                        from bot_modules import db as _dbsk
+                        _dbsk.set_pending(user_id, f'vip_ready:{tariff_idx}:{name}:')
                     except: pass
+                    try:
+                        from bot_modules.cabinet import show_vip_final_confirm as _svfc
+                        _svfc(cfg, chat_id, user_id, tariff_idx, name)
+                    except Exception as _e:
+                        log.error(f"show_vip_final_confirm: {_e}")
                     continue
 
                 if pending == 'test_hwid_ch' and text and not text.startswith('/'):
