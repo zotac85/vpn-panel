@@ -1,43 +1,35 @@
 source /usr/local/share/vpn-panel/modules/brutal.sh
 #!/bin/bash
-
 # ──────────────────────────────────────────────────────────────
 # МОДУЛЬ БЕЗОПАСНОСТИ, СИСТЕМЫ И ОПТИМИЗАЦИИ
 # ──────────────────────────────────────────────────────────────
-
 # ──────────────────────────────────────────────────────────────
 # 🖥️  СИСТЕМА
 # ──────────────────────────────────────────────────────────────
-
 system_update() {
     header
     echo -e "${YELLOW}--- 🔄 Обновление системы ---${NC}"
     echo ""
     echo -e "${CYAN}Обновляем списки пакетов...${NC}"
     apt update -qq 2>/dev/null
-
     # Проверяем, есть ли что обновлять
     local upgradable=$(apt list --upgradable 2>/dev/null | grep -c upgradable)
-
     if [ "$upgradable" -eq 0 ]; then
         echo -e "${GREEN}✅ Система уже актуальна — обновлений нет.${NC}"
         read -p "Нажмите Enter..."
         return
     fi
-
     echo -e "${YELLOW}Доступно обновлений: $upgradable${NC}"
     echo ""
     apt list --upgradable 2>/dev/null | head -20
     echo ""
     read -p "Продолжить обновление? (y/n): " c
     [[ ! "$c" =~ ^[Yy]$ ]] && return
-
     echo ""
     apt upgrade -y
     echo -e "${GREEN}✅ Система обновлена!${NC}"
     read -p "Нажмите Enter..."
 }
-
 change_timezone() {
     header
     echo -e "${YELLOW}--- 🕒 Изменение часового пояса ---${NC}"
@@ -58,7 +50,6 @@ change_timezone() {
     echo "  0) Отмена"
     echo ""
     read -p "Выбор [0-9]: " tz
-
     local new_tz=""
     case $tz in
         1) new_tz="Europe/Moscow" ;;
@@ -73,7 +64,6 @@ change_timezone() {
         0) return ;;
         *) return ;;
     esac
-
     if [ -n "$new_tz" ]; then
         timedatectl set-timezone "$new_tz" 2>/dev/null
         echo "$new_tz" > /etc/timezone 2>/dev/null
@@ -83,7 +73,6 @@ change_timezone() {
     fi
     read -p "Нажмите Enter..."
 }
-
 change_dns() {
     header
     echo -e "${YELLOW}--- 🌐 Изменение DNS-серверов ---${NC}"
@@ -116,9 +105,7 @@ change_dns() {
     echo -e "  0) Отмена"
     echo ""
     read -p "Выбор [0-12]: " dns
-
     local dns1="" dns2="" dns_name=""
-
     case $dns in
         1)  dns1="1.1.1.1";       dns2="1.0.0.1";       dns_name="Cloudflare" ;;
         2)  dns1="8.8.8.8";       dns2="8.8.4.4";       dns_name="Google" ;;
@@ -148,24 +135,19 @@ change_dns() {
         0|"") return ;;
         *) return ;;
     esac
-
     if [ -z "$dns1" ]; then
         echo -e "${RED}DNS #1 не задан — отмена.${NC}"
         read -p "Enter..."
         return
     fi
-
     echo ""
     echo -e "${CYAN}Применяем: ${GREEN}$dns_name${NC} ($dns1${dns2:+, $dns2})"
     echo ""
-
     # Отключаем systemd-resolved (чтобы не перетирал)
     systemctl stop systemd-resolved 2>/dev/null
     systemctl disable systemd-resolved 2>/dev/null
-
     # Снимаем защиту от записи (если была)
     chattr -i /etc/resolv.conf 2>/dev/null
-
     # Записываем новый resolv.conf
     rm -f /etc/resolv.conf
     cat > /etc/resolv.conf << EOF
@@ -173,15 +155,12 @@ change_dns() {
 nameserver $dns1
 EOF
     [ -n "$dns2" ] && echo "nameserver $dns2" >> /etc/resolv.conf
-
     # Защищаем от случайного перезаписывания
     chattr +i /etc/resolv.conf 2>/dev/null
-
     # Обновляем systemd-resolved, если он есть (но закомментирован)
     if [ -f /etc/systemd/resolved.conf ]; then
         sed -i "s|^#\?DNS=.*|DNS=$dns1${dns2:+ $dns2}|" /etc/systemd/resolved.conf 2>/dev/null
     fi
-
     echo -e "${GREEN}✅ DNS обновлены!${NC}"
     echo ""
     echo -e "${CYAN}Проверка:${NC}"
@@ -202,11 +181,9 @@ cleanup_system() {
     header
     echo -e "${YELLOW}--- 🧹 Очистка системы ---${NC}"
     echo ""
-
     # Считаем освобождаемое место
     local apt_size=$(du -sh /var/cache/apt 2>/dev/null | awk '{print $1}')
     local journal_size=$(journalctl --disk-usage 2>/dev/null | grep -oP '[\d.]+[A-Z]+' | head -1)
-
     echo -e "${CYAN}Будет очищено:${NC}"
     echo -e "  • Кеш apt       : ~${apt_size:-0}"
     echo -e "  • Журнал systemd: ~${journal_size:-0}"
@@ -214,25 +191,20 @@ cleanup_system() {
     echo ""
     read -p "Очистить? (y/n): " c
     [[ ! "$c" =~ ^[Yy]$ ]] && return
-
     echo ""
     echo -e "${CYAN}[1/3] Очистка apt...${NC}"
     apt clean -y 2>/dev/null
     apt autoremove -y 2>/dev/null
-
     echo -e "${CYAN}[2/3] Очистка журналов (старше 7 дней)...${NC}"
     journalctl --vacuum-time=7d 2>/dev/null
-
     echo -e "${CYAN}[3/3] Очистка /tmp...${NC}"
     rm -rf /tmp/* 2>/dev/null
     rm -rf /var/tmp/* 2>/dev/null
-
     echo ""
     echo -e "${GREEN}✅ Очистка завершена${NC}"
     df -h / | tail -1
     read -p "Нажмите Enter..."
 }
-
 disk_info() {
     header
     echo -e "${YELLOW}--- 💽 Информация о дисках ---${NC}"
@@ -245,17 +217,14 @@ disk_info() {
     echo ""
     read -p "Нажмите Enter..."
 }
-
 # ──────────────────────────────────────────────────────────────
 # 🛡️  БЕЗОПАСНОСТЬ
 # ──────────────────────────────────────────────────────────────
-
 ufw_manage() {
     while true; do
         header
         echo -e "${YELLOW}🧱 UFW FIREWALL — УПРАВЛЕНИЕ${NC}"
         echo ""
-
         if ufw status 2>/dev/null | grep -q "Status: active"; then
             echo -e " Статус: ${GREEN}🟢 Активен${NC}"
             local rules_count=$(ufw status numbered 2>/dev/null | grep -c '^\[')
@@ -273,7 +242,6 @@ ufw_manage() {
         echo -e " 0) ↩️  Назад"
         echo ""
         read -p "Выберите действие [0-6]: " uchoice
-
         case $uchoice in
             1)
                 header
@@ -381,13 +349,11 @@ ufw_manage() {
         esac
     done
 }
-
 fail2ban_manage() {
     while true; do
         header
         echo -e "${YELLOW}🛡️  FAIL2BAN — УПРАВЛЕНИЕ${NC}"
         echo ""
-
         if systemctl is-active --quiet fail2ban 2>/dev/null; then
             echo -e " Статус: ${GREEN}🟢 Активен${NC}"
             local banned=$(fail2ban-client status sshd 2>/dev/null | grep -oP 'Currently banned:\s*\K[0-9]+')
@@ -406,7 +372,6 @@ fail2ban_manage() {
         echo -e " 0) ↩️  Назад"
         echo ""
         read -p "Выберите действие [0-7]: " fchoice
-
         case $fchoice in
             1)
                 header
@@ -418,7 +383,6 @@ bantime  = 1h
 findtime = 10m
 maxretry = 5
 ignoreip = 127.0.0.1/8
-
 [sshd]
 enabled = true
 port    = 22
@@ -497,7 +461,6 @@ EOF
         esac
     done
 }
-
 change_root_password() {
     header
     echo -e "${YELLOW}--- 🔑 Смена пароля root ---${NC}"
@@ -507,12 +470,10 @@ change_root_password() {
     echo ""
     read -p "Продолжить? (y/n): " c
     [[ ! "$c" =~ ^[Yy]$ ]] && return
-
     echo ""
     passwd root
     read -p "Нажмите Enter..."
 }
-
 change_ssh_port() {
     header
     echo -e "${YELLOW}--- 🔐 Смена порта SSH ---${NC}"
@@ -528,39 +489,31 @@ change_ssh_port() {
     echo ""
     read -p "Новый порт (1-65535, 0 = отмена): " new_port
     [[ "$new_port" == "0" || -z "$new_port" ]] && return
-
     if ! [[ "$new_port" =~ ^[0-9]+$ ]] || [ "$new_port" -lt 1 ] || [ "$new_port" -gt 65535 ]; then
         echo -e "${RED}Неверный порт${NC}"
         read -p "Enter..."; return
     fi
-
     # Открываем новый порт в UFW
     ufw allow "$new_port/tcp" comment 'SSH new port' 2>/dev/null
-
     # Меняем в sshd_config
     if grep -qE "^#?Port " /etc/ssh/sshd_config; then
         sed -i "s|^#\?Port .*|Port $new_port|" /etc/ssh/sshd_config
     else
         echo "Port $new_port" >> /etc/ssh/sshd_config
     fi
-
     # Обновляем fail2ban, если есть
     [ -f /etc/fail2ban/jail.local ] && \
         sed -i "s|^port.*=.*22|port = $new_port|" /etc/fail2ban/jail.local
-
     systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
     systemctl restart fail2ban 2>/dev/null
-
     echo ""
     echo -e "${GREEN}✅ Порт SSH изменён на $new_port${NC}"
     echo -e "${CYAN}Не закрывай текущую сессию! Проверь вход с нового порта.${NC}"
     read -p "Нажмите Enter..."
 }
-
 # ──────────────────────────────────────────────────────────────
 # ⚡ ОПТИМИЗАЦИЯ
 # ──────────────────────────────────────────────────────────────
-
 toggle_ipv6() {
     header
     echo -e "${YELLOW}--- 🌐 IPv6 ---${NC}"
@@ -588,7 +541,6 @@ toggle_ipv6() {
     fi
     read -p "Нажмите Enter..."
 }
-
 toggle_bbr() {
     header
     echo -e "${YELLOW}--- 🚀 TCP BBR ---${NC}"
@@ -621,7 +573,6 @@ toggle_bbr() {
     fi
     read -p "Нажмите Enter..."
 }
-
 optimize_udp_tm() {
     header
     echo -e "${YELLOW}--- ⚡ Оптимизация буферов ---${NC}"
@@ -643,12 +594,10 @@ SYS_EOF
     fi
     read -p "Нажмите Enter..."
 }
-
 create_swap() {
     header
     echo -e "${YELLOW}--- 💾 Swap-файл ---${NC}"
     echo ""
-
     local current_swap=$(free -m | awk '/Swap:/ {print $2}')
     if [ "$current_swap" -gt 0 ]; then
         echo -e "Текущий swap: ${GREEN}${current_swap} MB${NC}"
@@ -659,33 +608,26 @@ create_swap() {
         rm -f /swapfile
         sed -i '/\/swapfile/d' /etc/fstab
     fi
-
     echo ""
     read -p "Размер swap в MB (например 1024 или 2048): " size
     [[ ! "$size" =~ ^[0-9]+$ ]] && { echo -e "${RED}Неверный размер${NC}"; sleep 1; return; }
-
     echo -e "\n${CYAN}Создаём swap ${size}MB...${NC}"
     fallocate -l ${size}M /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=$size 2>/dev/null
     chmod 600 /swapfile
     mkswap /swapfile >/dev/null 2>&1
     swapon /swapfile 2>/dev/null
-
     grep -q "/swapfile" /etc/fstab || echo "/swapfile none swap sw 0 0" >> /etc/fstab
-
     # Оптимизация для VPS
     sysctl vm.swappiness=10 2>/dev/null
     grep -q "vm.swappiness" /etc/sysctl.conf || echo "vm.swappiness=10" >> /etc/sysctl.conf
-
     echo ""
     echo -e "${GREEN}✅ Swap ${size}MB создан${NC}"
     free -m | grep Swap
     read -p "Нажмите Enter..."
 }
-
 # ──────────────────────────────────────────────────────────────
 # 🔄 УПРАВЛЕНИЕ
 # ──────────────────────────────────────────────────────────────
-
 server_reboot() {
     header
     echo -e "${YELLOW}--- 🔄 Перезагрузка сервера ---${NC}"
@@ -700,7 +642,6 @@ server_reboot() {
         reboot
     fi
 }
-
 server_shutdown() {
     header
     echo -e "${YELLOW}--- 🛑 Выключение сервера ---${NC}"
@@ -714,18 +655,15 @@ server_shutdown() {
         shutdown -h now
     fi
 }
-
 monitoring_htop() {
     header
     echo -e "${YELLOW}--- 📊 Мониторинг ресурсов ---${NC}"
     echo ""
-
     if ! command -v htop &>/dev/null; then
         echo -e "${CYAN}htop не установлен. Устанавливаем...${NC}"
         apt update -qq 2>/dev/null
         apt install -y htop 2>/dev/null
     fi
-
     if command -v htop &>/dev/null; then
         echo -e "${CYAN}Запуск htop (выход — клавиша Q)...${NC}"
         sleep 1
@@ -738,7 +676,6 @@ monitoring_htop() {
         read -p "Enter..."
     fi
 }
-
 # ──────────────────────────────────────────────────────────────
 # ГЛАВНОЕ МЕНЮ
 # ──────────────────────────────────────────────────────────────
@@ -752,7 +689,6 @@ icmp_block_status() {
         echo -e "${RED}🔴 Выключена${NC}"
     fi
 }
-
 icmp_block_enable() {
     header
     echo -e "${YELLOW}🛡  БЛОКИРОВКА ICMP (ping)${NC}"
@@ -780,7 +716,6 @@ icmp_block_enable() {
     echo -e "${CYAN}Проверь с другого хоста: ping $(hostname -I | awk '{print $1}')${NC}"
     read -p "Нажмите Enter..."
 }
-
 icmp_block_disable() {
     header
     iptables -D INPUT -p icmp --icmp-type echo-request -j DROP 2>/dev/null
@@ -792,8 +727,6 @@ icmp_block_disable() {
     fi
     read -p "Нажмите Enter..."
 }
-
-
 # ──────────────────────────────────────────────────────────────
 # БЭКАП / ВОССТАНОВЛЕНИЕ
 # ──────────────────────────────────────────────────────────────
@@ -812,7 +745,6 @@ backup_create_now() {
     echo ""
     read -p "Enter для продолжения..." _
 }
-
 backup_list() {
     header
     echo -e "${YELLOW}📂 Локальные бэкапы в /root/backups/${NC}"
@@ -827,7 +759,6 @@ backup_list() {
     echo ""
     read -p "Enter для продолжения..." _
 }
-
 backup_restore_menu() {
     header
     echo -e "${YELLOW}📥 Восстановление из бэкапа${NC}"
@@ -872,7 +803,6 @@ backup_restore_menu() {
     echo ""
     read -p "Enter для продолжения..." _
 }
-
 menu_icmp_block() {
     while true; do
         header
@@ -897,9 +827,6 @@ menu_icmp_block() {
         esac
     done
 }
-
-
-
 optimize_ssh() {
     clear
     echo -e "${YELLOW}Ускоряем SSH...${NC}"
@@ -911,7 +838,6 @@ optimize_ssh() {
     echo -e "${GREEN}✅ SSH ускорен (DNS и GSSAPI отключены)${NC}"
     read -p "Нажмите Enter..."
 }
-
 run_full_optimize() {
     clear
     echo -e "${CYAN}══════════════════════════════════════════════${NC}"
@@ -934,11 +860,8 @@ run_full_optimize() {
     read -p "Продолжить? (y/n): " c
     [[ "$c" != "y" && "$c" != "Y" ]] && return
     echo ""
-    
     # 1. Запускаем основной скрипт оптимизации
     bash /usr/local/bin/vpn-optimize.sh ""
-    
-    
     echo ""
     read -p "Нажмите Enter..."
     echo -e "${CYAN}Настраиваю SSH KeepAlive (от обрывов)...${NC}"
@@ -947,35 +870,28 @@ run_full_optimize() {
     echo 'ClientAliveInterval 30' >> /etc/ssh/sshd_config
     echo 'ClientAliveCountMax 6' >> /etc/ssh/sshd_config
     systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
-
 }
-
 menu_sec() {
     while true; do
         header
         echo -e "${YELLOW}🛡️  БЕЗОПАСНОСТЬ, СИСТЕМА И ОПТИМИЗАЦИЯ${NC}"
         echo ""
-
         # Статусы
         local upgradable=$(apt list --upgradable 2>/dev/null | grep -c upgradable)
         [ "$upgradable" -gt 0 ] && US="${YELLOW}$upgradable обновлений${NC}" || US="${GREEN}Актуальна${NC}"
         echo -e " Обновление системы : $US"
-
-
         if ufw status 2>/dev/null | grep -q "Status: active"; then
             local rules=$(ufw status numbered 2>/dev/null | grep -c '^\[')
             echo -e " UFW Firewall       : ${GREEN}🟢 Активен ($rules правил)${NC}"
         else
             echo -e " UFW Firewall       : ${RED}🔴 Выключен${NC}"
         fi
-
         if systemctl is-active --quiet fail2ban 2>/dev/null; then
             local banned=$(fail2ban-client status sshd 2>/dev/null | grep -oP 'Currently banned:\s*\K[0-9]+')
             echo -e " Fail2ban           : ${GREEN}🟢 Активен (${banned:-0} в бане)${NC}"
         else
             echo -e " Fail2ban           : ${RED}🔴 Выключен${NC}"
         fi
-
         if sysctl net.ipv4.tcp_congestion_control 2>/dev/null | grep -q "bbr"; then
             echo -e " TCP BBR            : ${GREEN}🟢 Включён${NC}"
         else
@@ -990,10 +906,8 @@ menu_sec() {
             fi
         else
             echo -e " TCP Brutal         : ${RED}🔴 Не установлен${NC}"
-        
         # Проверка лимитов скорости
         IFACE=$(ip -o -4 route show to default | awk '{print $5}')
-        
         # TCP Лимит
         TCP_LIMIT=$(tc class show dev $IFACE 2>/dev/null | grep "1:20" | grep -o "rate [0-9]*Mbit")
         if [ -n "$TCP_LIMIT" ]; then
@@ -1002,7 +916,6 @@ menu_sec() {
         else
             echo -e " TCP Лимит          : \033[0;31m🔴 Не установлен\033[0m"
         fi
-        
         # DNS Лимит
         DNS_LIMIT=$(tc class show dev $IFACE 2>/dev/null | grep "1:10" | grep -o "rate [0-9]*Mbit")
         if [ -n "$DNS_LIMIT" ]; then
@@ -1012,14 +925,11 @@ menu_sec() {
             echo -e " DNS Лимит          : \033[0;31m🔴 Не установлен\033[0m"
         fi
         fi
-
         if grep -q "net.core.rmem_max" /etc/sysctl.conf 2>/dev/null; then
             echo -e " Буферы ядра        : ${GREEN}🟢 Оптимизированы${NC}"
         else
             echo -e " Буферы ядра        : ${RED}🔴 Стандартные${NC}"
         fi
-
-
 # ── SWAP (новая строка) ──
 local swap_used=$(free -m | awk '/Swap:/ {print $3}')
 local swap_total=$(free -m | awk '/Swap:/ {print $2}')
@@ -1035,7 +945,6 @@ if [ "$swap_total" -gt 0 ]; then
 else
     echo -e " Swap               : ${RED}🔴 Не создан${NC}"
 fi
-
         echo ""
         echo -e "${CYAN}─── 🖥️  Система ───${NC}"
         echo -e " 1) 🔄 Обновить систему"
@@ -1078,7 +987,6 @@ fi
         echo -e " 0) ↩️  Назад в главное меню"
         echo ""
         read -p "Выберите раздел [0-25]: " sec_choice
-
         case $sec_choice in
             1) system_update ;;
             14) manage_tcp_brutal ;;
@@ -1104,12 +1012,30 @@ fi
             22) backup_create_now ;;
             23) backup_list ;;
             24) backup_restore_menu ;;
+            25)
+                _CURRENT_INT=$(grep "ClientAliveInterval" /etc/ssh/sshd_config | awk '{print $2}' | head -1)
+                _CURRENT_MAX=$(grep "ClientAliveCountMax" /etc/ssh/sshd_config | awk '{print $2}' | head -1)
+                echo -e "${CYAN}Текущие настройки SSH KeepAlive:${NC}"
+                echo -e "Интервал: ${GREEN}${_CURRENT_INT:-120}${NC} сек"
+                echo -e "Макс. попыток: ${GREEN}${_CURRENT_MAX:-10}${NC}"
+                echo ""
+                read -p "Новый интервал в секундах (Enter = оставить): " new_int
+                read -p "Макс. попыток (Enter = оставить): " new_max
+                new_int=${new_int:-${_CURRENT_INT:-120}}
+                new_max=${new_max:-${_CURRENT_MAX:-10}}
+                sed -i '/ClientAliveInterval/d' /etc/ssh/sshd_config
+                sed -i '/ClientAliveCountMax/d' /etc/ssh/sshd_config
+                echo "ClientAliveInterval $new_int" >> /etc/ssh/sshd_config
+                echo "ClientAliveCountMax $new_max" >> /etc/ssh/sshd_config
+                systemctl restart ssh
+                echo -e "${GREEN}✅ Настройки применены!${NC}"
+                sleep 2
+                ;;
             0) break ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
         esac
     done
 }
-
 bandwidth_limit_menu() {
     IFACE=$(ip -o -4 route show to default | awk '{print $5}')
     if [ -z "$IFACE" ]; then
@@ -1178,7 +1104,6 @@ bandwidth_limit_menu() {
                     else
                         echo -e "TCP лимит: \033[0;33mНе установлен\033[0m"
                     fi
-                    
                     DNS_LIMIT=$(tc class show dev $IFACE 2>/dev/null | grep "1:10" | grep -o "rate [0-9]*Mbit")
                     if [ -n "$DNS_LIMIT" ]; then
                         echo -e "DNS лимит: \033[0;32m$(echo $DNS_LIMIT | cut -d' ' -f2)\033[0m"
