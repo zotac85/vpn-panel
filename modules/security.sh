@@ -1042,6 +1042,9 @@ fi
         echo -e " 21) 🛡  Блокировка ICMP (анти-DPI)"
         echo ""
         echo -e "${CYAN}─── 💾 Бэкап / Восстановление ───${NC}"
+        _K_INT=$(grep "ClientAliveInterval" /etc/ssh/sshd_config | awk '{print $2}' | head -1)
+        _K_MAX=$(grep "ClientAliveCountMax" /etc/ssh/sshd_config | awk '{print $2}' | head -1)
+        echo -e " 🔗 KeepAlive: ${CYAN}${_K_INT:-120}${NC} сек, ${CYAN}${_K_MAX:-10}${NC} попыток"
         echo -e " 22) 💾 Создать бэкап сейчас"
         echo -e " 23) 🔗 Настроить SSH KeepAlive (от обрывов)"
         echo -e " 23) 📂 Список бэкапов"
