@@ -923,6 +923,13 @@ run_full_optimize() {
     
     echo ""
     read -p "Нажмите Enter..."
+    echo -e "${CYAN}Настраиваю SSH KeepAlive (от обрывов)...${NC}"
+    sed -i '/ClientAliveInterval/d' /etc/ssh/sshd_config
+    sed -i '/ClientAliveCountMax/d' /etc/ssh/sshd_config
+    echo 'ClientAliveInterval 30' >> /etc/ssh/sshd_config
+    echo 'ClientAliveCountMax 6' >> /etc/ssh/sshd_config
+    systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+
 }
 
 menu_sec() {
@@ -1046,13 +1053,13 @@ fi
         _K_MAX=$(grep "ClientAliveCountMax" /etc/ssh/sshd_config | awk '{print $2}' | head -1)
         echo -e " 🔗 KeepAlive: ${CYAN}${_K_INT:-120}${NC} сек, ${CYAN}${_K_MAX:-10}${NC} попыток"
         echo -e " 22) 💾 Создать бэкап сейчас"
-        echo -e " 23) 🔗 Настроить SSH KeepAlive (от обрывов)"
         echo -e " 23) 📂 Список бэкапов"
         echo -e " 24) 📥 Восстановить из файла"
+        echo -e " 25) 🔗 Настроить SSH KeepAlive (от обрывов)"
         echo ""
         echo -e " 0) ↩️  Назад в главное меню"
         echo ""
-        read -p "Выберите раздел [0-24]: " sec_choice
+        read -p "Выберите раздел [0-25]: " sec_choice
 
         case $sec_choice in
             1) system_update ;;
