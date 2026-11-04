@@ -357,8 +357,7 @@ ufw_manage() {
                 ufw reload 2>/dev/null
                 echo -e "${GREEN}✅ UFW перезагружен${NC}"
                 sleep 1
-                ;;
-            25)
+                ;;            25)
                 _CURRENT_INT=$(grep "ClientAliveInterval" /etc/ssh/sshd_config | awk '{print $2}' | head -1)
                 _CURRENT_MAX=$(grep "ClientAliveCountMax" /etc/ssh/sshd_config | awk '{print $2}' | head -1)
                 echo -e "${CYAN}Текущие настройки SSH KeepAlive:${NC}"
