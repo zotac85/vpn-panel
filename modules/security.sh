@@ -358,6 +358,25 @@ ufw_manage() {
                 echo -e "${GREEN}✅ UFW перезагружен${NC}"
                 sleep 1
                 ;;
+            25)
+                _CURRENT_INT=$(grep "ClientAliveInterval" /etc/ssh/sshd_config | awk '{print $2}' | head -1)
+                _CURRENT_MAX=$(grep "ClientAliveCountMax" /etc/ssh/sshd_config | awk '{print $2}' | head -1)
+                echo -e "${CYAN}Текущие настройки SSH KeepAlive:${NC}"
+                echo -e "Интервал: ${GREEN}${_CURRENT_INT:-120}${NC} сек"
+                echo -e "Макс. попыток: ${GREEN}${_CURRENT_MAX:-10}${NC}"
+                echo ""
+                read -p "Новый интервал в секундах (Enter = оставить): " new_int
+                read -p "Макс. попыток (Enter = оставить): " new_max
+                new_int=${new_int:-${_CURRENT_INT:-120}}
+                new_max=${new_max:-${_CURRENT_MAX:-10}}
+                sed -i '/ClientAliveInterval/d' /etc/ssh/sshd_config
+                sed -i '/ClientAliveCountMax/d' /etc/ssh/sshd_config
+                echo "ClientAliveInterval $new_int" >> /etc/ssh/sshd_config
+                echo "ClientAliveCountMax $new_max" >> /etc/ssh/sshd_config
+                systemctl restart ssh
+                echo -e "${GREEN}✅ Настройки применены!${NC}"
+                sleep 2
+                ;;
             0) break ;;
             *) echo -e "${RED}Неверный выбор.${NC}"; sleep 1 ;;
         esac
