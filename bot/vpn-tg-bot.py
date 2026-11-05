@@ -2263,8 +2263,9 @@ def show_wd_resolvers(cfg, chat_id, user_id, msg_id=None):
     text = NL.join(txt)
     kb = {'inline_keyboard': [
         [{'text': '🇩🇪 Германия', 'callback_data': 'wd_res_edit_0'},
-         {'text': '🇫🇮 Финляндия', 'callback_data': 'wd_res_edit_1'},
-         {'text': '🇫🇷 Франция', 'callback_data': 'wd_res_edit_2'}],
+         {'text': '🇫🇮 Финляндия', 'callback_data': 'wd_res_edit_1'}],
+        [{'text': '🇫🇷 Франция', 'callback_data': 'wd_res_edit_2'},
+         {'text': '🇳🇱 Нидерланды', 'callback_data': 'wd_res_edit_3'}],
         [{'text': '⬅️ Назад', 'callback_data': 'adm_whitedns'}]
     ]}
     if msg_id:
