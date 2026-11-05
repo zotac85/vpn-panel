@@ -2579,6 +2579,9 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
     if cb_data == 'cab_wd_se':
         show_whitedns_profiles(cfg, chat_id, user_id, 2, msg_id)
         return True
+    if cb_data == 'cab_wd_nl':
+        show_whitedns_profiles(cfg, chat_id, user_id, 3, msg_id)
+        return True
     if cb_data.startswith('cab_wd_prof:'):
         _parts = cb_data.split(':')
         show_whitedns_confirm(cfg, chat_id, user_id, int(_parts[2]), int(_parts[1]), msg_id)
@@ -2959,7 +2962,7 @@ def show_whitedns_menu(cfg, chat_id, user_id, msg_id=None):
             "━━━━━━━━━━━━━━━━━━━━",
             "",
             "🌐 <b>3 сервера на выбор:</b>",
-            "   🇩🇪 Германия  ·  🇫🇮 Финляндия  ·  🇫🇷 Франция",
+            "   🇩🇪 Германия · 🇫🇮 Финляндия · 🇫🇷 Франция · 🇳🇱 Нидерланды",
             "",
             "⚙️ <b>3 профиля под твой интернет:</b>",
             "   📱 3G — мобильная сеть (LTE/4G/5G)",
@@ -2996,7 +2999,7 @@ def show_whitedns_menu(cfg, chat_id, user_id, msg_id=None):
     else:
         _srv = _wd_c_read_servers()
         _srv_lines = []
-        for _i in range(3):
+        for _i in range(4):
             _ok = bool(_srv[_i]) and bool(_wd_c_read_file(WD_RES_PATHS[_i]))
             _srv_lines.append(WD_SRV_NAMES[_i] + (' — ✅ активен' if _ok else ' — ⏳ настройка'))
         text = NL.join([
@@ -3026,7 +3029,8 @@ def show_whitedns_menu(cfg, chat_id, user_id, msg_id=None):
         kb = {'inline_keyboard': [
             [{'text': '🇩🇪 Германия', 'callback_data': 'cab_wd_de'},
              {'text': '🇫🇮 Финляндия', 'callback_data': 'cab_wd_fi'}],
-            [{'text': '🇫🇷 Франция', 'callback_data': 'cab_wd_se'}],
+            [{'text': '🇫🇷 Франция', 'callback_data': 'cab_wd_se'},
+             {'text': '🇳🇱 Нидерланды', 'callback_data': 'cab_wd_nl'}],
             [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
         ]}
     if msg_id:
@@ -3038,12 +3042,13 @@ def show_whitedns_menu(cfg, chat_id, user_id, msg_id=None):
 # ──────────────────────────────────────────────────────────────
 # WHITEDNS — клиентские функции
 # ──────────────────────────────────────────────────────────────
-WD_SRV_NAMES = ['🇩🇪 Германия', '🇫🇮 Финляндия', '🇫🇷 Франция']
+WD_SRV_NAMES = ['🇩🇪 Германия', '🇫🇮 Финляндия', '🇫🇷 Франция', '🇳🇱 Нидерланды']
 WD_PROF_NAMES = ['📱 3G', '📶 WiFi', '🖥 ADSL']
 WD_RES_PATHS = [
     '/etc/UDPCustom/whitedns_resolvers_de.txt',
     '/etc/UDPCustom/whitedns_resolvers_fi.txt',
     '/etc/UDPCustom/whitedns_resolvers_se.txt',
+    '/etc/UDPCustom/whitedns_resolvers_nl.txt',
 ]
 WD_SET_PATHS = [
     '/etc/UDPCustom/whitedns_settings_3g.txt',
@@ -3054,7 +3059,7 @@ WD_SRV_FILE = '/etc/UDPCustom/whitedns_servers.txt'
 WD_ISSUED_LOG = '/etc/UDPCustom/whitedns_issued.log'
 
 def _wd_c_read_servers():
-    result = ['', '', '']
+    result = ['', '', '', '']
     try:
         with open(WD_SRV_FILE) as f:
             lines = [l.rstrip(chr(10)) for l in f]
