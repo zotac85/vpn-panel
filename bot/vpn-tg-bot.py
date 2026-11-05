@@ -2425,8 +2425,8 @@ def show_adm_whitedns(cfg, chat_id, user_id, msg_id=None):
     lines.append('━━━━━━━━━━━━━━━━━━━━')
     text = NL.join(lines)
     kb = {'inline_keyboard': [
-        [{'text': '🌐 Серверы (' + str(srv_ready) + '/3)', 'callback_data': 'wd_servers'},
-         {'text': '🔢 Резолверы (' + str(res_ready) + '/3)', 'callback_data': 'wd_resolvers'}],
+        [{'text': '🌐 Серверы (' + str(srv_ready) + '/4)', 'callback_data': 'wd_servers'},
+         {'text': '🔢 Резолверы (' + str(res_ready) + '/4)', 'callback_data': 'wd_resolvers'}],
         [{'text': '⚙️ Профили (' + str(prof_ready) + '/3)', 'callback_data': 'wd_profiles'},
          {'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
     ]}
