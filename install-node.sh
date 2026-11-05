@@ -18,6 +18,17 @@ GITHUB_TOKEN=$(cat "$TOKEN_FILE" | tr -d ' \n\r')
 SRC_DIR="/tmp/vpn-panel-src-$$"
 [ -d "$SRC_DIR" ] && rm -rf "$SRC_DIR"
 echo -e "\033[0;36m📦 Загрузка репозитория...\033[0m"
+# Фикс DNS для GitHub (обход MasterDnsVPN)
+if ! grep -q "zotac85/vpn-panel" /etc/hosts; then
+    echo -e "\033[0;33m🔧 Применяю фикс DNS для GitHub...\033[0m"
+    echo "140.82.121.4     github.com" >> /etc/hosts
+    echo "140.82.121.5     api.github.com" >> /etc/hosts
+    echo "185.199.108.133  raw.githubusercontent.com" >> /etc/hosts
+    echo "185.199.109.133  raw.githubusercontent.com" >> /etc/hosts
+    echo "185.199.110.133  raw.githubusercontent.com" >> /etc/hosts
+    echo "185.199.111.133  raw.githubusercontent.com" >> /etc/hosts
+fi
+
 if ! git clone --depth 1 "https://${GITHUB_TOKEN}@github.com/zotac85/vpn-panel.git" "$SRC_DIR" >/dev/null 2>&1; then
     echo -e "\033[0;31m❌ Не удалось загрузить репозиторий. Проверь токен.\033[0m"
     exit 1
