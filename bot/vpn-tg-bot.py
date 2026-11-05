@@ -2228,7 +2228,8 @@ def _wd_read_resolvers(idx):
     paths = [
         '/etc/UDPCustom/whitedns_resolvers_de.txt',
         '/etc/UDPCustom/whitedns_resolvers_fi.txt',
-        '/etc/UDPCustom/whitedns_resolvers_se.txt'
+        '/etc/UDPCustom/whitedns_resolvers_se.txt',
+        '/etc/UDPCustom/whitedns_resolvers_nl.txt'
     ]
     try:
         with open(paths[idx]) as f:
@@ -2240,7 +2241,8 @@ def _wd_res_path(idx):
     return [
         '/etc/UDPCustom/whitedns_resolvers_de.txt',
         '/etc/UDPCustom/whitedns_resolvers_fi.txt',
-        '/etc/UDPCustom/whitedns_resolvers_se.txt'
+        '/etc/UDPCustom/whitedns_resolvers_se.txt',
+        '/etc/UDPCustom/whitedns_resolvers_nl.txt'
     ][idx]
 
 def show_wd_resolvers(cfg, chat_id, user_id, msg_id=None):
@@ -2306,11 +2308,11 @@ def show_wd_resolver_edit(cfg, chat_id, user_id, idx, msg_id=None):
 
 def _wd_read_servers():
     """Читает 3 строки серверов. Возвращает список из 3 строк (или '')."""
-    result = ['', '', '']
+    result = ['', '', '', '']
     try:
         with open(WD_SS) as f:
             lines = [l.rstrip(chr(10)) for l in f]
-        for i in range(min(3, len(lines))):
+        for i in range(min(4, len(lines))):
             result[i] = lines[i]
     except:
         pass
