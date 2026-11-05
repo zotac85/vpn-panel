@@ -17,6 +17,12 @@ fi
 GITHUB_TOKEN=$(cat "$TOKEN_FILE" | tr -d ' \n\r')
 SRC_DIR="/tmp/vpn-panel-src-$$"
 [ -d "$SRC_DIR" ] && rm -rf "$SRC_DIR"
+
+# Установка базовых пакетов (включая git) ДО скачивания репозитория
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq >/dev/null 2>&1 || true
+apt-get install -y -qq python3 ufw curl git ca-certificates >/dev/null 2>&1 || true
+
 echo -e "\033[0;36m📦 Загрузка репозитория...\033[0m"
 # Фикс DNS для GitHub (обход MasterDnsVPN)
 if ! grep -q "zotac85/vpn-panel" /etc/hosts; then
