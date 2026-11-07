@@ -3360,7 +3360,7 @@ def show_users_test(cfg, chat_id, user_id, page=1, msg_id=None, show_all=False):
     kb['inline_keyboard'].append([{'text': toggle_text, 'callback_data': toggle_cb}])
     kb['inline_keyboard'].append([
         {'text': '🎁 Тестовые', 'callback_data': 'adm_users_test:1'},
-        {'text': '💎 VIP', 'callback_data': 'adm_users_vip:1'}
+        {'text': '👥 Клиенты', 'callback_data': 'adm_users_clients:1'}
     ])
     kb['inline_keyboard'].append([
         {'text': '⬅️ К разделам', 'callback_data': 'adm_users_menu'}
@@ -3431,7 +3431,7 @@ def show_users_vip(cfg, chat_id, user_id, page=1, msg_id=None):
     if nav: kb['inline_keyboard'].append(nav)
     kb['inline_keyboard'].append([
         {'text': '🎁 Тестовые', 'callback_data': 'adm_users_test:1'},
-        {'text': '💎 VIP', 'callback_data': 'adm_users_vip:1'}
+        {'text': '👥 Клиенты', 'callback_data': 'adm_users_clients:1'}
     ])
     kb['inline_keyboard'].append([
         {'text': '⬅️ К разделам', 'callback_data': 'adm_users_menu'}
@@ -3442,6 +3442,121 @@ def show_users_vip(cfg, chat_id, user_id, page=1, msg_id=None):
     else:
         smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
 
+
+
+def show_adm_users_clients(cfg, chat_id, user_id, page=1, msg_id=None):
+    """Список клиентов (вместо списка ключей)"""
+    try:
+        from bot_modules import db as _db
+    except: return
+    per_page = 8
+    # Получаем уникальные tg_id из ключей
+    rows = _db.query("""
+        SELECT DISTINCT tg_id FROM (
+            SELECT tg_id FROM vip_keys
+            UNION
+            SELECT tg_id FROM test_keys
+        ) WHERE tg_id > 0 ORDER BY tg_id DESC
+    """)
+    total = len(rows)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    if page < 1: page = 1
+    if page > total_pages: page = total_pages
+    offset = (page - 1) * per_page
+    paginated = rows[offset:offset+per_page]
+    
+    NL = chr(10)
+    lines_txt = [
+        "👥 <b>КЛИЕНТЫ</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        f"<i>Стр. {page}/{total_pages} · всего {total}</i>",
+        ""
+    ]
+    kb = {'inline_keyboard': []}
+    btn_row = []
+    if not paginated:
+        lines_txt.append("<i>Пусто</i>")
+    else:
+        for r in paginated:
+            tg_id = r['tg_id']
+            u = _db.get_user(tg_id) or {}
+            name = u.get('first_name', 'Без имени')
+            un = f" (@{u.get('username')})" if u.get('username') else ""
+            bal = _db.get_balance(tg_id)
+            lines_txt.append(f"👤 <b>{name}</b>{un}")
+            lines_txt.append(f"🆔 <code>{tg_id}</code> | 💰 {bal:.2f} USDT")
+            lines_txt.append("")
+            btn_row.append({'text': f"👤 {name[:12]} ({bal:.1f}$)", 'callback_data': f"adm_client_view:{tg_id}"})
+    
+    for i in range(0, len(btn_row), 2):
+        kb['inline_keyboard'].append(btn_row[i:i+2])
+        
+    text = NL.join(lines_txt)
+    nav = []
+    if page > 1:
+        nav.append({'text': '◀', 'callback_data': f'adm_users_clients:{page-1}'})
+    nav.append({'text': f'{page}/{total_pages}', 'callback_data': 'noop'})
+    if page < total_pages:
+        nav.append({'text': '▶', 'callback_data': f'adm_users_clients:{page+1}'})
+        
+    if nav: kb['inline_keyboard'].append(nav)
+    
+    kb['inline_keyboard'].append([
+        {'text': '⬅️ К разделам', 'callback_data': 'adm_users_menu'}
+    ])
+    token = cfg['BOT_TOKEN']
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
+
+def show_admin_client_profile(cfg, chat_id, user_id, tg_id, msg_id=None):
+    """Карточка клиента (с балансом и списком ключей)"""
+    try:
+        from bot_modules import db as _db
+    except: return
+    token = cfg['BOT_TOKEN']
+    u = _db.get_user(tg_id) or {}
+    name = u.get('first_name', 'Без имени')
+    un = f"@{u.get('username')}" if u.get('username') else "нет"
+    bal = _db.get_balance(tg_id)
+    
+    vips = _db.get_vip_keys(tg_id) or []
+    tests = _db.get_test_keys(tg_id) or []
+    
+    NL = chr(10)
+    lines = [
+        f"👤 <b>КЛИЕНТ: {name}</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        f"🆔 TG ID: <code>{tg_id}</code>",
+        f"🔗 Юзернейм: {un}",
+        f"💰 Баланс: <b>{bal:.2f} USDT</b>",
+        "",
+        f"💎 <b>VIP-ключи ({len(vips)}):</b>"
+    ]
+    if not vips:
+        lines.append("  <i>нет</i>")
+    for v in vips:
+        lines.append(f"  • <code>{v['login']}</code>")
+        
+    lines.append("")
+    lines.append(f"🎁 <b>Тестовые ({len(tests)}):</b>")
+    if not tests:
+        lines.append("  <i>нет</i>")
+    for t in tests:
+        lines.append(f"  • <code>{t['login']}</code>")
+        
+    text = NL.join(lines)
+    
+    kb = {'inline_keyboard': [
+        [{'text': '💰 Пополнить баланс', 'callback_data': f'adm_client_topup:{tg_id}'}],
+        [{'text': '⬅️ К клиентам', 'callback_data': 'adm_users_clients:1'}]
+    ]}
+    
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
 
 def show_admin_vip_key(cfg, chat_id, user_id, key_login, msg_id=None):
     """Карточка VIP-ключа с управлением."""
@@ -5624,6 +5739,36 @@ def main():
                         _show_all = (len(_parts) > 2 and _parts[2] == 'all')
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         show_users_test(cfg, cb['message']['chat']['id'], cb_user_id, pg, cb['message']['message_id'], show_all=_show_all)
+                        continue
+                    elif cb_data.startswith('adm_users_clients:'):
+                        try:
+                            _page = int(cb_data.split(':')[1])
+                        except:
+                            _page = 1
+                        show_adm_users_clients(cfg, cb['message']['chat']['id'], cb_user_id, _page, cb['message']['message_id'])
+                        continue
+                    elif cb_data.startswith('adm_client_view:'):
+                        try:
+                            _tid = int(cb_data.split(':')[1])
+                        except:
+                            continue
+                        show_admin_client_profile(cfg, cb['message']['chat']['id'], cb_user_id, _tid, cb['message']['message_id'])
+                        continue
+                    elif cb_data.startswith('adm_client_topup:'):
+                        try:
+                            _tid = int(cb_data.split(':')[1])
+                        except:
+                            continue
+                        try:
+                            from bot_modules import db as _dbt
+                            _dbt.set_pending(cb_user_id, f'adm_topup:{_tid}')
+                        except: pass
+                        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+                            'chat_id': cb['message']['chat']['id'],
+                            'text': f'💰 <b>Пополнение баланса</b> для ID <code>{_tid}</code>\n\nВведи сумму (можно с минусом) и комментарий:\n<code>10 бонус</code>\n<code>-5 штраф</code>',
+                            'parse_mode': 'HTML'
+                        })
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         continue
                     elif cb_data.startswith('adm_users_vip:'):
                         try:
