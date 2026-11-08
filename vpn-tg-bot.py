@@ -127,6 +127,14 @@ def smart_send(token, chat_id, text, reply_markup=None, parse_mode='HTML'):
         path = f"{SMART_DIR}/{chat_id}"
         import json
         old_ids = []
+        # Загружаем ID сообщения с клавиатурой, чтобы не удалить его
+        kb_path = f"{SMART_DIR}/{chat_id}_kb"
+        kb_id = None
+        if os.path.exists(kb_path):
+            try:
+                kb_id = int(open(kb_path).read().strip())
+            except: pass
+
         if os.path.exists(path):
             try:
                 old_ids = json.load(open(path))
@@ -134,6 +142,8 @@ def smart_send(token, chat_id, text, reply_markup=None, parse_mode='HTML'):
                     old_ids = [int(old_ids)]
             except: pass
             for old_id in old_ids:
+                if old_id == kb_id:
+                    continue # Пропускаем удаление клавиатуры
                 try:
                     tg_request(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': old_id})
                 except: pass
@@ -747,13 +757,18 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         from bot_modules.admin import is_admin as _is_adm
         _rkb = get_main_reply_kb(_is_adm(cfg, user_id))
         
-        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+        _res = tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
             'chat_id': chat_id,
             'text': '⚡️ <b>Навигация:</b> используйте кнопки внизу 👇',
             'reply_markup': _rkb,
             'parse_mode': 'HTML',
             'disable_notification': True
         })
+        if _res and _res.get('ok'):
+            try:
+                with open(f"{SMART_DIR}/{chat_id}_kb", 'w') as f:
+                    f.write(str(_res['result']['message_id']))
+            except: pass
 
 def _has_username(token, user_id):
     """Проверяет есть ли @username у юзера."""
