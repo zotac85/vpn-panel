@@ -10,6 +10,7 @@ import json
 import time
 import base64
 import logging
+import threading
 import urllib.request
 from bot_modules import db
 from bot_modules import nodes_client as nc
@@ -915,7 +916,7 @@ echo "OK"
         _send(token, chat_id, text, kb)
     # Автоотправка .dark после сброса
     try:
-        send_dark_files_all_nodes(cfg, chat_id, user_id, key_name)
+        threading.Thread(target=send_dark_files_all_nodes, args=(cfg, chat_id, user_id, key_name), daemon=True).start()
     except Exception as _e:
         cab_log.error(f"auto send_dark on reset: {_e}")
     cab_log.info(f"Key config reset (hwid+pw): {key_name} by tg={user_id}")
