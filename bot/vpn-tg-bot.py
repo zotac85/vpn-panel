@@ -4855,15 +4855,8 @@ def main():
     # Команды ТОЛЬКО для админа (scope: chat)
     admin_id = cfg.get('ADMIN_ID', '')
     if admin_id:
-        tg_request(cfg['BOT_TOKEN'], 'setMyCommands', {
-            'commands': [
-                {'command': 'start', 'description': '👋 Начать'},
-                {'command': 'admin', 'description': '⚙️ Админ-панель'},
-                {'command': 'cabinet', 'description': '👤 Личный кабинет'},
-                {'command': 'help', 'description': '🛟 Помощь'}
-            ],
-            'scope': {'type': 'chat', 'chat_id': int(admin_id)}
-        })
+        # setMyCommands отключен
+    pass
     
     # Запускаем автопостинг
     start_autopost_thread(cfg['BOT_TOKEN'], {})
