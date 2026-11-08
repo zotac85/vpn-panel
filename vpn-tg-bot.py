@@ -565,7 +565,22 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
     
     if not channels:
         send_message(token, chat_id, f"❌  Каналы не настроены. Обратись: {get_support()}")
-        return
+        
+    # Отправляем нижнюю Reply-клавиатуру отдельным сообщением
+    try:
+        from bot_modules.cabinet import get_main_reply_kb
+        from bot_modules.admin import is_admin as _is_adm
+        _is_adm_val = _is_adm(cfg, user_id) if 'cfg' in locals() else False
+        _rkb = get_main_reply_kb(_is_adm_val)
+        tg_request(token, 'sendMessage', {
+            'chat_id': chat_id,
+            'text': '👇 Используй кнопки внизу для быстрой навигации',
+            'reply_markup': _rkb
+        })
+    except Exception as e:
+        log.error(f"reply_kb error: {e}")
+
+    return
     
     primary = channels[0].lstrip('@')
     # verified=True только если пришёл по deep-link из канала (force_verified=True)
