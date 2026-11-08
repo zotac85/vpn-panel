@@ -403,7 +403,7 @@ def get_main_reply_kb(is_admin=False):
             [{'text': '🏠 Начать'}, {'text': '👤 Профиль'}],
             [{'text': '🛟 Помощь'}, {'text': '🔑 Мои ключи'}]
         ]
-    return {'keyboard': kb, 'resize_keyboard': True, 'is_persistent': True}
+    return {'keyboard': kb, 'resize_keyboard': True, 'is_persistent': False}
 
 
 def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
