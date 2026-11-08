@@ -4854,8 +4854,7 @@ def main():
     
     # Команды ТОЛЬКО для админа (scope: chat)
     admin_id = cfg.get('ADMIN_ID', '')
-    if admin_id:
-        # setMyCommands отключен
+    # setMyCommands для админа также отключен, чтобы убрать кнопку Меню
     pass
     
     # Запускаем автопостинг
