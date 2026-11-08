@@ -143,7 +143,7 @@ def node_check(node_id):
     return (False, 0)
 
 
-def sync_user_to_all_nodes(username, password, action="add", device_limit=None, exp_ts=None):
+def _sync_user_to_all_nodes_orig(username, password, action="add", device_limit=None, exp_ts=None):
     """Синхронизирует юзера на все активные ноды (в фоновом режиме, чтобы не тормозить бота)."""
     
     def _worker():
@@ -186,24 +186,36 @@ def collect_traffic_from_all_nodes():
     return total
 
 
+def _unban_all_nodes_orig():
+    """Разбанивает все IP на всех активных нодах через fail2ban."""
+    results = {}
+    for node_id, name, host, ip, ssh_port, ws_port, is_master in get_all_active_nodes(only_online=True):
+        if is_master:
+            continue
+        try:
+            rc, out, err = _run_on_node(node_id, "true", timeout=5)
+            # используем ssh напрямую, node-user.sh unban нет — отдельная команда
+            import subprocess
+            cmd = ["ssh"] + SSH_OPTS + ["-p", str(ssh_port), f"root@{ip}", "fail2ban-client unban --all 2>/dev/null || true"]
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            results[name] = (True, "unban ok")
+        except Exception as e:
+            results[name] = (False, str(e))
+    return results
+
+
+# ── Асинхронные обертки (запускают оригинальные функции в фоне) ──
+
+def sync_user_to_all_nodes(username, password, action="add", device_limit=None, exp_ts=None):
+    import threading
+    def _worker():
+        return _sync_user_to_all_nodes_orig(username, password, action, device_limit, exp_ts)
+    threading.Thread(target=_worker, daemon=True).start()
+    return {}
+
 def unban_all_nodes():
     import threading
     def _worker():
-        """Разбанивает все IP на всех активных нодах через fail2ban."""
-        results = {}
-        for node_id, name, host, ip, ssh_port, ws_port, is_master in get_all_active_nodes(only_online=True):
-        if is_master:
-        continue
-        try:
-        rc, out, err = _run_on_node(node_id, "true", timeout=5)
-        # используем ssh напрямую, node-user.sh unban нет — отдельная команда
-        import subprocess
-        cmd = ["ssh"] + SSH_OPTS + ["-p", str(ssh_port), f"root@{ip}", "fail2ban-client unban --all 2>/dev/null || true"]
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-        results[name] = (True, "unban ok")
-        except Exception as e:
-        results[name] = (False, str(e))
-        return results
-
+        return _unban_all_nodes_orig()
     threading.Thread(target=_worker, daemon=True).start()
     return {}
