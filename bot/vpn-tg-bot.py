@@ -3242,8 +3242,7 @@ def show_users_menu(cfg, chat_id, user_id, msg_id=None):
     kb = {'inline_keyboard': [
         [{'text': f'🎁 Тестовые ({test_total})', 'callback_data': 'adm_users_test:1'},
          {'text': f'💎 VIP ({vip_total})', 'callback_data': 'adm_users_vip:1'}],
-        [{'text': f'👤 TG-юзеры ({tg_total})', 'callback_data': 'adm_users_tg:1'},
-         {'text': f'👥 Клиенты', 'callback_data': 'adm_users_clients:1'}],
+        [{'text': f'👥 Клиенты', 'callback_data': 'adm_users_clients:1'}],
         [{'text': '🗑️ Удалить истёкших', 'callback_data': 'admin_cleanup'}],
         [{'text': '🚫 Бан-лист', 'callback_data': 'admin_banlist'}],
         [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
