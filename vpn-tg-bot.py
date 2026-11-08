@@ -748,7 +748,7 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         _rkb = get_main_reply_kb(_is_adm(cfg, user_id))
         tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
             'chat_id': chat_id,
-            'text': '👇 Используй кнопки внизу для быстрой навигации',
+            'text': '\u2060',
             'reply_markup': _rkb
         })
 
