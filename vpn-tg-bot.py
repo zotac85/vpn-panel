@@ -580,7 +580,7 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
     except Exception as e:
         log.error(f"reply_kb error: {e}")
 
-    return
+
     
     primary = channels[0].lstrip('@')
     # verified=True только если пришёл по deep-link из канала (force_verified=True)
