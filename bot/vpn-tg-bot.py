@@ -6702,7 +6702,7 @@ def main():
                     elif action == 'addbalance':
                         _do_addbalance(cfg, chat_id, text)
                     elif action.startswith('broadcast_text'):
-                    _tgt = action.split(':', 1)[1] if ':' in action else 'all'
+                        _tgt = action.split(':', 1)[1] if ':' in action else 'all'
                         _do_broadcast_preview(cfg, chat_id, text, _tgt)
                     elif action.startswith('promo_post:'):
                         _pcode = action.split(':', 1)[1]
