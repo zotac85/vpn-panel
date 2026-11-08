@@ -3445,25 +3445,35 @@ def show_users_vip(cfg, chat_id, user_id, page=1, msg_id=None):
 
 
 def show_adm_users_clients(cfg, chat_id, user_id, page=1, msg_id=None):
-    """Список клиентов (вместо списка ключей)"""
+    """Список клиентов (стабильный)"""
     try:
         from bot_modules import db as _db
     except: return
     per_page = 8
-    # Получаем уникальные tg_id из ключей
-    rows = _db.query("""
-        SELECT DISTINCT tg_id FROM (
-            SELECT tg_id FROM vip_keys
-            UNION
-            SELECT tg_id FROM test_keys
-        ) WHERE tg_id > 0 ORDER BY tg_id DESC
-    """)
-    total = len(rows)
+    
+    vips = _db.query("SELECT DISTINCT tg_id FROM vip_keys WHERE tg_id > 0")
+    tests = _db.query("SELECT DISTINCT tg_id FROM test_keys WHERE tg_id > 0")
+    
+    vip_ids = {r['tg_id'] for r in vips}
+    test_ids = {r['tg_id'] for r in tests}
+    all_ids = list(vip_ids.union(test_ids))
+    
+    clients = []
+    for tg_id in all_ids:
+        u = _db.get_user(tg_id) or {}
+        name = u.get('first_name') or u.get('username') or f"ID: {tg_id}"
+        has_vip = tg_id in vip_ids
+        bal = _db.get_balance(tg_id)
+        clients.append({'tg_id': tg_id, 'name': name, 'has_vip': has_vip, 'bal': bal})
+        
+    clients.sort(key=lambda x: (not x['has_vip'], str(x['name']).lower()))
+    
+    total = len(clients)
     total_pages = max(1, (total + per_page - 1) // per_page)
     if page < 1: page = 1
     if page > total_pages: page = total_pages
     offset = (page - 1) * per_page
-    paginated = rows[offset:offset+per_page]
+    paginated = clients[offset:offset+per_page]
     
     NL = chr(10)
     lines_txt = [
@@ -3477,16 +3487,13 @@ def show_adm_users_clients(cfg, chat_id, user_id, page=1, msg_id=None):
     if not paginated:
         lines_txt.append("<i>Пусто</i>")
     else:
-        for r in paginated:
-            tg_id = r['tg_id']
-            u = _db.get_user(tg_id) or {}
-            name = u.get('first_name', 'Без имени')
-            un = f" (@{u.get('username')})" if u.get('username') else ""
-            bal = _db.get_balance(tg_id)
-            lines_txt.append(f"👤 <b>{name}</b>{un}")
-            lines_txt.append(f"🆔 <code>{tg_id}</code> | 💰 {bal:.2f} USDT")
+        for cl in paginated:
+            icon = "💎" if cl['has_vip'] else "🎁"
+            lines_txt.append(f"{icon} <b>{cl['name']}</b>")
+            lines_txt.append(f"🆔 <code>{cl['tg_id']}</code> | 💰 {cl['bal']:.2f} USDT")
             lines_txt.append("")
-            btn_row.append({'text': f"👤 {name[:12]} ({bal:.1f}$)", 'callback_data': f"adm_client_view:{tg_id}"})
+            btn_text = f"{icon} {cl['name'][:12]} ({cl['bal']:.1f}$)"
+            btn_row.append({'text': btn_text, 'callback_data': f"adm_client_view:{cl['tg_id']}"})
     
     for i in range(0, len(btn_row), 2):
         kb['inline_keyboard'].append(btn_row[i:i+2])
@@ -6212,6 +6219,20 @@ def main():
                     tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
                         'chat_id': user_id, 'text': _ok_msg, 'parse_mode': 'HTML', 'reply_markup': _kb
                     })
+                    continue
+                if pending and pending.startswith('adm_topup:'):
+                    try:
+                        _tid = int(pending.split(':')[1])
+                        _db.clear_pending(user_id)
+                        _parts = text.strip().split(maxsplit=1)
+                        _amt = float(_parts[0].replace(',', '.'))
+                        _comment = _parts[1] if len(_parts) > 1 else "Пополнение через профиль"
+                        _new_bal = _db.add_balance(_tid, _amt, method='manual', meta={'comment': _comment, 'by_admin': user_id})
+                        _sign = "+" if _amt >= 0 else ""
+                        send_message(cfg['BOT_TOKEN'], chat_id, f"✅ Баланс ID <code>{_tid}</code> изменён на <b>{_sign}{_amt:.2f} USDT</b>.\n💰 Новый баланс: <b>{_new_bal:.2f} USDT</b>", parse_mode='HTML')
+                        show_admin_client_profile(cfg, chat_id, user_id, _tid)
+                    except Exception as e:
+                        send_message(cfg['BOT_TOKEN'], chat_id, f"❌ Ошибка: {e}")
                     continue
                 if pending and pending.startswith('vip_name:') and text and not text.startswith('/'):
                     _db.clear_pending(user_id)
