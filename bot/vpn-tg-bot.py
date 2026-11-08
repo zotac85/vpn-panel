@@ -3288,7 +3288,8 @@ def _fmt_key_row(key, kind):
         u = _db2.get_user(tg_id) or {}
         un = (u.get('username') or '').strip()
         fn = (u.get('first_name') or '').strip()
-        if un: tg_name = f"@{un}"
+        if un and fn: tg_name = f"{fn} (@{un})"
+        elif un: tg_name = f"@{un}"
         elif fn: tg_name = fn
     except Exception: pass
     user_str = f"👤 {tg_name}" if tg_name else f"👤 <code>{tg_id}</code>"
