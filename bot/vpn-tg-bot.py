@@ -3735,38 +3735,57 @@ def handle_users(cfg, chat_id, user_id, page=1, msg_id=None):
 
 
 def handle_cleanup(cfg, chat_id, user_id):
-    """Удалить всех истёкших"""
+    """Удалить всех истёкших (из системы И из БД)"""
     token = cfg['BOT_TOKEN']
-    admin_id = cfg.get('ADMIN_ID', '')
     if not is_admin(cfg, user_id):
         send_message(token, chat_id, "🚫 Только для админа.")
         return
+        
+    import sqlite3
+    import time
+    now = int(time.time())
     
-    users = get_users_stats()
-    expired = [u for u in users if u['expired']]
+    db = sqlite3.connect('/etc/UDPCustom/vpn.db')
+    vip_exp = db.execute("SELECT login FROM vip_keys WHERE expires_at > 0 AND expires_at < ?", (now,)).fetchall()
+    test_exp = db.execute("SELECT login FROM test_keys WHERE expires_at > 0 AND expires_at < ?", (now,)).fetchall()
+    db.close()
     
-    if not expired:
-        send_message(token, chat_id, "✅ Нет истёкших для удаления.")
+    all_expired = [r[0] for r in vip_exp] + [r[0] for r in test_exp]
+    
+    if not all_expired:
+        send_message(token, chat_id, "✅  Нет истёкших для удаления.")
         return
-    
+        
     removed = 0
     failed = 0
-    for u in expired:
-        name = u['name']
+    for name in all_expired:
         try:
+            # 1. Удаляем системного юзера
             subprocess.run(['userdel', '-f', name], capture_output=True, timeout=10)
-            # Удаляем следы
-            for p in [f"/etc/UDPCustom/limits/{name}", f"/etc/UDPCustom/expire_ts/{name}", 
-                      f"/etc/UDPCustom/traffic/{name}", f"/etc/UDPCustom/traffic_limits/{name}"]:
+            
+            # 2. Удаляем файлы
+            for p in [f"/etc/UDPCustom/limits/{name}", f"/etc/UDPCustom/expire_ts/{name}",
+                      f"/etc/UDPCustom/traffic/{name}", f"/etc/UDPCustom/traffic_limits/{name}",
+                      f"/etc/UDPCustom/passwords/{name}"]:
                 try: os.remove(p)
                 except: pass
-            # Убираем из users.db
+                
+            # 3. Убираем из текстового файла users.db
             subprocess.run(['sed', '-i', f'/^{name}$/d', USERS_DB], capture_output=True)
+            
+            # 4. Удаляем из БД SQLite
+            db2 = sqlite3.connect('/etc/UDPCustom/vpn.db')
+            db2.execute("DELETE FROM vip_keys WHERE login=?", (name,))
+            db2.execute("DELETE FROM test_keys WHERE login=?", (name,))
+            db2.commit()
+            db2.close()
+            
             removed += 1
-        except:
+        except Exception as e:
+            log.error(f"cleanup {name}: {e}")
             failed += 1
-    
-    send_message(token, chat_id, f"✅ Удалено истёкших: <b>{removed}</b>\n" + (f"⚠️ Ошибок: {failed}" if failed else ""), parse_mode='HTML')
+            
+    send_message(token, chat_id, f"✅  <b>Очистка завершена!</b>\n\n🗑 Удалено ключей (и из базы): <b>{removed}</b>\n" + (f"⚠️ Ошибок: {failed}" if failed else ""), parse_mode='HTML')
     log.info(f"CLEANUP via bot: removed={removed}, failed={failed}")
 
 
