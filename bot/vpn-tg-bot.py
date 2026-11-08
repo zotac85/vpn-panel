@@ -6862,15 +6862,28 @@ def main():
                 elif text.startswith('/addadmin'): handle_addadmin(cfg, chat_id, user_id, text[9:].strip())
                 elif text.startswith('/deladmin'): handle_deladmin(cfg, chat_id, user_id, text[9:].strip())
                 elif text.startswith('/autopost'): handle_autopost(cfg, chat_id, user_id, text[9:].strip())
-                elif text.startswith('/restart'): handle_restart(cfg, chat_id, user_id, text[8:].strip())
-                elif text == '\U0001F464 Кабинет' or text.startswith('/cabinet'):
-                    # Удаляем ранее отправленные .dark файлы
+                elif text.startswith('/restart'): handle_restart(cfg, chat_id, user_id, text[8:].strip())                elif text == '👤 Кабинет' or text.startswith('/cabinet'):
                     try:
-                        from bot_modules.cabinet import _smart_files_clear as _sfc
-                        _sfc(cfg['BOT_TOKEN'], chat_id)
-                    except Exception as _e:
-                        log.error(f"clear dark on /cabinet: {_e}")
-                    show_cabinet(cfg, chat_id, user_id, first_name)
+                        from bot_modules.cabinet import show_cabinet as _sc
+                        _sc(cfg, chat_id, user_id, first_name)
+                    except Exception as e: log.error(f"reply_kb cabinet: {e}")
+                    continue
+                elif text == '⚙️ Админка' or text.startswith('/admin'):
+                    show_admin_panel(cfg, chat_id, user_id)
+                    continue
+                elif text == '💎 Купить VIP':
+                    try:
+                        from bot_modules.cabinet import show_buy_vip as _sbv
+                        _sbv(cfg, chat_id, user_id)
+                    except Exception as e: log.error(f"reply_kb buy_vip: {e}")
+                    continue
+                elif text in ('🛟 Помощь', '🎁 Помощь') or text.startswith('/help'):
+                    handle_help(cfg, chat_id)
+                    continue
+                elif text == '🏠 Начать' or text.startswith('/start'):
+                    handle_start(cfg, chat_id, user_id, first_name)
+                    continue
+
                 elif text == '\u2699\uFE0F Админка' or text.startswith('/admin'): show_admin_panel(cfg, chat_id, user_id)
                 elif text == '\U0001F381 Помощь' or text.startswith('/help'): handle_help(cfg, chat_id)
         except KeyboardInterrupt: log.info("Остановка"); break

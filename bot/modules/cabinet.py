@@ -395,14 +395,16 @@ def get_main_reply_kb(is_admin=False):
     if is_admin:
         kb = [
             [{'text': '👤 Кабинет'}, {'text': '💎 Купить VIP'}],
-            [{'text': '⚙️ Админка'}, {'text': '🛟 Помощь'}]
+            [{'text': '⚙️ Админка'}, {'text': '🛟 Помощь'}],
+            [{'text': '🏠 Начать'}]
         ]
     else:
         kb = [
             [{'text': '👤 Кабинет'}, {'text': '💎 Купить VIP'}],
-            [{'text': '🛟 Помощь'}]
+            [{'text': '🛟 Помощь'}, {'text': '🏠 Начать'}]
         ]
     return {'keyboard': kb, 'resize_keyboard': True, 'is_persistent': True}
+
 
 def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
     """Главное меню кабинета — данные из БД"""
