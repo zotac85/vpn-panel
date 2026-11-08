@@ -6858,13 +6858,31 @@ def main():
                 elif text.startswith('/addadmin'): handle_addadmin(cfg, chat_id, user_id, text[9:].strip())
                 elif text.startswith('/deladmin'): handle_deladmin(cfg, chat_id, user_id, text[9:].strip())
                 elif text.startswith('/autopost'): handle_autopost(cfg, chat_id, user_id, text[9:].strip())
-                elif text.startswith('/restart'): handle_restart(cfg, chat_id, user_id, text[8:].strip())
-                elif text == '👤 Кабинет' or text.startswith('/cabinet'):
+                elif text.startswith('/restart'): handle_restart(cfg, chat_id, user_id, text[8:].strip())                elif text == '🏠 Начать' or text.startswith('/start'):
+                    handle_start(cfg, chat_id, user_id, first_name)
+                    continue
+                elif text == '👤 Профиль' or text.startswith('/cabinet'):
                     try:
                         from bot_modules.cabinet import show_cabinet as _sc
                         _sc(cfg, chat_id, user_id, first_name)
                     except Exception as e: log.error(f"reply_kb cabinet: {e}")
                     continue
+                elif text == '💎 VIP':
+                    try:
+                        from bot_modules.cabinet import show_buy_vip as _sbv
+                        _sbv(cfg, chat_id, user_id)
+                    except Exception as e: log.error(f"reply_kb buy_vip: {e}")
+                    continue
+                elif text == '💰 Баланс':
+                    try:
+                        from bot_modules.cabinet import show_balance as _sb
+                        _sb(cfg, chat_id, user_id)
+                    except Exception as e: log.error(f"reply_kb balance: {e}")
+                    continue
+                elif text == '🤖 Админка' or text.startswith('/admin'):
+                    show_admin_panel(cfg, chat_id, user_id)
+                    continue
+
                 elif text == '⚙️ Админка' or text.startswith('/admin'):
                     show_admin_panel(cfg, chat_id, user_id)
                     continue

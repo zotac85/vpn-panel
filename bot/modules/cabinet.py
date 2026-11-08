@@ -394,14 +394,14 @@ def make_darktunnel_url(username, password, domain, ws_port, proxy, loc='VPN'):
 def get_main_reply_kb(is_admin=False):
     if is_admin:
         kb = [
-            [{'text': '👤 Кабинет'}, {'text': '💎 Купить VIP'}],
-            [{'text': '⚙️ Админка'}, {'text': '🛟 Помощь'}],
-            [{'text': '🏠 Начать'}]
+            [{'text': '🏠 Начать'}, {'text': '👤 Профиль'}],
+            [{'text': '💎 VIP'}, {'text': '💰 Баланс'}],
+            [{'text': '🤖 Админка'}]
         ]
     else:
         kb = [
-            [{'text': '👤 Кабинет'}, {'text': '💎 Купить VIP'}],
-            [{'text': '🛟 Помощь'}, {'text': '🏠 Начать'}]
+            [{'text': '🏠 Начать'}, {'text': '👤 Профиль'}],
+            [{'text': '💎 VIP'}, {'text': '💰 Баланс'}]
         ]
     return {'keyboard': kb, 'resize_keyboard': True, 'is_persistent': True}
 
