@@ -391,16 +391,18 @@ def make_darktunnel_url(username, password, domain, ws_port, proxy, loc='VPN'):
         cab_log.error(f"make_darktunnel_url: {e}")
         return None
 
-def get_main_reply_kb():
-    return {
-        'keyboard': [
-            [{'text': '👤 Личный кабинет'}, {'text': '🔑 Мои ключи'}],
-            [{'text': '💎 Купить VIP'}, {'text': '💰 Баланс'}],
-            [{'text': '🛟 Помощь'}, {'text': '🏠 Главное меню'}]
-        ],
-        'resize_keyboard': True,
-        'is_persistent': True
-    }
+def get_main_reply_kb(is_admin=False):
+    if is_admin:
+        kb = [
+            [{'text': '👤 Кабинет'}, {'text': '💎 Купить VIP'}],
+            [{'text': '⚙️ Админка'}, {'text': '🛟 Помощь'}]
+        ]
+    else:
+        kb = [
+            [{'text': '👤 Кабинет'}, {'text': '💎 Купить VIP'}],
+            [{'text': '🛟 Помощь'}]
+        ]
+    return {'keyboard': kb, 'resize_keyboard': True, 'is_persistent': True}
 
 def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
     """Главное меню кабинета — данные из БД"""
@@ -437,16 +439,6 @@ def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
         "🔒 <i>Все разделы (ПК, iPhone, WhiteDns) доступны после покупки VIP.</i>"
     ]
     text = NL.join(lines)
-
-    # Отправляем Reply-клавиатуру (один раз, чтобы прикрепить к полю ввода)
-    try:
-        _reply_kb = get_main_reply_kb()
-        _tg(token, 'sendMessage', {
-            'chat_id': chat_id,
-            'text': 'Выбери действие на клавиатуре ниже 👇',
-            'reply_markup': _reply_kb
-        })
-    except: pass
 
     try:
         _tariffs = _parse_vip_tariffs(cfg)
