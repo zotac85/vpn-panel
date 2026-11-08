@@ -4850,11 +4850,7 @@ def main():
     if not cfg.get('BOT_TOKEN'):
         log.error("BOT_TOKEN не задан"); sys.exit(1)
     # Команды для ВСЕХ юзеров
-    tg_request(cfg['BOT_TOKEN'], 'setMyCommands', {'commands': [
-        {'command': 'start', 'description': '👋 Начать'},
-        {'command': 'cabinet', 'description': '👤 Личный кабинет'},
-        {'command': 'help', 'description': '📖 Как получить ключ'}
-    ]})
+    tg_request(cfg['BOT_TOKEN'], 'setMyCommands', {'commands': []})
     
     # Команды ТОЛЬКО для админа (scope: chat)
     admin_id = cfg.get('ADMIN_ID', '')
