@@ -6869,11 +6869,11 @@ def main():
                     handle_help(cfg, chat_id)
                     continue
                 
-                elif text == '💰 Баланс':
+                elif text == '🔑 Мои ключи':
                     try:
-                        from bot_modules.cabinet import show_balance as _sb
-                        _sb(cfg, chat_id, user_id)
-                    except Exception as e: log.error(f"reply_kb balance: {e}")
+                        from bot_modules.cabinet import show_my_keys as _smk
+                        _smk(cfg, chat_id, user_id)
+                    except Exception as e: log.error(f"reply_kb keys: {e}")
                     continue
                 elif text == '🤖 Админка' or text.startswith('/admin'):
                     show_admin_panel(cfg, chat_id, user_id)

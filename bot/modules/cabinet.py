@@ -395,13 +395,13 @@ def get_main_reply_kb(is_admin=False):
     if is_admin:
         kb = [
             [{'text': '🏠 Начать'}, {'text': '👤 Профиль'}],
-            [{'text': '🛟 Помощь'}, {'text': '💰 Баланс'}],
+            [{'text': '🛟 Помощь'}, {'text': '🔑 Мои ключи'}],
             [{'text': '🤖 Админка'}]
         ]
     else:
         kb = [
             [{'text': '🏠 Начать'}, {'text': '👤 Профиль'}],
-            [{'text': '🛟 Помощь'}, {'text': '💰 Баланс'}]
+            [{'text': '🛟 Помощь'}, {'text': '🔑 Мои ключи'}]
         ]
     return {'keyboard': kb, 'resize_keyboard': True, 'is_persistent': True}
 
