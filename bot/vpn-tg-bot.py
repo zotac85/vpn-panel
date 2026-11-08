@@ -749,7 +749,7 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         
         tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
             'chat_id': chat_id,
-            'text': '⚡️ <b>Быстрые кнопки:</b>',
+            'text': '⚡️ <b>Быстрая навигация:</b> меню слева и кнопки внизу 👇',
             'reply_markup': _rkb,
             'parse_mode': 'HTML',
             'disable_notification': True
