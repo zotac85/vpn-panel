@@ -6862,7 +6862,8 @@ def main():
                 elif text.startswith('/addadmin'): handle_addadmin(cfg, chat_id, user_id, text[9:].strip())
                 elif text.startswith('/deladmin'): handle_deladmin(cfg, chat_id, user_id, text[9:].strip())
                 elif text.startswith('/autopost'): handle_autopost(cfg, chat_id, user_id, text[9:].strip())
-                elif text.startswith('/restart'): handle_restart(cfg, chat_id, user_id, text[8:].strip())                elif text == '👤 Кабинет' or text.startswith('/cabinet'):
+                elif text.startswith('/restart'): handle_restart(cfg, chat_id, user_id, text[8:].strip())
+                elif text == '👤 Кабинет' or text.startswith('/cabinet'):
                     try:
                         from bot_modules.cabinet import show_cabinet as _sc
                         _sc(cfg, chat_id, user_id, first_name)
