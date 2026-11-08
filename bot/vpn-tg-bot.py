@@ -3242,7 +3242,8 @@ def show_users_menu(cfg, chat_id, user_id, msg_id=None):
     kb = {'inline_keyboard': [
         [{'text': f'🎁 Тестовые ({test_total})', 'callback_data': 'adm_users_test:1'},
          {'text': f'💎 VIP ({vip_total})', 'callback_data': 'adm_users_vip:1'}],
-        [{'text': f'👤 TG-юзеры ({tg_total})', 'callback_data': 'adm_users_tg:1'}],
+        [{'text': f'👤 TG-юзеры ({tg_total})', 'callback_data': 'adm_users_tg:1'},
+         {'text': f'👥 Клиенты', 'callback_data': 'adm_users_clients:1'}],
         [{'text': '🗑️ Удалить истёкших', 'callback_data': 'admin_cleanup'}],
         [{'text': '🚫 Бан-лист', 'callback_data': 'admin_banlist'}],
         [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
@@ -3359,8 +3360,7 @@ def show_users_test(cfg, chat_id, user_id, page=1, msg_id=None, show_all=False):
     toggle_cb = f'adm_users_test:{page}' if show_all else f'adm_users_test:{page}:all'
     kb['inline_keyboard'].append([{'text': toggle_text, 'callback_data': toggle_cb}])
     kb['inline_keyboard'].append([
-        {'text': '🎁 Тестовые', 'callback_data': 'adm_users_test:1'},
-        {'text': '👥 Клиенты', 'callback_data': 'adm_users_clients:1'}
+        {'text': '🎁 Тестовые', 'callback_data': 'adm_users_test:1'}
     ])
     kb['inline_keyboard'].append([
         {'text': '⬅️ К разделам', 'callback_data': 'adm_users_menu'}
@@ -3430,8 +3430,7 @@ def show_users_vip(cfg, chat_id, user_id, page=1, msg_id=None):
         kb['inline_keyboard'].append(key_btns[i:i+2])
     if nav: kb['inline_keyboard'].append(nav)
     kb['inline_keyboard'].append([
-        {'text': '🎁 Тестовые', 'callback_data': 'adm_users_test:1'},
-        {'text': '👥 Клиенты', 'callback_data': 'adm_users_clients:1'}
+        {'text': '🎁 Тестовые', 'callback_data': 'adm_users_test:1'}
     ])
     kb['inline_keyboard'].append([
         {'text': '⬅️ К разделам', 'callback_data': 'adm_users_menu'}
