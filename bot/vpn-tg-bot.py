@@ -559,197 +559,198 @@ def generate_darktunnel_url(username, password, domain, ws_port, proxy, cfg):
     return cabinet.make_darktunnel_url(username, password, domain, ws_port, proxy, loc)
 
 def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
-    token = cfg['BOT_TOKEN']
-    name = first_name or 'друг'
-    channels = get_channels()
+    try:
+        token = cfg['BOT_TOKEN']
+        name = first_name or 'друг'
+        channels = get_channels()
     
-    if not channels:
-        send_message(token, chat_id, f"❌  Каналы не настроены. Обратись: {get_support()}")
+        if not channels:
+            send_message(token, chat_id, f"❌  Каналы не настроены. Обратись: {get_support()}")
         
-    # Отправляем нижнюю Reply-клавиатуру отдельным сообщением (без try/except, чтобы видеть ошибки)
-    from bot_modules.cabinet import get_main_reply_kb
-    from bot_modules.admin import is_admin as _is_adm
-    _is_adm_val = _is_adm(cfg, user_id)
-    _rkb = get_main_reply_kb(_is_adm_val)
-    tg_request(token, 'sendMessage', {
-        'chat_id': chat_id,
-        'text': '👇 Используй кнопки внизу для быстрой навигации',
-        'reply_markup': _rkb
-    })
+        primary = channels[0].lstrip('@')
+        # verified=True только если пришёл по deep-link из канала (force_verified=True)
+        # Обычный /start всегда показывает "Перейди в канал"
+        verified = True if force_verified is True else False
+        admin_id = cfg.get('ADMIN_ID', '')
+        is_admin = str(user_id) == str(admin_id)
     
-    primary = channels[0].lstrip('@')
-    # verified=True только если пришёл по deep-link из канала (force_verified=True)
-    # Обычный /start всегда показывает "Перейди в канал"
-    verified = True if force_verified is True else False
-    admin_id = cfg.get('ADMIN_ID', '')
-    is_admin = str(user_id) == str(admin_id)
+        # ПРОВЕРКА ПОДПИСКИ на все каналы (включая спонсоров)
+        not_sub = []
+        if cfg.get('REQUIRE_SUBSCRIPTION','0') == '1':
+            for ch in channels:
+                if not check_subscription(token, user_id, ch):
+                    not_sub.append(ch.lstrip('@'))
     
-    # ПРОВЕРКА ПОДПИСКИ на все каналы (включая спонсоров)
-    not_sub = []
-    if cfg.get('REQUIRE_SUBSCRIPTION','0') == '1':
-        for ch in channels:
-            if not check_subscription(token, user_id, ch):
-                not_sub.append(ch.lstrip('@'))
+        if not_sub:
+            # Не подписан на какие-то каналы
+            # Пытаемся прочитать welcome.txt (редактируемый админом)
+            channels_list = chr(10).join([f"👉 @{ch}" for ch in not_sub])
+            welcome_tpl = get_welcome_text()
+            if welcome_tpl:
+                text = (welcome_tpl
+                        .replace('{name}', name)
+                        .replace('{channels_list}', channels_list))
+            else:
+                # Fallback — если файла нет
+                text = (
+                    f"👋 Привет, {name}!\n\n"
+                    f"⚠️ <b>Чтобы получить тестовый ключ:</b>\n\n"
+                    f"1️⃣ Подпишись на все каналы ниже\n"
+                    f"2️⃣ Зайди в каждый, посмотри посты\n"
+                    f"3️⃣ Поставь лайк или реакцию 👍\n"
+                    f"4️⃣ Вернись и нажми «Я подписался»\n\n"
+                    f"<b>Ты не подписан на:</b>\n"
+                    + "".join([f"👉 @{ch}\n" for ch in not_sub]) +
+                    f"\n💎 Есть VIP-ключи. Нужен VIP-ключ? Пиши в поддержку: {get_support()}"
+                )
+            keyboard = {'inline_keyboard': []}
+            for ch in not_sub:
+                keyboard['inline_keyboard'].append([{'text': f'📢 @{ch}', 'url': f'https://t.me/{ch}'}])
+            keyboard['inline_keyboard'].append([{'text': '✅ Я подписался → Проверить', 'callback_data': 'check_verified'}])
     
-    if not_sub:
-        # Не подписан на какие-то каналы
-        # Пытаемся прочитать welcome.txt (редактируемый админом)
-        channels_list = chr(10).join([f"👉 @{ch}" for ch in not_sub])
-        welcome_tpl = get_welcome_text()
-        if welcome_tpl:
-            text = (welcome_tpl
-                    .replace('{name}', name)
-                    .replace('{channels_list}', channels_list))
-        else:
-            # Fallback — если файла нет
-            text = (
-                f"👋 Привет, {name}!\n\n"
-                f"⚠️ <b>Чтобы получить тестовый ключ:</b>\n\n"
-                f"1️⃣ Подпишись на все каналы ниже\n"
-                f"2️⃣ Зайди в каждый, посмотри посты\n"
-                f"3️⃣ Поставь лайк или реакцию 👍\n"
-                f"4️⃣ Вернись и нажми «Я подписался»\n\n"
-                f"<b>Ты не подписан на:</b>\n"
-                + "".join([f"👉 @{ch}\n" for ch in not_sub]) +
-                f"\n💎 Есть VIP-ключи. Нужен VIP-ключ? Пиши в поддержку: {get_support()}"
-            )
-        keyboard = {'inline_keyboard': []}
-        for ch in not_sub:
-            keyboard['inline_keyboard'].append([{'text': f'📢 @{ch}', 'url': f'https://t.me/{ch}'}])
-        keyboard['inline_keyboard'].append([{'text': '✅ Я подписался → Проверить', 'callback_data': 'check_verified'}])
-    
-    elif verified:
-        # Подписан на все + verified → кнопка получить тест
-        # Читаем test_ready.txt (редактируемый админом)
-        tpl_ready = get_test_ready_text()
-        hours = cfg.get("TEST_HOURS", "8")
-        gb = cfg.get("TEST_TRAFFIC_GB", "50")
-        devices = cfg.get("TEST_DEVICES", "1")
-        location = cfg.get("SERVER_LOCATION", "🌍 Сервер")
-        try:
-            import sqlite3 as _sq
-            _con = _sq.connect("/etc/UDPCustom/vpn.db")
-            _rows = _con.execute("SELECT name FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
-            _con.close()
-            if _rows:
-                location = ' · '.join([r[0] for r in _rows])
-        except: pass
-        if tpl_ready:
-            text = (tpl_ready
-                    .replace("{name}", name)
-                    .replace("{hours}", str(hours))
-                    .replace("{gb}", str(gb))
-                    .replace("{devices}", str(devices))
-                    .replace("{location}", str(location)))
-        else:
-            text = (
-                f"👋 Привет, {name}!\n\n"
-                "━━━━━━━━━━━━━━━━━━━━\n"
-                "🎁 <b>ТЕСТОВЫЙ КЛЮЧ ДОСТУПЕН</b>\n"
-                "━━━━━━━━━━━━━━━━━━━━\n\n"
-                "✅ Подписка подтверждена\n\n"
-                f"📱 {hours} часов   |   📊 {gb} ГБ   |   💻 {devices} устр.\n"
-                f"{location}\n\n"
-                "👇 Жми кнопку и получай 🔑"
-            )
-        keyboard = {"inline_keyboard": [
-            [{"text": "🎁 ПОЛУЧИТЬ ТЕСТ", "callback_data": "get_test"}],
-            [{"text": "👤 Личный кабинет", "callback_data": "cab_main"}],
-        ]}
-    
-    else:
-        # Подписан на все, но НЕ verified → надо зайти на канал
-        channels_all = [c.lstrip("@") for c in channels]
-        primary_clean = channels_all[0] if channels_all else primary
-        sponsors_start = channels_all[1:] if len(channels_all) > 1 else []
-        sponsors_list = chr(10).join([f"   📢 @{s}" for s in sponsors_start]) if sponsors_start else "(нет спонсоров)"
-        # Пытаемся прочитать start.txt
-        tpl_start = get_start_text()
-        NL = chr(10)
-        _hours = cfg.get("TEST_HOURS", "8")
-        _gb = cfg.get("TEST_TRAFFIC_GB", "50")
-        _dev = cfg.get("TEST_DEVICES", "1")
-        if tpl_start:
-            _loc = cfg.get("SERVER_LOCATION", "")
+        elif verified:
+            # Подписан на все + verified → кнопка получить тест
+            # Читаем test_ready.txt (редактируемый админом)
+            tpl_ready = get_test_ready_text()
+            hours = cfg.get("TEST_HOURS", "8")
+            gb = cfg.get("TEST_TRAFFIC_GB", "50")
+            devices = cfg.get("TEST_DEVICES", "1")
+            location = cfg.get("SERVER_LOCATION", "🌍 Сервер")
             try:
                 import sqlite3 as _sq
                 _con = _sq.connect("/etc/UDPCustom/vpn.db")
                 _rows = _con.execute("SELECT name FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
                 _con.close()
                 if _rows:
-                    _loc = ' · '.join([r[0] for r in _rows])
+                    location = ' · '.join([r[0] for r in _rows])
             except: pass
-            text = (tpl_start
-                    .replace("{name}", name)
-                    .replace("{primary}", primary_clean)
-                    .replace("{sponsors_list}", sponsors_list)
-                    .replace("{hours}", str(_hours))
-                    .replace("{gb}", str(_gb))
-                    .replace("{devices}", str(_dev))
-                    .replace("{location}", str(_loc)))
-        else:
-            text = NL.join([
-                f"👋 Привет, {name}!",
-                "",
-                "━━━━━━━━━━━━━━━━━━━━",
-                "🎁 <b>БЕСПЛАТНЫЙ ТЕСТ-КЛЮЧ</b>",
-                "━━━━━━━━━━━━━━━━━━━━",
-                "",
-                "Как получить 👇",
-                "",
-                f"1️⃣ Перейди в наш канал: @{primary_clean}",
-                "",
-                "2️⃣ Найди в канале пост с кнопкой",
-                "   «🎁 Получить тест» — нажми её",
-                "",
-                "3️⃣ Прояви активность на постах",
-                "   (лайки, реакции — это важно!)",
-                "",
-                "4️⃣ После этого кнопка появится",
-                "   здесь, в боте — жми и получай 🔑",
-                "",
-                "━━━━━━━━━━━━━━━━━━━━",
-                "🎁 Тест:  8 часов · 50 ГБ · 1 устр.",
-                f"💎 VIP:   {get_support()}"
-            ])
-        kb_start = [
-            [
-                {"text": "\U0001F4E3 Реклама", "callback_data": "cab_ad"},
-                {"text": "\U0001F464 Личный кабинет", "callback_data": "cab_main"}
-            ]
-        ]
-        keyboard = {"inline_keyboard": kb_start}
+            if tpl_ready:
+                text = (tpl_ready
+                        .replace("{name}", name)
+                        .replace("{hours}", str(hours))
+                        .replace("{gb}", str(gb))
+                        .replace("{devices}", str(devices))
+                        .replace("{location}", str(location)))
+            else:
+                text = (
+                    f"👋 Привет, {name}!\n\n"
+                    "━━━━━━━━━━━━━━━━━━━━\n"
+                    "🎁 <b>ТЕСТОВЫЙ КЛЮЧ ДОСТУПЕН</b>\n"
+                    "━━━━━━━━━━━━━━━━━━━━\n\n"
+                    "✅ Подписка подтверждена\n\n"
+                    f"📱 {hours} часов   |   📊 {gb} ГБ   |   💻 {devices} устр.\n"
+                    f"{location}\n\n"
+                    "👇 Жми кнопку и получай 🔑"
+                )
+            keyboard = {"inline_keyboard": [
+                [{"text": "🎁 ПОЛУЧИТЬ ТЕСТ", "callback_data": "get_test"}],
+                [{"text": "👤 Личный кабинет", "callback_data": "cab_main"}],
+            ]}
     
-    # Сохраняем message_id приветствия для авто-удаления
-    # Убираем старую reply-клавиатуру (если была) + отправляем inline
-    try:
-        tg_request(token, 'sendMessage', {
-            'chat_id': chat_id,
-            'text': '\u2060',  # zero-width
-            'reply_markup': {'remove_keyboard': True},
-        })
-    except: pass
-    # Удаляем предыдущее welcome-сообщение (если было)
-    _old_wf = f'/etc/UDPCustom/welcome_msgs/{user_id}'
-    if os.path.exists(_old_wf):
+        else:
+            # Подписан на все, но НЕ verified → надо зайти на канал
+            channels_all = [c.lstrip("@") for c in channels]
+            primary_clean = channels_all[0] if channels_all else primary
+            sponsors_start = channels_all[1:] if len(channels_all) > 1 else []
+            sponsors_list = chr(10).join([f"   📢 @{s}" for s in sponsors_start]) if sponsors_start else "(нет спонсоров)"
+            # Пытаемся прочитать start.txt
+            tpl_start = get_start_text()
+            NL = chr(10)
+            _hours = cfg.get("TEST_HOURS", "8")
+            _gb = cfg.get("TEST_TRAFFIC_GB", "50")
+            _dev = cfg.get("TEST_DEVICES", "1")
+            if tpl_start:
+                _loc = cfg.get("SERVER_LOCATION", "")
+                try:
+                    import sqlite3 as _sq
+                    _con = _sq.connect("/etc/UDPCustom/vpn.db")
+                    _rows = _con.execute("SELECT name FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
+                    _con.close()
+                    if _rows:
+                        _loc = ' · '.join([r[0] for r in _rows])
+                except: pass
+                text = (tpl_start
+                        .replace("{name}", name)
+                        .replace("{primary}", primary_clean)
+                        .replace("{sponsors_list}", sponsors_list)
+                        .replace("{hours}", str(_hours))
+                        .replace("{gb}", str(_gb))
+                        .replace("{devices}", str(_dev))
+                        .replace("{location}", str(_loc)))
+            else:
+                text = NL.join([
+                    f"👋 Привет, {name}!",
+                    "",
+                    "━━━━━━━━━━━━━━━━━━━━",
+                    "🎁 <b>БЕСПЛАТНЫЙ ТЕСТ-КЛЮЧ</b>",
+                    "━━━━━━━━━━━━━━━━━━━━",
+                    "",
+                    "Как получить 👇",
+                    "",
+                    f"1️⃣ Перейди в наш канал: @{primary_clean}",
+                    "",
+                    "2️⃣ Найди в канале пост с кнопкой",
+                    "   «🎁 Получить тест» — нажми её",
+                    "",
+                    "3️⃣ Прояви активность на постах",
+                    "   (лайки, реакции — это важно!)",
+                    "",
+                    "4️⃣ После этого кнопка появится",
+                    "   здесь, в боте — жми и получай 🔑",
+                    "",
+                    "━━━━━━━━━━━━━━━━━━━━",
+                    "🎁 Тест:  8 часов · 50 ГБ · 1 устр.",
+                    f"💎 VIP:   {get_support()}"
+                ])
+            kb_start = [
+                [
+                    {"text": "\U0001F4E3 Реклама", "callback_data": "cab_ad"},
+                    {"text": "\U0001F464 Личный кабинет", "callback_data": "cab_main"}
+                ]
+            ]
+            keyboard = {"inline_keyboard": kb_start}
+    
+        # Сохраняем message_id приветствия для авто-удаления
+        # Убираем старую reply-клавиатуру (если была) + отправляем inline
         try:
-            with open(_old_wf) as _f:
-                _old_id = int(_f.read().strip())
-            tg_request(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': _old_id})
+            tg_request(token, 'sendMessage', {
+                'chat_id': chat_id,
+                'text': '\u2060',  # zero-width
+                'reply_markup': {'remove_keyboard': True},
+            })
         except: pass
-        try: os.remove(_old_wf)
-        except: pass
-    result = smart_send(token, chat_id, text, reply_markup=keyboard, parse_mode='HTML')
-    if result and result.get('ok'):
-        msg_id = result['result']['message_id']
-        welcome_dir = '/etc/UDPCustom/welcome_msgs'
-        try:
-            os.makedirs(welcome_dir, exist_ok=True)
-            with open(f'{welcome_dir}/{user_id}', 'w') as f:
-                f.write(str(msg_id))
-        except: pass
-        # Авто-удаление отключено (welcome удаляется при выдаче теста)
+        # Удаляем предыдущее welcome-сообщение (если было)
+        _old_wf = f'/etc/UDPCustom/welcome_msgs/{user_id}'
+        if os.path.exists(_old_wf):
+            try:
+                with open(_old_wf) as _f:
+                    _old_id = int(_f.read().strip())
+                tg_request(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': _old_id})
+            except: pass
+            try: os.remove(_old_wf)
+            except: pass
+        result = smart_send(token, chat_id, text, reply_markup=keyboard, parse_mode='HTML')
+        if result and result.get('ok'):
+            msg_id = result['result']['message_id']
+            welcome_dir = '/etc/UDPCustom/welcome_msgs'
+            try:
+                os.makedirs(welcome_dir, exist_ok=True)
+                with open(f'{welcome_dir}/{user_id}', 'w') as f:
+                    f.write(str(msg_id))
+            except: pass
+            # Авто-удаление отключено (welcome удаляется при выдаче теста)
 
+
+    finally:
+        # Отправляем Reply-клавиатуру в самом конце (ее никто не удалит)
+        from bot_modules.cabinet import get_main_reply_kb
+        from bot_modules.admin import is_admin as _is_adm
+        _rkb = get_main_reply_kb(_is_adm(cfg, user_id))
+        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
+            'chat_id': chat_id,
+            'text': '👇 Используй кнопки внизу для быстрой навигации',
+            'reply_markup': _rkb
+        })
 
 def _has_username(token, user_id):
     """Проверяет есть ли @username у юзера."""
