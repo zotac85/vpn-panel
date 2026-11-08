@@ -6865,12 +6865,10 @@ def main():
                         _sc(cfg, chat_id, user_id, first_name)
                     except Exception as e: log.error(f"reply_kb cabinet: {e}")
                     continue
-                elif text == '💎 VIP':
-                    try:
-                        from bot_modules.cabinet import show_buy_vip as _sbv
-                        _sbv(cfg, chat_id, user_id)
-                    except Exception as e: log.error(f"reply_kb buy_vip: {e}")
+                elif text in ('🛟 Помощь', '🎁 Помощь') or text.startswith('/help'):
+                    handle_help(cfg, chat_id)
                     continue
+                
                 elif text == '💰 Баланс':
                     try:
                         from bot_modules.cabinet import show_balance as _sb
