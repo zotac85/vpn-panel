@@ -70,7 +70,7 @@ PYEOF_INNER
 _nodes_check() {
     local ip="$1" sport="$2"
     local start=$(date +%s%N)
-    if ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "echo OK" < /dev/null &>/dev/null; then
+    if ssh -o BatchMode=yes -o ConnectTimeout=2 -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "echo OK" < /dev/null &>/dev/null; then
         local end=$(date +%s%N)
         echo "online:$(( (end - start) / 1000000 ))"
     else
@@ -274,7 +274,7 @@ PYCODE
         FAIL=0
         while IFS='|' read -r login pwd dev exp; do
             [ -z "$login" ] && continue
-            RES=$(timeout 15s ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o ServerAliveInterval=5 -o ServerAliveCountMax=2 -p "$_sp" root@"$_ip" "node-user.sh add '$login' '$pwd' '$exp' && node-user.sh setlimit '$login' '$dev'" < /dev/null 2>/dev/null)
+            RES=$(timeout 15s ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=2 -o ServerAliveInterval=5 -o ServerAliveCountMax=2 -p "$_sp" root@"$_ip" "node-user.sh add '$login' '$pwd' '$exp' && node-user.sh setlimit '$login' '$dev'" < /dev/null 2>/dev/null)
             if echo "$RES" | grep -q "OK"; then
                 OK=$((OK+1))
             else
@@ -579,7 +579,7 @@ _nodes_install_tls() {
 
     # 1. Проверка SSH
     echo -ne "[1/4] Проверка SSH-соединения... "
-    if ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 -p "$sport" root@"$ip" "echo OK" >/dev/null 2>&1; then
+    if ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=2 -p "$sport" root@"$ip" "echo OK" >/dev/null 2>&1; then
         echo -e "${GREEN}✅ OK${NC}"
     else
         echo -e "${RED}❌ Нода недоступна!${NC}"
@@ -755,7 +755,13 @@ menu_nodes() {
         echo ""
         printf "  %-3s %-18s %-18s %-16s %-8s\n" "ID" "Имя" "Домен" "IP" "Статус"
         echo "  ────────────────────────────────────────────────────────────────"
-        echo -e "${RED}  ⚠️ ВАЖНО: Для новой ноды СНАЧАЛА нажмите п.4 (Ключ+Токен), а ПОТОМ п.14 (Автоустановка)!${NC}"
+        echo -e "⚠️ ВАЖНО: СТРОГАЯ ПОСЛЕДОВАТЕЛЬНОСТЬ ДЕЙСТВИЙ!"; \
+        echo -e " 1. Создайте 2 домена (WS на 80 и TLS на 443)."; \
+        echo -e " 2. Нажмите п.1 (Добавить ноду) - укажите имя и IP."; \
+        echo -e " 3. Нажмите п.4 (Закинуть SSH-ключ) - введите пароль root."; \
+        echo -e " 4. Нажмите п.14 (Автоустановка) - ждите 2-3 минуты."; \
+        echo -e " 5. Нажмите п.2 (Проверить ноды) - статус станет online."; \
+        echo -e "Если нода unknown - вы пропустили шаг 3 или 4."
         echo ""
         local num=0
         while IFS='|' read -r id name host ip sport wsport is_master is_active status; do
@@ -1125,7 +1131,7 @@ PYCODE
     OK=0; FAIL=0
     while IFS='|' read -r login pwd dev exp; do
         [ -z "$login" ] && continue
-        RES=$(timeout 15s ssh -q -o LogLevel=QUIET -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 -p "$sport" root@"$ip" "node-user.sh add '$login' '$pwd' '$exp' && node-user.sh setlimit '$login' '$dev'" < /dev/null 2>/dev/null)
+        RES=$(timeout 15s ssh -q -o LogLevel=QUIET -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=2 -p "$sport" root@"$ip" "node-user.sh add '$login' '$pwd' '$exp' && node-user.sh setlimit '$login' '$dev'" < /dev/null 2>/dev/null)
         if echo "$RES" | grep -q "OK"; then OK=$((OK+1)); else FAIL=$((FAIL+1)); fi
         sleep 0.1
     done < "$TMP_FILE"
