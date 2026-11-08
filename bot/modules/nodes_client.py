@@ -3,6 +3,7 @@ import subprocess
 import sqlite3
 import os
 import logging
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -143,27 +144,31 @@ def node_check(node_id):
 
 
 def sync_user_to_all_nodes(username, password, action="add", device_limit=None, exp_ts=None):
-    """Синхронизирует юзера на все активные ноды (кроме мастера).
-    action: 'add' | 'del' | 'passwd'
-    device_limit: количество устройств (только для action='add')
-    exp_ts: timestamp истечения (только для action='add')
-    Возвращает dict {node_name: (success, msg)}.
-    """
-    results = {}
-    for node_id, name, host, ip, ssh_port, ws_port, is_master in get_all_active_nodes(only_online=True):
-        if is_master:
-            continue
-        if action == "add":
-            ok, msg = node_add_user(node_id, username, password, device_limit=device_limit, exp_ts=exp_ts)
-        elif action == "del":
-            ok, msg = node_del_user(node_id, username)
-        elif action == "passwd":
-            ok, msg = node_passwd(node_id, username, password)
-        else:
-            ok, msg = (False, f"unknown action: {action}")
-        results[name] = (ok, msg)
-        logger.info(f"sync_user_to_all_nodes {action} {username} -> {name}: {ok} {msg}")
-    return results
+    """Синхронизирует юзера на все активные ноды (в фоновом режиме, чтобы не тормозить бота)."""
+    
+    def _worker():
+        results = {}
+        try:
+            for node_id, name, host, ip, ssh_port, ws_port, is_master in get_all_active_nodes(only_online=True):
+                if is_master:
+                    continue
+                if action == "add":
+                    ok, msg = node_add_user(node_id, username, password, device_limit=device_limit, exp_ts=exp_ts)
+                elif action == "del":
+                    ok, msg = node_del_user(node_id, username)
+                elif action == "passwd":
+                    ok, msg = node_passwd(node_id, username, password)
+                else:
+                    ok, msg = (False, f"unknown action: {action}")
+                results[name] = (ok, msg)
+                logger.info(f"sync_user_to_all_nodes {action} {username} -> {name}: {ok} {msg}")
+        except Exception as e:
+            logger.error(f"sync_user_to_all_nodes error: {e}")
+
+    # Запускаем в фоне и сразу возвращаем пустой результат
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+    return {}
 
 
 def collect_traffic_from_all_nodes():
