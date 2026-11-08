@@ -559,6 +559,9 @@ def generate_darktunnel_url(username, password, domain, ws_port, proxy, cfg):
     return cabinet.make_darktunnel_url(username, password, domain, ws_port, proxy, loc)
 
 def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
+    from bot_modules.cabinet import get_main_reply_kb
+    from bot_modules.admin import is_admin as _is_adm
+    _rkb = get_main_reply_kb(_is_adm(cfg, user_id))
     try:
         token = cfg['BOT_TOKEN']
         name = first_name or 'друг'
@@ -729,7 +732,7 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
             except: pass
             try: os.remove(_old_wf)
             except: pass
-        result = smart_send(token, chat_id, text, reply_markup=keyboard, parse_mode='HTML')
+        result = smart_send(token, chat_id, text, reply_markup=_rkb, reply_markup=keyboard, parse_mode='HTML')
         if result and result.get('ok'):
             msg_id = result['result']['message_id']
             welcome_dir = '/etc/UDPCustom/welcome_msgs'
@@ -741,24 +744,7 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
             # Авто-удаление отключено (welcome удаляется при выдаче теста)
 
 
-    finally:
-        # Отправляем Reply-клавиатуру в самом конце
-        from bot_modules.cabinet import get_main_reply_kb
-        from bot_modules.admin import is_admin as _is_adm
-        _rkb = get_main_reply_kb(_is_adm(cfg, user_id))
-        # Отправляем сообщение с клавиатурой без звука
-        _res = tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
-            'chat_id': chat_id,
-            'text': '\u2060',
-            'reply_markup': _rkb,
-            'disable_notification': True
-        })
-        # Сразу удаляем само сообщение, чтобы не было пузыря (клавиатура останется)
-        if _res and _res.get('ok'):
-            try:
-                _mid = _res['result']['message_id']
-                tg_request(cfg['BOT_TOKEN'], 'deleteMessage', {'chat_id': chat_id, 'message_id': _mid})
-            except: pass
+
 
 def _has_username(token, user_id):
     """Проверяет есть ли @username у юзера."""
