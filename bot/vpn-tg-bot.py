@@ -6858,7 +6858,8 @@ def main():
                 elif text.startswith('/addadmin'): handle_addadmin(cfg, chat_id, user_id, text[9:].strip())
                 elif text.startswith('/deladmin'): handle_deladmin(cfg, chat_id, user_id, text[9:].strip())
                 elif text.startswith('/autopost'): handle_autopost(cfg, chat_id, user_id, text[9:].strip())
-                elif text.startswith('/restart'): handle_restart(cfg, chat_id, user_id, text[8:].strip())                elif text == '🏠 Начать' or text.startswith('/start'):
+                elif text.startswith('/restart'): handle_restart(cfg, chat_id, user_id, text[8:].strip())
+                elif text == '🏠 Начать' or text.startswith('/start'):
                     handle_start(cfg, chat_id, user_id, first_name)
                     continue
                 elif text == '👤 Профиль' or text.startswith('/cabinet'):
