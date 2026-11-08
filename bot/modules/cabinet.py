@@ -2437,19 +2437,25 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
 
     if cb_data.startswith('cab_darkfile:'):
         key_name = cb_data.split(':', 1)[1]
-        # Удаляем старые сообщения/файлы
+
+        # МГНОВЕННО убираем крутилку с кнопки
+        _tg(token, 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': '⏳ Генерирую конфиги...'})
+
         try: _smart_files_clear(token, chat_id)
         except Exception as e: pass
-        
+
         _inst_text = "📱 <b>Ключи для Android (DarkTunnel)</b>" + chr(10) + chr(10) + \
                      "1. Скачай приложение: <a href='https://play.google.com/store/apps/details?id=net.darktunnel.app'>Google Play</a>" + chr(10) + \
                      "2. Нажми на файл ключа ниже" + chr(10) + \
                      "3. Выбери <b>Открыть с помощью DarkTunnel</b>" + chr(10) + chr(10) + \
                      "🚀 <b>Также доступен Trojan (WS) для NekoBox / v2rayNG — работает на любых устройствах.</b>"
         _inst_kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
-        
+
         _send_instr(token, chat_id, _inst_text, _inst_kb)
-        send_dark_files_all_nodes(cfg, chat_id, user_id, key_name)
+
+        # Генерируем файлы в фоне, чтобы не вешать бота
+        import threading
+        threading.Thread(target=send_dark_files_all_nodes, args=(cfg, chat_id, user_id, key_name), daemon=True).start()
         return True
     if cb_data.startswith('cab_npvt:'):
         key_name = cb_data.split(':', 1)[1]
