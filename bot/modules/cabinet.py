@@ -110,17 +110,25 @@ def _edit(token, chat_id, msg_id, text, reply_markup=None):
 
 
 def _send_new(token, chat_id, text, reply_markup=None, parse_mode='HTML'):
-    """Удаляет старое бот-сообщение и шлёт новое (для команд)."""
+    """Удаляет старые бот-сообщения и шлёт новое."""
     try:
         os.makedirs(SMART_DIR, exist_ok=True)
         path = f"{SMART_DIR}/{chat_id}"
+        import json
+        old_ids = []
         if os.path.exists(path):
             try:
-                old_id = int(open(path).read().strip())
-                _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': old_id})
+                old_ids = json.load(open(path))
+                if not isinstance(old_ids, list):
+                    old_ids = [int(old_ids)]
             except: pass
+            for old_id in old_ids:
+                try:
+                    _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': old_id})
+                except: pass
             try: os.remove(path)
             except: pass
+
         params = {'chat_id': chat_id, 'text': text,
                   'disable_web_page_preview': True, 'parse_mode': parse_mode}
         if reply_markup:
@@ -128,14 +136,15 @@ def _send_new(token, chat_id, text, reply_markup=None, parse_mode='HTML'):
         result = _tg(token, 'sendMessage', params)
         if result and result.get('ok'):
             try:
+                old_ids.append(result['result']['message_id'])
+                old_ids = old_ids[-10:]
                 with open(path, 'w') as f:
-                    f.write(str(result['result']['message_id']))
+                    json.dump(old_ids, f)
             except: pass
         return result
     except Exception as e:
         cab_log.error(f"_send_new error: {e}")
         return None
-
 
 def _human_bytes(b):
     try:

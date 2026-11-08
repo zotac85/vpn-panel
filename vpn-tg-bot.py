@@ -121,28 +121,35 @@ def smart_files_clear(token, chat_id):
         log.error(f"smart_files_clear: {e}")
 
 def smart_send(token, chat_id, text, reply_markup=None, parse_mode='HTML'):
-    """Отправляет сообщение, удаляя предыдущее сообщение бота в этом чате."""
+    """Отправляет сообщение, удаляя предыдущие 10 сообщений бота в этом чате."""
     try:
         os.makedirs(SMART_DIR, exist_ok=True)
         path = f"{SMART_DIR}/{chat_id}"
-        # Удаляем предыдущее
+        import json
+        old_ids = []
         if os.path.exists(path):
             try:
-                old_id = int(open(path).read().strip())
-                tg_request(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': old_id})
+                old_ids = json.load(open(path))
+                if not isinstance(old_ids, list):
+                    old_ids = [int(old_ids)]
             except: pass
+            for old_id in old_ids:
+                try:
+                    tg_request(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': old_id})
+                except: pass
             try: os.remove(path)
             except: pass
-        # Отправляем новое
+
         params = {'chat_id': chat_id, 'text': text, 'disable_web_page_preview': True}
         if parse_mode: params['parse_mode'] = parse_mode
         if reply_markup: params['reply_markup'] = reply_markup
         result = tg_request(token, 'sendMessage', params)
-        # Запоминаем id
         if result and result.get('ok'):
             try:
+                old_ids.append(result['result']['message_id'])
+                old_ids = old_ids[-10:]
                 with open(path, 'w') as f:
-                    f.write(str(result['result']['message_id']))
+                    json.dump(old_ids, f)
             except: pass
         return result
     except Exception as e:
@@ -6702,7 +6709,7 @@ def main():
                     elif action == 'addbalance':
                         _do_addbalance(cfg, chat_id, text)
                     elif action.startswith('broadcast_text'):
-                    _tgt = action.split(':', 1)[1] if ':' in action else 'all'
+                        _tgt = action.split(':', 1)[1] if ':' in action else 'all'
                         _do_broadcast_preview(cfg, chat_id, text, _tgt)
                     elif action.startswith('promo_post:'):
                         _pcode = action.split(':', 1)[1]
