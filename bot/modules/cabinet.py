@@ -2435,7 +2435,7 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         _send_instr(token, chat_id, _text, _kb)
         return True
 
-    if cb_data.startswith('cab_darkfile:'):
+    if cb_data.startswith('cab_darkfile:') or cb_data.startswith('cab_dt:'):
         key_name = cb_data.split(':', 1)[1]
 
         # МГНОВЕННО убираем крутилку с кнопки
