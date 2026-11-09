@@ -1330,6 +1330,24 @@ def _send_instr(token, chat_id, text, kb=None):
         except: pass
         try: os.remove(instr_file)
         except: pass
+
+    # Удаляем также предыдущее главное сообщение (например, "Ключ продлён"), чтобы не засорять чат
+    main_file = f"{SMART_DIR}/{chat_id}"
+    if os.path.exists(main_file):
+        try:
+            old_main_id = int(open(main_file).read().strip())
+            # Проверяем, что это не сообщение с клавиатурой
+            kb_file = f"{SMART_DIR}/{chat_id}_kb"
+            is_kb = False
+            if os.path.exists(kb_file):
+                if int(open(kb_file).read().strip()) == old_main_id:
+                    is_kb = True
+            
+            if not is_kb:
+                _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': old_main_id})
+        except: pass
+        try: os.remove(main_file)
+        except: pass
     res = _tg(token, 'sendMessage', {'chat_id': chat_id, 'text': text, 'reply_markup': kb, 'parse_mode': 'HTML', 'disable_web_page_preview': True})
     if res and res.get('ok'):
         try: open(instr_file, 'w').write(str(res['result']['message_id']))
