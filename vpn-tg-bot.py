@@ -757,9 +757,18 @@ def handle_start(cfg, chat_id, user_id, first_name, force_verified=None):
         from bot_modules.admin import is_admin as _is_adm
         _rkb = get_main_reply_kb(_is_adm(cfg, user_id))
         
+        # Удаляем предыдущее сообщение с клавиатурой, чтобы не спамить
+        import os as _os
+        _kb_file = f"{SMART_DIR}/{chat_id}_kb"
+        if _os.path.exists(_kb_file):
+            try:
+                _old_kb_id = int(open(_kb_file).read().strip())
+                tg_request(cfg['BOT_TOKEN'], 'deleteMessage', {'chat_id': chat_id, 'message_id': _old_kb_id})
+            except Exception: pass
+
         _res = tg_request(cfg['BOT_TOKEN'], 'sendMessage', {
             'chat_id': chat_id,
-            'text': '⚡️ <b>Навигация:</b> используйте кнопки внизу 👇',
+            'text': '⚡️ <b>Быстрые кнопки к разделам 👇</b>',
             'reply_markup': _rkb,
             'parse_mode': 'HTML',
             'disable_notification': True
