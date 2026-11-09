@@ -1138,12 +1138,16 @@ def do_key_extend(cfg, chat_id, user_id, key_name, tariff_idx, msg_id=None):
         )
     except Exception as e:
         cab_log.error(f"extend DB update: {e}")
-    # Обновляем Linux-юзера (срок, лимиты, iptables) — через rotate
+    # Берем текущий пароль (НЕ меняем его при продлении, чтобы старый конфиг работал)
+    new_pw = key.get('password')
+    # Синхронизируем обновленные сроки и лимиты на ноды
     try:
-        new_pw = rotate_key_password(key_name)
+        _dev_lim = int(t['devices'])
+        sync_res = nc.sync_user_to_all_nodes(key_name, new_pw, action="add", device_limit=_dev_lim, exp_ts=new_exp)
+        for node_name, (ok, msg) in sync_res.items():
+            cab_log.info(f"extend sync {key_name} -> {node_name}: {'OK' if ok else 'FAIL'} {msg}")
     except Exception as e:
-        cab_log.error(f"extend rotate: {e}")
-        new_pw = None
+        cab_log.error(f"extend sync nodes: {e}")
     # Обновляем срок в expire_ts и chage
     import subprocess as _sp
     try:
