@@ -71,7 +71,9 @@ def _send(token, chat_id, text, reply_markup=None, parse_mode='HTML'):
             r = _edit(token, chat_id, old_id, text, reply_markup)
             if r and r.get('ok'):
                 return r
-            # если edit упал (не изменилось / удалено) — падаем на новый send
+            # если edit упал — ПРИНУДИТЕЛЬНО УДАЛЯЕМ старое сообщение, чтобы не засорять чат
+            try: _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': old_id})
+            except Exception: pass
         # 2) Новое сообщение
         params = {'chat_id': chat_id, 'text': text,
                   'disable_web_page_preview': True, 'parse_mode': parse_mode}
