@@ -6866,57 +6866,60 @@ def main():
                 elif text.startswith('/deladmin'): handle_deladmin(cfg, chat_id, user_id, text[9:].strip())
                 elif text.startswith('/autopost'): handle_autopost(cfg, chat_id, user_id, text[9:].strip())
                 elif text.startswith('/restart'): handle_restart(cfg, chat_id, user_id, text[8:].strip())
-                # Удаляем сообщение юзера
-                try: tg_request(cfg['BOT_TOKEN'], 'deleteMessage', {'chat_id': chat_id, 'message_id': msg['message_id']})
-                except Exception: pass
                 elif text == '🏠 Начать' or text.startswith('/start'):
+                    try: tg_request(cfg['BOT_TOKEN'], 'deleteMessage', {'chat_id': chat_id, 'message_id': msg['message_id']})
+                    except Exception: pass
                     handle_start(cfg, chat_id, user_id, first_name)
                     continue
-                # Удаляем сообщение юзера
-                try: tg_request(cfg['BOT_TOKEN'], 'deleteMessage', {'chat_id': chat_id, 'message_id': msg['message_id']})
-                except Exception: pass
                 elif text == '👤 Профиль' or text.startswith('/cabinet'):
+                    try: tg_request(cfg['BOT_TOKEN'], 'deleteMessage', {'chat_id': chat_id, 'message_id': msg['message_id']})
+                    except Exception: pass
                     try:
                         from bot_modules.cabinet import show_cabinet as _sc
                         _sc(cfg, chat_id, user_id, first_name)
                     except Exception as e: log.error(f"reply_kb cabinet: {e}")
                     continue
                 elif text in ('🛟 Помощь', '🎁 Помощь') or text.startswith('/help'):
+                    try: tg_request(cfg['BOT_TOKEN'], 'deleteMessage', {'chat_id': chat_id, 'message_id': msg['message_id']})
+                    except Exception: pass
                     handle_help(cfg, chat_id)
                     continue
                 
-                # Удаляем сообщение юзера
-                try: tg_request(cfg['BOT_TOKEN'], 'deleteMessage', {'chat_id': chat_id, 'message_id': msg['message_id']})
-                except Exception: pass
                 elif text == '🔑 Мои ключи':
+                    try: tg_request(cfg['BOT_TOKEN'], 'deleteMessage', {'chat_id': chat_id, 'message_id': msg['message_id']})
+                    except Exception: pass
                     try:
                         from bot_modules.cabinet import show_my_keys as _smk
                         _smk(cfg, chat_id, user_id)
                     except Exception as e: log.error(f"reply_kb keys: {e}")
                     continue
                 elif text == '🤖 Админка' or text.startswith('/admin'):
+                    try: tg_request(cfg['BOT_TOKEN'], 'deleteMessage', {'chat_id': chat_id, 'message_id': msg['message_id']})
+                    except Exception: pass
                     show_admin_panel(cfg, chat_id, user_id)
                     continue
 
-                # Удаляем сообщение юзера
-                try: tg_request(cfg['BOT_TOKEN'], 'deleteMessage', {'chat_id': chat_id, 'message_id': msg['message_id']})
-                except Exception: pass
                 elif text == '⚙️ Админка' or text.startswith('/admin'):
+                    try: tg_request(cfg['BOT_TOKEN'], 'deleteMessage', {'chat_id': chat_id, 'message_id': msg['message_id']})
+                    except Exception: pass
                     show_admin_panel(cfg, chat_id, user_id)
                     continue
-                # Удаляем сообщение юзера
-                try: tg_request(cfg['BOT_TOKEN'], 'deleteMessage', {'chat_id': chat_id, 'message_id': msg['message_id']})
-                except Exception: pass
                 elif text == '💎 Купить VIP':
+                    try: tg_request(cfg['BOT_TOKEN'], 'deleteMessage', {'chat_id': chat_id, 'message_id': msg['message_id']})
+                    except Exception: pass
                     try:
                         from bot_modules.cabinet import show_buy_vip as _sbv
                         _sbv(cfg, chat_id, user_id)
                     except Exception as e: log.error(f"reply_kb buy_vip: {e}")
                     continue
                 elif text in ('🛟 Помощь', '🎁 Помощь') or text.startswith('/help'):
+                    try: tg_request(cfg['BOT_TOKEN'], 'deleteMessage', {'chat_id': chat_id, 'message_id': msg['message_id']})
+                    except Exception: pass
                     handle_help(cfg, chat_id)
                     continue
                 elif text == '🏠 Начать' or text.startswith('/start'):
+                    try: tg_request(cfg['BOT_TOKEN'], 'deleteMessage', {'chat_id': chat_id, 'message_id': msg['message_id']})
+                    except Exception: pass
                     handle_start(cfg, chat_id, user_id, first_name)
                     continue
 
