@@ -1153,6 +1153,28 @@ def do_key_extend(cfg, chat_id, user_id, key_name, tariff_idx, msg_id=None):
         ], capture_output=True, timeout=15)
     except Exception as e:
         cab_log.error(f"extend linux update: {e}")
+    # Уведомление админу о продлении
+    try:
+        _admin_id = cfg.get('ADMIN_ID', '')
+        if _admin_id:
+            _u = db.get_user(user_id) or {}
+            _date_str = time.strftime('%d.%m.%Y %H:%M', time.localtime(new_exp))
+            _a_msg = chr(10).join([
+                "🔄 <b>ПРОДЛЕНИЕ VIP</b>",
+                "",
+                f"👤 Имя: {_u.get('first_name') or '—'}",
+                f"🆔 ID: <code>{user_id}</code>",
+                f"📱 @{_u.get('username') or '—'}",
+                "",
+                f"📦 +{t['days']}д / {t['gb']}ГБ / {t['devices']} устр.",
+                f"💵 {t['price']:.2f} USDT",
+                f"🔑 Ключ: <code>{key_name}</code>",
+                f"📅 Новый срок: {_date_str}"
+            ])
+            _tg(token, 'sendMessage', {'chat_id': _admin_id, 'text': _a_msg, 'parse_mode': 'HTML'})
+    except Exception as e:
+        cab_log.error(f"Admin extend notification error: {e}")
+
     # Уведомление юзеру
     NL = chr(10)
     from datetime import datetime as _dt
