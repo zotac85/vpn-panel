@@ -17,7 +17,6 @@ import threading
 import urllib.request
 
 CONFIG_FILE = '/etc/UDPCustom/autopost.conf'
-MSGS_DIR = '/etc/UDPCustom/msgs'
 CHANNELS_FILE = '/etc/UDPCustom/channels.txt'
 POST_FILE = '/etc/UDPCustom/post.txt'
 
@@ -217,15 +216,18 @@ def publish_post(token):
         primary_clean = target.lstrip('@')
         sponsors = [c2.lstrip('@') for c2 in channels if c2.lstrip('@') != primary_clean]
         sponsors_list = ", ".join([f"@{s}" for s in sponsors]) if sponsors else "—"
-            import random
-    _titles = [
-        "🚀 Разгоняем скорость!", "🔥 Твой быстрый VPN ждет!",
-        "💎 Забирай свой тест-ключ!", "⚡ ️ Максимальная скорость и свобода!",
-        "🌍 Открой свободный интернет!", "🎁 Подарок для тебя — бесплатный VPN!",
-        "🛡 Твой надежный щит в сети!", "✨  Подключайся без ограничений!"
-    ]
-    _random_title = random.choice(_titles)
-personalized = (post_text
+        
+        # Случайный заголовок для разнообразия
+        import random
+        _titles = [
+            "🚀 Разгоняем скорость!", "🔥 Твой быстрый VPN ждет!",
+            "💎 Забирай свой тест-ключ!", "⚡ ️ Максимальная скорость и свобода!",
+            "🌍 Открой свободный интернет!", "🎁 Подарок для тебя — бесплатный VPN!",
+            "🛡 Твой надежный щит в сети!", "✨  Подключайся без ограничений!"
+        ]
+        _random_title = random.choice(_titles)
+        
+        personalized = (post_text
             .replace('{sponsors_list}', sponsors_list)
             .replace('{primary}', primary_clean)
             .replace('{hours}', _hours)
