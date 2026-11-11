@@ -19,6 +19,7 @@ import urllib.request
 CONFIG_FILE = '/etc/UDPCustom/autopost.conf'
 CHANNELS_FILE = '/etc/UDPCustom/channels.txt'
 POST_FILE = '/etc/UDPCustom/post.txt'
+MSGS_DIR = '/etc/UDPCustom/msgs'
 
 
 def _track_and_delete_autopost(token, chat_id, new_msg_id, max_posts=2, log=None):
