@@ -16,16 +16,16 @@ NGINX_CONF="/etc/nginx/conf.d/tls-tunnel.conf"
 
 echo "[xray-node] Installing Xray..."
 
-# 1. Установка Xray (официальный установщик)
-if ! command -v xray >/dev/null 2>&1; then
-    if ! bash -c "$(curl -fsSL https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install >/dev/null 2>&1; then
-        echo "[xray-node] Official installer failed, trying apt..."
-        apt-get update -y >/dev/null 2>&1
-        apt-get install -y xray >/dev/null 2>&1 || {
-            echo "[xray-node] ERROR: xray not installed"
-            exit 1
-        }
-    fi
+# 1. Установка / Обновление Xray (всегда)
+echo "[xray-node] Installing/Updating Xray..."
+rm -f /usr/local/bin/xray
+if ! bash -c "$(curl -fsSL https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install > /tmp/xray-install.log 2>&1; then
+    echo "[xray-node] Official installer failed, trying apt..."
+    apt-get update -y >/dev/null 2>&1
+    apt-get install -y --reinstall xray >/dev/null 2>&1 || {
+        echo "[xray-node] ERROR: xray not installed"
+        exit 1
+    }
 fi
 
 # 2. Конфиг
