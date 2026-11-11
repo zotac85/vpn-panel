@@ -1,5 +1,9 @@
 import logging
 auto_log = logging.getLogger('AUTOPOST')
+auto_log.setLevel(logging.INFO)
+_fh = logging.FileHandler('/var/log/vpn-autopost.log')
+_fh.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+auto_log.addHandler(_fh)
 
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
@@ -239,14 +243,23 @@ def _should_post(cfg, now):
     last = int(cfg.get('LAST_POST', '0'))
     
     if cfg.get('MODE') == 'time':
-        # Режим конкретного времени (например "10:00,22:00")
         times = [t.strip() for t in cfg.get('TIMES', '').split(',') if t.strip()]
         if not times: return False
+        
         cur_hm = time.strftime('%H:%M', time.localtime(now))
-        # Проверяем, попадаем ли мы в одну из минут (не более 60 сек отклонение)
+        cur_date = time.strftime('%Y-%m-%d', time.localtime(now))
+        last_date = time.strftime('%Y-%m-%d', time.localtime(last)) if last > 0 else ""
+        
         for t in times:
-            if cur_hm == t and (now - last) > 60:
+            # Если время совпадает и сегодня еще не постили
+            if cur_hm == t and cur_date != last_date:
                 return True
+            # Если проспали (например, из-за sleep 60), проверяем опоздание до 15 минут
+            if cur_hm > t and cur_date != last_date:
+                h1, m1 = map(int, cur_hm.split(':'))
+                h2, m2 = map(int, t.split(':'))
+                if (h1*60+m1) - (h2*60+m2) <= 15:
+                    return True
         return False
     else:
         # Режим интервала (каждые N часов)
