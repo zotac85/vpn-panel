@@ -17,6 +17,7 @@ import threading
 import urllib.request
 
 CONFIG_FILE = '/etc/UDPCustom/autopost.conf'
+MSGS_DIR = '/etc/UDPCustom/msgs'
 CHANNELS_FILE = '/etc/UDPCustom/channels.txt'
 POST_FILE = '/etc/UDPCustom/post.txt'
 
