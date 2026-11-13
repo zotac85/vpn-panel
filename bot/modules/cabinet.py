@@ -3093,6 +3093,9 @@ def show_whitedns_menu(cfg, chat_id, user_id, msg_id=None):
             "💻 <b>ПК (Windows):</b> <a href='https://github.com/WhiteDNS/WhiteDNS-Desktop'>Скачать</a>",
             "🍏 <b>iOS (CoreForge):</b> <a href='https://whitedns.online/tools/coreforge/'>Скачать</a>",
             "",
+            "📝 <b>Важно:</b> Открывай файлы как текст (TXT) через файловый редактор.",
+            "📱 <b>X-Plore (Android):</b> <a href='https://play.google.com/store/apps/details?id=com.lonelycatgames.Xplore'>Скачать</a>",
+            "",
             "━━ 🌐 <b>СЕРВЕРЫ</b> ━━",
         ] + _srv_lines + [
             "",
