@@ -3189,7 +3189,7 @@ def send_whitedns_files(cfg, chat_id, user_id, server_idx):
     new_ids = []
     try:
         # Отправляем Connection и сохраняем ID
-        r1 = requests.post(url, data={'chat_id': chat_id, f'caption': '🧩 Connection ({WD_SRV_NAMES[server_idx]})'}, files={'document': open(conn_file, 'rb')})
+        r1 = requests.post(url, data={'chat_id': chat_id, 'caption': f'🧩 Connection ({WD_SRV_NAMES[server_idx]})'}, files={'document': open(conn_file, 'rb')})
         if r1.status_code == 200: new_ids.append(r1.json()['result']['message_id'])
         
         # Отправляем Settings и сохраняем ID
