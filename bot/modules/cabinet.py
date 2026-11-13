@@ -2648,25 +2648,21 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         return True
 
     if cb_data == 'cab_wd_de':
-        show_whitedns_profiles(cfg, chat_id, user_id, 0, msg_id)
+        show_whitedns_confirm(cfg, chat_id, user_id, 0, msg_id)
         return True
     if cb_data == 'cab_wd_fi':
-        show_whitedns_profiles(cfg, chat_id, user_id, 1, msg_id)
+        show_whitedns_confirm(cfg, chat_id, user_id, 1, msg_id)
         return True
     if cb_data == 'cab_wd_se':
-        show_whitedns_profiles(cfg, chat_id, user_id, 2, msg_id)
+        show_whitedns_confirm(cfg, chat_id, user_id, 2, msg_id)
         return True
     if cb_data == 'cab_wd_nl':
-        show_whitedns_profiles(cfg, chat_id, user_id, 3, msg_id)
-        return True
-    if cb_data.startswith('cab_wd_prof:'):
-        _parts = cb_data.split(':')
-        show_whitedns_confirm(cfg, chat_id, user_id, int(_parts[2]), int(_parts[1]), msg_id)
+        show_whitedns_confirm(cfg, chat_id, user_id, 3, msg_id)
         return True
 
     if cb_data.startswith('cab_wd_send:'):
         _parts = cb_data.split(':')
-        send_whitedns_files(cfg, chat_id, user_id, int(_parts[1]), int(_parts[2]))
+        send_whitedns_files(cfg, chat_id, user_id, int(_parts[1]))
         return True
     if cb_data == 'cab_balance':
         show_balance(cfg, chat_id, user_id, msg_id)
@@ -3077,7 +3073,7 @@ def show_whitedns_menu(cfg, chat_id, user_id, msg_id=None):
         _srv = _wd_c_read_servers()
         _srv_lines = []
         for _i in range(4):
-            _ok = bool(_srv[_i]) and bool(_wd_c_read_file(WD_RES_PATHS[_i]))
+            _ok = bool(_srv[_i]) and bool(_wd_c_read_file(WD_RES_PATHS[0]))
             _srv_lines.append(WD_SRV_NAMES[_i] + (' — ✅ активен' if _ok else ' — ⏳ настройка'))
         text = NL.join([
             "🌐 <b>WhiteDNS (Резервный доступ)</b>",
@@ -3121,17 +3117,8 @@ def show_whitedns_menu(cfg, chat_id, user_id, msg_id=None):
 # ──────────────────────────────────────────────────────────────
 WD_SRV_NAMES = ['🇩🇪 Германия', '🇫🇮 Финляндия', '🇫🇷 Франция', '🇳🇱 Нидерланды']
 WD_PROF_NAMES = ['📱 3G', '📶 WiFi', '🖥 ADSL']
-WD_RES_PATHS = [
-    '/etc/UDPCustom/whitedns_resolvers_de.txt',
-    '/etc/UDPCustom/whitedns_resolvers_fi.txt',
-    '/etc/UDPCustom/whitedns_resolvers_se.txt',
-    '/etc/UDPCustom/whitedns_resolvers_nl.txt',
-]
-WD_SET_PATHS = [
-    '/etc/UDPCustom/whitedns_settings_3g.txt',
-    '/etc/UDPCustom/whitedns_settings_wifi.txt',
-    '/etc/UDPCustom/whitedns_settings_adsl.txt',
-]
+WD_RES_PATHS = ['/etc/UDPCustom/whitedns_resolvers.txt']
+WD_SET_PATHS = ['/etc/UDPCustom/whitedns_settings.txt']
 WD_SRV_FILE = '/etc/UDPCustom/whitedns_servers.txt'
 WD_ISSUED_LOG = '/etc/UDPCustom/whitedns_issued.log'
 
@@ -3153,40 +3140,81 @@ def _wd_c_read_file(path):
     except:
         return ''
 
-def _wd_c_log(user_id, username, server_idx, prof_idx):
+def _wd_c_log(user_id, username, server_idx, prof_idx=0):
     from datetime import datetime as _dt
     try:
         with open(WD_ISSUED_LOG, 'a') as f:
-            f.write(str(user_id) + '|' + str(username) + '|' + WD_SRV_NAMES[server_idx] + '|' + WD_PROF_NAMES[prof_idx] + '|' + _dt.now().strftime('%F %H:%M') + chr(10))
+            f.write(str(user_id) + '|' + str(username) + '|' + WD_SRV_NAMES[server_idx] + '|' + _dt.now().strftime('%F %H:%M') + chr(10))
     except: pass
 
-def send_whitedns_files(cfg, chat_id, user_id, server_idx, prof_idx):
+def send_whitedns_files(cfg, chat_id, user_id, server_idx):
     import requests
     import os
+    import json
     token = cfg['BOT_TOKEN']
-    _wd_c_log(user_id, chat_id, server_idx, prof_idx)
-    res_data = _wd_c_read_file(WD_RES_PATHS[server_idx])
-    set_data = _wd_c_read_file(WD_SET_PATHS[prof_idx])
+    _wd_c_log(user_id, chat_id, server_idx, 0)
+    
+    # 1. Удаляем предыдущие файлы, если они были
+    msg_log = f"/tmp/wd_files_{user_id}.json"
+    if os.path.exists(msg_log):
+        try:
+            with open(msg_log, 'r') as f:
+                old_ids = json.load(f)
+            for mid in old_ids:
+                try:
+                    requests.post(f"https://api.telegram.org/bot{token}/deleteMessage", data={'chat_id': chat_id, 'message_id': mid}, timeout=5)
+                except: pass
+            os.remove(msg_log)
+        except: pass
+
+    # Читаем данные
+    res_data = _wd_c_read_file(WD_RES_PATHS[0])
+    set_data = _wd_c_read_file(WD_SET_PATHS[0])
     conn_data = _wd_c_read_servers()[server_idx]
+    
+    # Создаем временные файлы
+    conn_file = f"/tmp/wd_conn_{user_id}.txt"
     res_file = f"/tmp/wd_res_{user_id}.txt"
     set_file = f"/tmp/wd_set_{user_id}.txt"
+    
+    with open(conn_file, 'w') as f: f.write(conn_data)
     with open(res_file, 'w') as f: f.write(res_data)
     with open(set_file, 'w') as f: f.write(set_data)
-    text = f"✅ <b>Твои файлы готовы!</b>\n\n🌐 Сервер: {WD_SRV_NAMES[server_idx]}\n⚙️ Профиль: {WD_PROF_NAMES[prof_idx]}\n\n📥 <b>Connection:</b> <code>{conn_data}</code>"
-    _send(token, chat_id, text)
+    
+    text = f"✅ <b>Твои файлы готовы!</b>\n\n🌐 Сервер: {WD_SRV_NAMES[server_idx]}\n\n⚠️ <b>Внимание!</b> Импортируй файлы строго в эти разделы:\n🧩 connection → «Connection»\n⚙️ settings → «Setting»\n🔢 resolvers → «Resolver»\n\n👇 Файлы ниже:"
+    _kb = {'inline_keyboard': [[{'text': '⬅️ Назад к серверам', 'callback_data': 'cab_whitedns'}]]}
+    _send(token, chat_id, text, reply_markup=_kb)
+    
     url = f"https://api.telegram.org/bot{token}/sendDocument"
+    new_ids = []
     try:
-        requests.post(url, data={'chat_id': chat_id, 'caption': '🔢 Resolvers'}, files={'document': open(res_file, 'rb')})
-        requests.post(url, data={'chat_id': chat_id, 'caption': '⚙️ Settings'}, files={'document': open(set_file, 'rb')})
+        # Отправляем Connection и сохраняем ID
+        r1 = requests.post(url, data={'chat_id': chat_id, f'caption': '🧩 Connection ({WD_SRV_NAMES[server_idx]})'}, files={'document': open(conn_file, 'rb')})
+        if r1.status_code == 200: new_ids.append(r1.json()['result']['message_id'])
+        
+        # Отправляем Settings и сохраняем ID
+        r2 = requests.post(url, data={'chat_id': chat_id, 'caption': '⚙️ Settings (setings)'}, files={'document': open(set_file, 'rb')})
+        if r2.status_code == 200: new_ids.append(r2.json()['result']['message_id'])
+        
+        # Отправляем Resolvers и сохраняем ID
+        r3 = requests.post(url, data={'chat_id': chat_id, 'caption': '🔢 Resolvers (resolvers)'}, files={'document': open(res_file, 'rb')})
+        if r3.status_code == 200: new_ids.append(r3.json()['result']['message_id'])
+        
+        # Записываем ID в файл для следующего удаления
+        with open(msg_log, 'w') as f:
+            json.dump(new_ids, f)
+            
     except Exception as e:
         pass
+        
+    os.remove(conn_file)
     os.remove(res_file)
     os.remove(set_file)
 
 def show_whitedns_profiles(cfg, chat_id, user_id, server_idx, msg_id=None):
     token = cfg['BOT_TOKEN']
     NL = chr(10)
-    if server_idx < 0 or server_idx > 2:
+    if server_idx < 0 or server_idx > 3:
         server_idx = 0
     text = NL.join([
         WD_SRV_NAMES[server_idx] + ' — <b>WHITEDNS</b>',
@@ -3209,14 +3237,12 @@ def show_whitedns_profiles(cfg, chat_id, user_id, server_idx, msg_id=None):
     else:
         _send(token, chat_id, text, kb)
 
-def show_whitedns_confirm(cfg, chat_id, user_id, server_idx, prof_idx, msg_id=None):
+def show_whitedns_confirm(cfg, chat_id, user_id, server_idx, msg_id=None):
     token = cfg['BOT_TOKEN']
     NL = chr(10)
     if server_idx < 0 or server_idx > 2:
         server_idx = 0
-    if prof_idx < 0 or prof_idx > 2:
-        prof_idx = 0
-    res = _wd_c_read_file(WD_RES_PATHS[server_idx])
+    res = _wd_c_read_file(WD_RES_PATHS[0])
     res_count = len([l for l in res.split(chr(10)) if l.strip()]) if res else 0
     text = NL.join([
         '⚠️ <b>ПРОВЕРЬ ВЫБОР</b>',
@@ -3225,8 +3251,6 @@ def show_whitedns_confirm(cfg, chat_id, user_id, server_idx, prof_idx, msg_id=No
         '📌 <b>Ты выбрал:</b>',
         '',
         '🌐 Сервер: ' + WD_SRV_NAMES[server_idx],
-        '⚙️ Профиль: ' + WD_PROF_NAMES[prof_idx],
-        '🔢 Резолверы: ' + WD_SRV_NAMES[server_idx] + ' (' + str(res_count) + ' IP)',
         '',
         '━━━━━━━━━━━━━━━━━━━━',
         '',
@@ -3239,7 +3263,7 @@ def show_whitedns_confirm(cfg, chat_id, user_id, server_idx, prof_idx, msg_id=No
         '❌ Перепутаешь — не заработает!',
     ])
     kb = {'inline_keyboard': [
-        [{'text': '✅ ДА, ВСЁ ВЕРНО', 'callback_data': 'cab_wd_send:' + str(server_idx) + ':' + str(prof_idx)}],
+        [{'text': '✅  ПОЛУЧИТЬ ФАЙЛЫ', 'callback_data': 'cab_wd_send:' + str(server_idx)}],
         [{'text': '❌ Отмена', 'callback_data': 'cab_whitedns'}]
     ]}
     if msg_id:
