@@ -406,7 +406,7 @@ def get_main_reply_kb(is_admin=False):
             [{'text': '🏠 Начать'}, {'text': '👤 Профиль'}],
             [{'text': '🛟 Помощь'}, {'text': '🔑 Мои ключи'}]
         ]
-    return {'keyboard': kb, 'resize_keyboard': True, 'is_persistent': False}
+    return {'keyboard': kb, 'resize_keyboard': True, 'is_persistent': True}
 
 
 def show_cabinet(cfg, chat_id, user_id, first_name="", msg_id=None):
@@ -3118,7 +3118,16 @@ def show_whitedns_menu(cfg, chat_id, user_id, msg_id=None):
 # ──────────────────────────────────────────────────────────────
 # WHITEDNS — клиентские функции
 # ──────────────────────────────────────────────────────────────
-WD_SRV_NAMES = ['🇩🇪 Германия', '🇫🇮 Финляндия', '🇫🇷 Франция', '🇳🇱 Нидерланды']
+def _get_wd_srv_names():
+    import sqlite3
+    try:
+        db = sqlite3.connect('/etc/UDPCustom/vpn.db')
+        rows = db.execute('SELECT name FROM whitedns_servers ORDER BY id').fetchall()
+        db.close()
+        return [r[0] for r in rows]
+    except:
+        return []
+WD_SRV_NAMES = _get_wd_srv_names()
 WD_PROF_NAMES = ['📱 3G', '📶 WiFi', '🖥 ADSL']
 WD_RES_PATHS = ['/etc/UDPCustom/whitedns_resolvers.txt']
 WD_SET_PATHS = ['/etc/UDPCustom/whitedns_settings.txt']
@@ -3126,15 +3135,14 @@ WD_SRV_FILE = '/etc/UDPCustom/whitedns_servers.txt'
 WD_ISSUED_LOG = '/etc/UDPCustom/whitedns_issued.log'
 
 def _wd_c_read_servers():
-    result = ['', '', '', '']
+    import sqlite3
     try:
-        with open(WD_SRV_FILE) as f:
-            lines = [l.rstrip(chr(10)) for l in f]
-        for i in range(min(3, len(lines))):
-            result[i] = lines[i]
+        db = sqlite3.connect('/etc/UDPCustom/vpn.db')
+        rows = db.execute('SELECT conn FROM whitedns_servers ORDER BY id').fetchall()
+        db.close()
+        return [r[0] for r in rows]
     except:
-        pass
-    return result
+        return []
 
 def _wd_c_read_file(path):
     try:

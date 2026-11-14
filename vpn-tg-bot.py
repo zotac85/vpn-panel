@@ -298,7 +298,7 @@ def get_payload():
     """Payload из базы данных"""
     try:
         import sqlite3
-        db = sqlite3.connect('/etc/UDPCustom/vpn.db')
+        db = sqlite3.connect('/etc/UDPCustom/vpn.db', timeout=15.0)
         mode_row = db.execute("SELECT value FROM settings WHERE key='MODE'").fetchone()
         mode = mode_row[0] if mode_row else 'WS'
         key = 'TLS_PAYLOAD' if mode == 'TLS' else 'WS_PAYLOAD'
@@ -2372,1734 +2372,23 @@ def show_wd_resolver_edit(cfg, chat_id, user_id, idx, msg_id=None):
         smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
 
 def _wd_read_servers():
-    """Читает 3 строки серверов. Возвращает список из 3 строк (или '')."""
-    result = ['', '', '', '']
+    import sqlite3
     try:
-        with open(WD_SS) as f:
-            lines = [l.rstrip(chr(10)) for l in f]
-        for i in range(min(4, len(lines))):
-            result[i] = lines[i]
-    except:
-        pass
-    return result
+        db = sqlite3.connect('/etc/UDPCustom/vpn.db', timeout=15.0)
+        rows = db.execute('SELECT name, conn FROM whitedns_servers ORDER BY id').fetchall()
+        db.close()
+        return [{'name': r[0], 'conn': r[1]} for r in rows]
+    except Exception as e:
+        return []
 
 def _wd_save_servers(servers):
-    """Сохраняет 3 строки серверов."""
-    with open(WD_SS, 'w') as f:
-        f.write(chr(10).join(servers) + chr(10))
-
-def show_wd_servers(cfg, chat_id, user_id, msg_id=None):
-    """Список 3 серверов WhiteDNS."""
-    token = cfg['BOT_TOKEN']
-    NL = chr(10)
-    servers = _wd_read_servers()
-    names = ['🇩🇪 Германия', '🇫🇮 Финляндия', '🇫🇷 Франция', '🇳🇱 Нидерланды']
-    txt = ['🌐 <b>СЕРВЕРЫ WHITEDNS</b>', '━━━━━━━━━━━━━━━━━━━━', '']
-    for i, name in enumerate(names):
-        if servers[i]:
-            txt.append(name + ' — ✅  настроено')
-        else:
-            txt.append(name + ' — ❌  пусто')
-        txt.append('')
-    txt.append('━━━━━━━━━━━━━━━━━━━━')
-    txt.append('Нажми на сервер, чтобы отредактировать.')
-    text = NL.join(txt)
-    kb = {'inline_keyboard': [
-        [{'text': '🇩🇪 Германия', 'callback_data': 'wd_srv_edit_0'},
-         {'text': '🇫🇮 Финляндия', 'callback_data': 'wd_srv_edit_1'}],
-        [{'text': '🇫🇷 Франция', 'callback_data': 'wd_srv_edit_2'},
-         {'text': '🇳🇱 Нидерланды', 'callback_data': 'wd_srv_edit_3'}],
-        [{'text': '⬅️ Назад', 'callback_data': 'adm_whitedns'}]
-    ]}
-    if msg_id:
-        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
-    else:
-        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
-
-def show_wd_server_edit(cfg, chat_id, user_id, idx, msg_id=None):
-    """Экран редактирования одного сервера."""
-    token = cfg['BOT_TOKEN']
-    NL = chr(10)
-    servers = _wd_read_servers()
-    names = ['🇩🇪 Германия', '🇫🇮 Финляндия', '🇫🇷 Франция', '🇳🇱 Нидерланды']
-    cur = servers[idx] if idx < len(servers) else ''
-    if cur:
-        _prev = cur[:500]
-        if len(cur) > 500:
-            _prev += NL + '... (обрезано)'
-        preview = '<pre>' + _prev + '</pre>'
-    else:
-        preview = '❌ пока пусто'
-    text = NL.join([
-        '✏️ <b>РЕДАКТИРОВАНИЕ: ' + names[idx] + '</b>',
-        '━━━━━━━━━━━━━━━━━━━━',
-        '',
-        'Текущее значение:',
-        preview,
-        '',
-        '━━━━━━━━━━━━━━━━━━━━',
-        'Отправь новое значение сообщением.',
-        '',
-        'Или отправь <code>-</code> чтобы очистить.',
-    ])
-    kb = {'inline_keyboard': [
-        [{'text': '🗑 Очистить', 'callback_data': 'wd_srv_clear_' + str(idx)}],
-        [{'text': '⬅️ Назад', 'callback_data': 'wd_servers'}]
-    ]}
-    if msg_id:
-        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
-    else:
-        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
-
-def show_adm_whitedns(cfg, chat_id, user_id, msg_id=None):
-    """Меню WhiteDNS в админке."""
-    token = cfg['BOT_TOKEN']
-    NL = chr(10)
-    issued = _wd_count_lines(WD_LOG)
-    srv = _wd_read_servers()
-    srv_names = ['🇩🇪 Германия', '🇫🇮 Финляндия', '🇫🇷 Франция', '🇳🇱 Нидерланды']
-    srv_ready = sum(1 for s in srv if s)
-    res_counts = [len(_wd_read_resolvers(i)) for i in range(4)]
-    res_ready = sum(1 for c in res_counts if c)
-    p3 = _wd_count_lines(WD_S3)
-    pw = _wd_count_lines(WD_SW)
-    pa = _wd_count_lines(WD_SA)
-    prof_ready = sum(1 for x in (p3, pw, pa) if x)
-    lines = [
-        '📡 <b>WHITEDNS УПРАВЛЕНИЕ</b>',
-        '━━━━━━━━━━━━━━━━━━━━',
-        '',
-        '📊 Выдано конфигов: <b>' + str(issued) + '</b>',
-        '',
-        '━━ 🌐 Серверы (' + str(srv_ready) + '/4) ━━',
-    ]
-    for i, name in enumerate(srv_names):
-        lines.append(name + ' — ' + ('✅' if srv[i] else '❌ пусто'))
-    lines.append('')
-    lines.append('━━ 🔢 Резолверы (' + str(res_ready) + '/4) ━━')
-    for i, name in enumerate(srv_names):
-        c = res_counts[i]
-        lines.append(name + ' — ' + (str(c) + ' IP ✅' if c else '❌ пусто'))
-    lines.append('')
-    lines.append('━━ ⚙️ Профили (' + str(prof_ready) + '/4) ━━')
-    lines.append('📱 3G   : ' + (str(p3) + ' стр. ✅' if p3 else '❌ пусто'))
-    lines.append('📶 WiFi : ' + (str(pw) + ' стр. ✅' if pw else '❌ пусто'))
-    lines.append('🖥 ADSL : ' + (str(pa) + ' стр. ✅' if pa else '❌ пусто'))
-    lines.append('')
-    lines.append('━━━━━━━━━━━━━━━━━━━━')
-    text = NL.join(lines)
-    kb = {'inline_keyboard': [
-        [{'text': '🌐 Серверы (' + str(srv_ready) + '/4)', 'callback_data': 'wd_servers'},
-         {'text': '🔢 Резолверы (' + str(res_ready) + '/4)', 'callback_data': 'wd_resolvers'}],
-        [{'text': '⚙️ Профили (' + str(prof_ready) + '/3)', 'callback_data': 'wd_profiles'},
-         {'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
-    ]}
-    if msg_id:
-        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
-    else:
-        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
-
-def show_admin_panel(cfg, chat_id, user_id, msg_id=None):
-    """Админ-панель"""
-    token = cfg['BOT_TOKEN']
-    admin_id = cfg.get('ADMIN_ID', '')
-    if not is_admin(cfg, user_id):
-        send_message(token, chat_id, '🚫 Только для админа.')
-        return
-    total_users = 0
-    try:
-        import sqlite3 as _sq
-        _c = _sq.connect('/etc/UDPCustom/vpn.db')
-        total_users = _c.execute('SELECT COUNT(*) FROM users').fetchone()[0]
-        _c.close()
-    except: pass
-    NLx = chr(10)
-    lines = ['⚙️ <b>АДМИН-ПАНЕЛЬ</b>', '━━━━━━━━━━━━━━━━━━━━', '', '👤 ID: <code>' + str(user_id) + '</code>', '📊 Юзеров: <b>' + str(total_users) + '</b>', '', '━━━━━━━━━━━━━━━━━━━━', 'Выбери раздел 👇']
-    text = NLx.join(lines)
-    keyboard = {'inline_keyboard': [
-        [{'text': '📊 Статистика', 'callback_data': 'admin_stats'},
-         {'text': '👥 Пользователи', 'callback_data': 'admin_users_1'},
-         {'text': '👑 Админы', 'callback_data': 'adm_admins'}],
-        [{'text': '💰 Баланс', 'callback_data': 'admin_addbalance'},
-         {'text': '🎫 Промокоды', 'callback_data': 'adm_promo_list'},
-         {'text': '📨 Рассылка', 'callback_data': 'adm_broadcast'}],
-        [{'text': '📢 Пост', 'callback_data': 'admin_post'},
-         {'text': '📢 Каналы', 'callback_data': 'admin_channels'},
-         {'text': '📝 Тексты', 'callback_data': 'adm_edit_texts'}],
-        [{'text': '⚙️ SSH WS', 'callback_data': 'manage_services'},
-         {'text': '⚙️ UDP Custom', 'callback_data': 'adm_udp_soon'},
-         {'text': '⚙️ WhiteDNS', 'callback_data': 'adm_whitedns'}]
-    ]}
-    if msg_id:
-        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': keyboard})
-    else:
-        smart_send(token, chat_id, text, reply_markup=keyboard, parse_mode='HTML')
-
-
-def handle_help(cfg, chat_id):
-    """Открывает раздел Помощи (тот же, что из кабинета)."""
-    try:
-        from bot_modules.cabinet import show_help_back
-        show_help_back(cfg, chat_id, 0)
-    except Exception as e:
-        log.error(f"handle_help: {e}")
-        send_message(cfg['BOT_TOKEN'], chat_id, "❌ Ошибка открытия помощи")
-
-
-
-def post_to_channel(cfg, chat_id, user_id):
-    """Публикует пост с кнопкой в канал"""
-    token = cfg['BOT_TOKEN']
-    admin_id = cfg.get('ADMIN_ID', '')
-    
-    # Только админ
-    if not is_admin(cfg, user_id):
-        send_message(token, chat_id, "🚫 Команда только для админа.")
-        return
-    
-    # Читаем текст поста
-    post_file = '/etc/UDPCustom/post.txt'
-    if not os.path.exists(post_file):
-        send_message(token, chat_id, "❌ Файл post.txt не найден")
-        return
-    
-    with open(post_file) as f:
-        post_text = f.read().strip().replace('{support}', get_support())
-    
-    # Убираем визуальный маркер кнопки из текста
-    post_text = post_text.replace('[🎁 Получить тест]', '').strip()
-    
-    # Канал для публикации — первый из channels.txt
-    channels = get_channels()
-    if not channels:
-        send_message(token, chat_id, "❌ Нет каналов в channels.txt")
-        return
-    
-    # Кнопка — deep link
-    bot_me = tg_request(token, 'getMe')
-    bot_username = bot_me.get('result', {}).get('username', '') if bot_me else ''
-    keyboard = {
-        'inline_keyboard': [
-            [{'text': '🎁 Получить тест', 'url': f'https://t.me/{bot_username}?start=from_channel', 'style': 'success'}]
-        ]
-    }
-    
-    # Публикуем ВО ВСЕ каналы
-    success_count = 0
-    errors = []
-    for ch in channels:
-        target_channel = ch if ch.startswith('@') else '@' + ch
-        primary_clean = target_channel.lstrip('@')
-        
-        # Спонсоры = все КРОМЕ текущего канала
-        sponsors = [c2.lstrip('@') for c2 in channels if c2.lstrip('@') != primary_clean]
-        sponsors_list = ", ".join([f"@{s}" for s in sponsors]) if sponsors else "—"
-        # Уникальный deep-link для этого канала: ?start=ch_<channel>
-        _ch_deeplink = f'https://t.me/{bot_username}?start=ch_{primary_clean}'
-        _keyboard_ch = {
-            'inline_keyboard': [
-                [{'text': '🎁 Получить тест', 'url': _ch_deeplink, 'style': 'success'}]
-            ]
-        }
-        
-        # Подстановка переменных
-        _hours = cfg.get('TEST_HOURS', '')
-        _gb = cfg.get('TEST_TRAFFIC_GB', '')
-        _devices = cfg.get('TEST_DEVICES', '')
-        _location = cfg.get('SERVER_LOCATION', '')
-        try:
-            import sqlite3 as _sq
-            _con = _sq.connect("/etc/UDPCustom/vpn.db")
-            _rows = _con.execute("SELECT name FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
-            _con.close()
-            if _rows:
-                _flags = []
-                for r in _rows:
-                    _em = ''.join([c for c in r[0] if ord(c) > 0x1F000])
-                    _flags.append(_em if _em else r[0])
-                _location = ' '.join(_flags)
-        except: pass
-        
-        import random
-        _titles = [
-            "🚀 Разгоняем скорость!", "🔥 Твой быстрый VPN ждет!",
-            "💎 Забирай свой тест-ключ!", "⚡️ Максимальная скорость и свобода!",
-            "🌍 Открой свободный интернет!", "🎁 Подарок для тебя — бесплатный VPN!",
-            "🛡 Твой надежный щит в сети!", "✨ Подключайся без ограничений!"
-        ]
-        _random_title = random.choice(_titles)
-        try:
-            import sqlite3 as _sq
-            _con = _sq.connect("/etc/UDPCustom/vpn.db")
-            _rows = _con.execute("SELECT name FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
-            _con.close()
-            if _rows:
-                _flags = []
-                for r in _rows:
-                    _em = ''.join([c for c in r[0] if ord(c) > 0x1F000])
-                    _flags.append(_em if _em else r[0])
-                _location = ' '.join(_flags)
-        except: pass
-        # Случайный заголовок для разнообразия
-        import random
-        _titles = [
-            "🚀 Разгоняем скорость!",
-            "🔥 Твой быстрый VPN ждет!",
-            "💎 Забирай свой тест-ключ!",
-            "⚡️ Максимальная скорость и свобода!",
-            "🌍 Открой свободный интернет!",
-            "🎁 Подарок для тебя — бесплатный VPN!",
-            "🛡 Твой надежный щит в сети!",
-            "✨ Подключайся без ограничений!"
-        ]
-        _random_title = random.choice(_titles)
-        
-        personalized = post_text.replace('{sponsors_list}', sponsors_list)
-        personalized = personalized.replace('{primary}', primary_clean)
-        personalized = personalized.replace('{hours}', _hours)
-        personalized = personalized.replace('{gb}', _gb)
-        personalized = personalized.replace('{devices}', _devices)
-        personalized = personalized.replace('{location}', _location)
-        personalized = personalized.replace('{random_title}', _random_title)
-        
-        result = tg_request(token, 'sendMessage', {
-            'chat_id': target_channel,
-            'text': personalized,
-            'reply_markup': _keyboard_ch,
-            'parse_mode': 'HTML',
-            'disable_web_page_preview': True
-        })
-        if result and result.get('ok'):
-            _track_and_delete_posts(token, target_channel, result['result']['message_id'], max_posts=2)
-            success_count += 1
-            log.info(f"Пост опубликован в {target_channel}")
-        else:
-            error = result.get('description', 'unknown') if result else 'no response'
-            errors.append(f"{target_channel}: {error}")
-            log.error(f"Ошибка публикации в {target_channel}: {error}")
-    
-    if success_count == len(channels):
-        send_message(token, chat_id, f"✅ Пост опубликован во все каналы ({success_count}/{len(channels)})")
-    elif success_count > 0:
-        err_text = "\n".join(errors)
-        send_message(token, chat_id, f"⚠️ Опубликовано в {success_count}/{len(channels)}\n\nОшибки:\n{err_text}")
-    else:
-        err_text = "\n".join(errors)
-        send_message(token, chat_id, f"❌ Не удалось опубликовать ни в один канал\n\n{err_text}")
-
-
-def handle_channel_test(cfg, user_id, first_name, hwid=None):
-    """Обработка кнопки из КАНАЛА — проверка спонсора + выдача в личку"""
-    token = cfg['BOT_TOKEN']
-    
-    # Проверяем чёрный список
-    if is_blacklisted(user_id):
-        tg_request(token, 'sendMessage', {
-            'chat_id': user_id,
-            'text': f"🚫 Ты в чёрном списке. Обратись: {get_support()}"
-        })
-        return
-    
-    # Проверяем кулдаун
-    admin_id = cfg.get('ADMIN_ID', '')
-    if not is_admin(cfg, user_id):
-        cooldown_hours = int(cfg.get('COOLDOWN_HOURS', '8'))
-        ok, remaining = check_cooldown(user_id, cooldown_hours)
-        if not ok:
-            send_message_ttl(token, user_id, f"⏰ Ты уже получал тест. Попробуй через {format_time(remaining)}.", ttl=15)
-            return
-    
-    # Проверяем подписку на канал СПОНСОРА (@vpnbalkan)
-    channels = get_channels()
-    not_sub = []
-    for ch in channels:
-        # Первый канал (основной) пропускаем — юзер уже там
-        if ch.strip('@') in [c.strip('@') for c in channels[:1]]:
-            continue
-        if not check_subscription(token, user_id, ch):
-            not_sub.append(ch.lstrip('@'))
-    
-    if not_sub:
-        # Отправляем в личку — надо подписаться
-        keyboard = {'inline_keyboard': []}
-        for ch in not_sub:
-            keyboard['inline_keyboard'].append([{'text': f'📢 {ch}', 'url': f'https://t.me/{ch}'}])
-        keyboard['inline_keyboard'].append([{'text': '✅ Я подписался → Получить тест', 'callback_data': 'get_test'}])
-        
-        text = (
-            "⚠️ Осталось подписаться на канал спонсора!\n\n"
-            "👇 Подпишись и нажми кнопку ниже"
-        )
-        tg_request(token, 'sendMessage', {
-            'chat_id': user_id,
-            'text': text,
-            'reply_markup': keyboard
-        })
-        return
-    
-    # Всё ОК — создаём аккаунт
-    # Проверка @username (только для не-админов)
-    if not is_admin(cfg, user_id):
-        if not _has_username(token, user_id):
-            _send_username_required(cfg, user_id)
-            return
-
-    # --- FSM: спрашиваем HWID ---
-    if hwid is None:
-        _is_adm = is_admin(cfg, user_id)
-        try:
-            from bot_modules import db as _tdb
-            _tdb.set_pending(user_id, 'test_hwid_ch')
-        except Exception as _e:
-            log.error(f"set_pending test_hwid: {_e}")
-        _hw_msg = (
-            "\U0001F194 <b>Отправь свой HWID</b>\n"
-            + "\u2501"*20 + "\n"
-            "HWID \u2014 это ID устройства.\n"
-            "Ключ будет работать только на этом устройстве.\n\n"
-            "Как узнать:\n"
-            "DarkTunnel \u2192 \u2699\uFE0F Settings \u2192 внизу <b>Hardware ID</b>\n\n"
-            "\U0001F4CB Скопируй и отправь сюда:"
-        )
-        if _is_adm:
-            _kb = {'inline_keyboard': [
-                [{'text': '\u27A1\uFE0F Пропустить', 'callback_data': 'test_hwid_skip'}]
-            ]}
-            smart_send(token, user_id, _hw_msg, reply_markup=_kb, parse_mode='HTML')
-        else:
-            smart_send(token, user_id, _hw_msg, parse_mode='HTML')
-        return
-    username, password = create_test_user(cfg, user_id, hwid=hwid)
-    if not username:
-        send_message_ttl(token, user_id, "❌ Ошибка создания. Попробуй позже.", ttl=15)
-        return
-    
-    record_issue(user_id, username)
-    
-    
-    domain = get_domain()
-    ws_port = get_ws_port()
-    proxy = get_random_proxy()
-    if hwid:
-        try:
-            from bot_modules import dark_gen
-            _proxy_str = proxy or '162.159.228.0'
-            _proxyhost = _proxy_str.split(':')[0] if ':' in _proxy_str else _proxy_str
-            _loc = cfg.get("SERVER_LOCATION", "VPN")
-            _cfg_name = (f"\U0001F381 TEST {_loc} {username[4:]}" if username.startswith('test') else username)
-            dt_url = dark_gen.generate(
-                hwid=hwid, host=domain, port=str(ws_port),
-                user=username, pw=password,
-                proxyhost=_proxyhost, proxyport=str(ws_port),
-                name=_cfg_name,
-            )
-            log.info(f"channel_test dark_gen ok for {username}")
-        except Exception as _e:
-            log.error(f"channel_test dark_gen error: {_e}")
-            dt_url = generate_darktunnel_url(username, password, domain, ws_port, proxy, cfg)
-    else:
-        dt_url = generate_darktunnel_url(username, password, domain, ws_port, proxy, cfg)
-    # Единый формат карточки ключа
-    try:
-        from bot_modules.cabinet import format_key_card as _fkc2
-        text, kb_ch_test = _fkc2(cfg, username)
-        if not text:
-            text = f"🎁 <code>{username}</code>"
-            kb_ch_test = {'inline_keyboard': [[{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]]}
-    except Exception as _e:
-        log.error(f'channel_test format_key_card: {_e}')
-        text = f"🎁 <code>{username}</code>"
-        kb_ch_test = {'inline_keyboard': [[{'text': '👤 Личный кабинет', 'callback_data': 'cab_main'}]]}
-    # Инфа о канале — только для админа
-    _is_adm_local = str(user_id) == str(admin_id)
-    if _is_adm_local:
-        try:
-            channels = get_channels()
-            ch_name = channels[0].lstrip('@') if channels else 'ArsenVipKeys'
-            from datetime import datetime
-            now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            text += f"\n\n✅ Ключ получен с канала @{ch_name}\n🕐 {now_str}"
-        except Exception: pass
-    
-    # Убираем кнопку "Получить тест" из welcome-сообщения
-    welcome_file = f"/etc/UDPCustom/welcome_msgs/{user_id}"
-    if os.path.exists(welcome_file):
-        try:
-            with open(welcome_file) as f:
-                w_id = int(f.read().strip())
-            # Удаляем welcome-сообщение полностью
-            tg_request(token, 'deleteMessage', {
-                'chat_id': user_id,
-                'message_id': w_id
-            })
-            os.remove(welcome_file)
-        except: pass
-    smart_send(token, user_id, text, reply_markup=kb_ch_test, parse_mode='HTML')
-    # Авто-отправка .dark файла (если конфиг зашифрован)
-    try:
-        if dt_url and dt_url.startswith('darktunnel://'):
-            from bot_modules.cabinet import send_dark_files_all_nodes as _sdf
-            _sdf(cfg, user_id, user_id, username)
-    except Exception as _e:
-        log.error(f"channel_test send_dark_file: {_e}")
-    
-    # Уведомляем админа — только если это НЕ админ
-    if admin_id:
-        from datetime import datetime
-        # Реальный канал-источник (из ?start=ch_<channel>)
-        try:
-            from bot_modules import db as _dbsrc2
-            _real_ch = _dbsrc2.get_user_source_channel(user_id)
-        except Exception:
-            _real_ch = None
-        if not _real_ch:
-            _chs_fb = get_channels()
-            _real_ch = _chs_fb[0].lstrip('@') if _chs_fb else 'ArsenVipKeys'
-        ch_name = _real_ch
-        now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        try:
-            _ch2 = tg_request(token, 'getChat', {'chat_id': user_id})
-            _un2 = (_ch2 or {}).get('result', {}).get('username', '') or ''
-            _un2 = ('@' + _un2) if _un2 else '—'
-        except Exception:
-            _un2 = '—'
-        admin_msg = (
-            f"🎁 <b>ТЕСТ из канала @{ch_name} — НОВАЯ ВЫДАЧА</b>\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"👤 Юзер: {first_name or '—'}\n"
-            f"📧 TG: {_un2}\n"
-            f"🆔 ID: <code>{user_id}</code>\n"
-            f"🔑 Ключ: <code>{username}</code>\n"
-            f"⏰  {now_str}"
-        )
-        notify_log(cfg, admin_msg)
-    
-    log.info(f"Выдан тест из канала: {username} (user_id={user_id})")
-
-
-def _stats_human_bytes(b):
-    try: b = int(b)
-    except: return "0 B"
-    if b >= 1073741824: return f"{b/1073741824:.1f} GB"
-    if b >= 1048576: return f"{b/1048576:.0f} MB"
-    if b >= 1024: return f"{b/1024:.0f} KB"
-    return f"{b} B"
-
-
-def _stats_human_time(sec):
-    try: sec = int(sec)
-    except: return "—"
-    if sec <= 0: return "истёк"
-    h = sec // 3600
-    if h >= 24:
-        d = h // 24
-        h = h % 24
-        return f"{d}д {h}ч"
-    return f"{h}ч"
-
-
-def handle_stats(cfg, chat_id, user_id, mode='main', msg_id=None):
-    """Статистика на БД: main | traffic"""
-    token = cfg['BOT_TOKEN']
-    if not is_admin(cfg, user_id):
-        send_message(token, chat_id, "🚫 Команда только для админа.")
-        return
-
-    try:
-        from bot_modules import db as _db
-    except Exception as e:
-        send_message(token, chat_id, f"Ошибка db: {e}")
-        return
-
-    now = int(time.time())
-    week_ago = now - 7 * 86400
-    month_ago = now - 30 * 86400
-    NL = chr(10)
-
-    if mode == 'traffic':
-        # Топ-5 по трафику (test + vip)
-        _now_ts = int(time.time())
-        tests = _db.query("SELECT login, tg_id, traffic_used, traffic_limit, expires_at FROM test_keys WHERE traffic_used > 0 AND (expires_at = 0 OR expires_at > ?) ORDER BY traffic_used DESC LIMIT 5", (_now_ts,))
-        vips  = _db.query("SELECT login, tg_id, traffic_used, traffic_limit, expires_at FROM vip_keys WHERE traffic_used > 0 AND (expires_at = 0 OR expires_at > ?) ORDER BY traffic_used DESC LIMIT 5", (_now_ts,))
-        all_keys = []
-        for k in tests: k['kind'] = '🎁'; all_keys.append(k)
-        for k in vips:  k['kind'] = '💎'; all_keys.append(k)
-        all_keys.sort(key=lambda x: x.get('traffic_used') or 0, reverse=True)
-        top = all_keys[:5]
-
-        lines_txt = [
-            "📈 <b>ТОП-5 ПО ТРАФИКУ</b>",
-            "━━━━━━━━━━━━━━━━━━━━",
-            ""
-        ]
-        if not top:
-            lines_txt.append("<i>Пока нет данных о трафике</i>")
-        else:
-            medals = ["🥇", "🥈", "🥉", "4.", "5."]
-            for i, k in enumerate(top):
-                m = medals[i]
-                tg_id = k.get('tg_id') or 0
-                user = _db.get_user(tg_id) if tg_id else None
-                uname = ''
-                if user and user.get('username'):
-                    uname = f"@{user['username']}"
-                elif user and user.get('first_name'):
-                    uname = user['first_name']
-                else:
-                    uname = f"id{tg_id}" if tg_id else "—"
-                used = _stats_human_bytes(k.get('traffic_used') or 0)
-                limit = k.get('traffic_limit') or 0
-                limit_str = f" / {_stats_human_bytes(limit)}" if limit > 0 else ""
-                exp = k.get('expires_at') or 0
-                t_left = _stats_human_time(exp - now) if exp > 0 else "♾"
-
-                lines_txt.append(f"{m} {k['kind']} <code>{k['login']}</code>")
-                lines_txt.append(f"   👤 {uname}")
-                lines_txt.append(f"   📊 {used}{limit_str} · ⏰ {t_left}")
-                lines_txt.append("")
-        lines_txt.append("━━━━━━━━━━━━━━━━━━━━")
-        text = NL.join(lines_txt)
-
-        kb = {'inline_keyboard': [
-            [{'text': '📊 Общая', 'callback_data': 'admin_stats'},
-             {'text': '✅ 📈 Трафик', 'callback_data': 'noop'}],
-            [{'text': '🔄 Обновить', 'callback_data': 'admin_stats_traffic'},
-             {'text': '👍 Реакции', 'callback_data': 'adm_reactions_menu'}],
-            [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
-        ]}
-    else:
-        # Основные цифры
-        total_users = _db.query_one("SELECT COUNT(*) as n FROM users")['n']
-        new_7d = _db.query_one("SELECT COUNT(*) as n FROM users WHERE registered_at >= ?", (week_ago,))['n']
-
-        # Активные = есть хотя бы 1 активный ключ (test или vip)
-        active_users = _db.query_one("""
-            SELECT COUNT(DISTINCT tg_id) as n FROM (
-                SELECT tg_id FROM test_keys WHERE expires_at = 0 OR expires_at > ?
-                UNION
-                SELECT tg_id FROM vip_keys WHERE expires_at = 0 OR expires_at > ?
-            )""", (now, now))['n']
-
-        # Ключи
-        test_total  = _db.query_one("SELECT COUNT(*) as n FROM test_keys")['n']
-        test_active = _db.query_one("SELECT COUNT(*) as n FROM test_keys WHERE expires_at = 0 OR expires_at > ?", (now,))['n']
-        vip_total   = _db.query_one("SELECT COUNT(*) as n FROM vip_keys")['n']
-        vip_active  = _db.query_one("SELECT COUNT(*) as n FROM vip_keys WHERE expires_at = 0 OR expires_at > ?", (now,))['n']
-
-        # Финансы
-        balances_sum = _db.query_one("SELECT COALESCE(SUM(balance),0) as s FROM users")['s'] or 0
-        income_30d = _db.query_one("SELECT COALESCE(SUM(amount),0) as s FROM payments WHERE method='purchase' AND amount > 0 AND created_at >= ?", (month_ago,))['s'] or 0
-        income_all = _db.query_one("SELECT COALESCE(SUM(amount),0) as s FROM payments WHERE method='purchase' AND amount > 0")['s'] or 0
-
-        # Рефералы
-        refs_total = _db.query_one("SELECT COUNT(*) as n FROM referrals")['n']
-        ref_paid = _db.query_one("SELECT COALESCE(SUM(amount),0) as s FROM payments WHERE method='referral_bonus'")['s'] or 0
-        promo_used = _db.query_one("SELECT COUNT(*) as n FROM promo_used")['n']
-
-        # Топ-5 по балансу
-        top_balance = _db.query("""
-            SELECT tg_id, first_name, username, balance
-            FROM users WHERE balance > 0
-            ORDER BY balance DESC LIMIT 5
-        """)
-
-        # Ноды и WS-онлайн
-        try:
-            _nodes_rows = _db.query("SELECT name, status FROM nodes WHERE is_active=1 ORDER BY is_master DESC, id")
-        except Exception:
-            _nodes_rows = []
-        import subprocess as _sp_st
-        try:
-            _r_ws = _sp_st.run(['bash', '-c', "ss -Htnp state established '( sport = :2052 )' 2>/dev/null | wc -l"], capture_output=True, text=True, timeout=3)
-            _ws_online = int(_r_ws.stdout.strip() or 0)
-        except Exception:
-            _ws_online = 0
-        _srv_lines = ["🌐 <b>СЕРВЕРЫ И СВЯЗЬ</b>"]
-        # Получаем трафик по нодам
-        try:
-            _nodes_full = _db.query("SELECT name, host, ip, ssh_port, is_master, status FROM nodes WHERE is_active=1 ORDER BY is_master DESC, id")
-        except Exception:
-            _nodes_full = []
-        for _nr in _nodes_full:
-            _ic = '🟢' if _nr.get('status') == 'online' else '🔴'
-            _name = _nr.get('name') or '?'
-            _tbytes = 0
-            if _nr.get('is_master'):
-                # Мастер — сумма файлов /etc/UDPCustom/traffic/
-                try:
-                    _tdir = '/etc/UDPCustom/traffic'
-                    if os.path.isdir(_tdir):
-                        for _f in os.listdir(_tdir):
-                            try:
-                                _tbytes += int(open(os.path.join(_tdir, _f)).read().strip() or 0)
-                            except Exception:
-                                pass
-                except Exception:
-                    pass
-            else:
-                # Нода — live SSH, суммируем файлы traffic/*
-                try:
-                    _sp = subprocess.run(
-                        ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=4', '-o', 'StrictHostKeyChecking=no',
-                         '-p', str(_nr.get('ssh_port') or 22), f"root@{_nr.get('ip')}",
-                         "iptables -L VPN_TRAFFIC -v -x -n 2>/dev/null | awk '$1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ {s+=$2} END {print s+0}'"],
-                        capture_output=True, text=True, timeout=8
-                    )
-                    _tbytes = int(_sp.stdout.strip() or 0)
-                except Exception:
-                    _tbytes = 0
-            # Форматируем
-            if _tbytes >= 1073741824:
-                _ts = f"{_tbytes/1073741824:.2f} GB"
-            elif _tbytes >= 1048576:
-                _ts = f"{_tbytes/1048576:.1f} MB"
-            elif _tbytes >= 1024:
-                _ts = f"{_tbytes/1024:.0f} KB"
-            else:
-                _ts = f"{_tbytes} B"
-            _srv_lines.append(f"   {_ic} {_name} · <b>{_ts}</b>")
-        _srv_lines.append(f"   📡 SSH WS онлайн: <b>{_ws_online}</b>")
-        _srv_lines.append("")
-
-        lines_txt = [
-            "📊 <b>СТАТИСТИКА</b>",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "",
-            "👥 <b>ЮЗЕРЫ</b>",
-            f"   Всего: <b>{total_users}</b>",
-            f"   📅 Новых за 7д: <b>{new_7d}</b>",
-            f"   🟢 Активных: <b>{active_users}</b>",
-            "",
-            "🔑 <b>КЛЮЧИ</b>",
-            f"   🎁 Тестовых: <b>{test_total}</b> (🟢 {test_active})",
-            f"   💎 VIP: <b>{vip_total}</b> (🟢 {vip_active})",
-            "",
-            *_srv_lines,
-            "💵 <b>ФИНАНСЫ</b>",
-            f"   На балансах: <b>{float(balances_sum):.2f} USDT</b>",
-            f"   💰 Всего дохода: <b>{float(income_all):.2f} USDT</b>",
-            "",
-            "👥 <b>РЕФЕРАЛЫ</b>",
-            f"   Всего: <b>{refs_total}</b>",
-            f"   💵 Выплачено: <b>{float(ref_paid):.2f} USDT</b>",
-            f"   🎫 Промо активаций: <b>{promo_used}</b>",
-            "",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "🏆 <b>ТОП-5 ПО БАЛАНСУ</b>",
-            ""
-        ]
-        if not top_balance:
-            lines_txt.append("<i>Пока ни у кого нет баланса</i>")
-        else:
-            medals = ["🥇", "🥈", "🥉", "4.", "5."]
-            for i, u in enumerate(top_balance):
-                m = medals[i]
-                name = u.get('first_name') or ''
-                uname = u.get('username') or ''
-                handle = f"@{uname}" if uname else (name or f"id{u['tg_id']}")
-                bal = float(u.get('balance') or 0)
-                lines_txt.append(f"{m} {handle} · <b>{bal:.2f} USDT</b>")
-        lines_txt.append("")
-        lines_txt.append("━━━━━━━━━━━━━━━━━━━━")
-        text = NL.join(lines_txt)
-
-        kb = {'inline_keyboard': [
-            [{'text': '✅ 📊 Общая', 'callback_data': 'noop'},
-             {'text': '📈 Трафик', 'callback_data': 'admin_stats_traffic'}],
-            [{'text': '🔄 Обновить', 'callback_data': 'admin_stats'}],
-            [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
-        ]}
-
-    if msg_id:
-        tg_request(token, 'editMessageText', {
-            'chat_id': chat_id,
-            'message_id': msg_id,
-            'text': text,
-            'parse_mode': 'HTML',
-            'reply_markup': kb
-        })
-    else:
-        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
-
-
-
-def handle_ban(cfg, chat_id, user_id, args):
-    token = cfg['BOT_TOKEN']
-    admin_id = cfg.get('ADMIN_ID', '')
-    if not is_admin(cfg, user_id):
-        send_message(token, chat_id, "🚫 Только для админа.")
-        return
-    if not args:
-        send_message(token, chat_id, "❌ Формат: /ban 1234567890")
-        return
-    target = args.strip().split()[0]
-    if not target.isdigit():
-        send_message(token, chat_id, "❌ ID должен быть числом")
-        return
-    if is_blacklisted(target):
-        send_message(token, chat_id, f"⚠️ {target} уже в бане")
-        return
-    with open(BLACKLIST, 'a') as f:
-        f.write(target + "\n")
-    send_message(token, chat_id, f"✅ Забанен: <code>{target}</code>", parse_mode='HTML')
-    log.info(f"BAN: {target} by admin")
-
-
-def handle_unban(cfg, chat_id, user_id, args):
-    token = cfg['BOT_TOKEN']
-    admin_id = cfg.get('ADMIN_ID', '')
-    if not is_admin(cfg, user_id):
-        return
-    if not args:
-        send_message(token, chat_id, "❌ Формат: /unban 1234567890")
-        return
-    target = args.strip().split()[0]
-    if not os.path.exists(BLACKLIST):
-        send_message(token, chat_id, "Список пуст")
-        return
-    with open(BLACKLIST) as f:
-        lines = f.readlines()
-    new_lines = [l for l in lines if l.strip() != target]
-    if len(new_lines) == len(lines):
-        send_message(token, chat_id, f"⚠️ {target} не в бане")
-        return
-    with open(BLACKLIST, 'w') as f:
-        f.writelines(new_lines)
-    send_message(token, chat_id, f"✅ Разбанен: <code>{target}</code>", parse_mode='HTML')
-    log.info(f"UNBAN: {target} by admin")
-
-
-def handle_banlist(cfg, chat_id, user_id, msg_id=None):
-    token = cfg['BOT_TOKEN']
-    admin_id = cfg.get('ADMIN_ID', '')
-    if not is_admin(cfg, user_id):
-        return
-    if not os.path.exists(BLACKLIST) or os.path.getsize(BLACKLIST) == 0:
-        kb = {'inline_keyboard': [[{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]]}
-        if msg_id:
-            tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': "📋 Чёрный список пуст", 'reply_markup': kb})
-        else:
-            send_message(token, chat_id, "📋 Чёрный список пуст", reply_markup=kb)
-        return
-    with open(BLACKLIST) as f:
-        banned = [l.strip() for l in f if l.strip()]
-    text = f"🚫 <b>Чёрный список ({len(banned)}):</b>\n\n"
-    for b in banned[-30:]:
-        text += f"  • <code>{b}</code>\n"
-    kb = {'inline_keyboard': [
-        [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
-    ]}
-    if msg_id:
-        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
-    else:
-        send_message(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
-
-
-VERIFIED_DB = "/etc/UDPCustom/verified_users.db"
-
-
-def is_verified(user_id):
-    """Проверяет, verified ли юзер СЕЙЧАС (с учётом таймаута 8ч)"""
-    if not os.path.exists(VERIFIED_DB): return False
-    try:
-        now = int(time.time())
-        with open(VERIFIED_DB) as f:
-            for line in f:
-                parts = line.strip().split('|')
-                if len(parts) < 2: continue
-                if parts[0] == str(user_id):
-                    try:
-                        return now < int(parts[1])
-                    except: return False
-    except: pass
-    return False
-
-
-def mark_verified(user_id, hours=8):
-    """Помечает юзера verified на N часов"""
-    try:
-        now = int(time.time())
-        until = int(now + (hours * 3600))
-        
-        # Убираем старые записи этого юзера
-        lines = []
-        if os.path.exists(VERIFIED_DB):
-            with open(VERIFIED_DB) as f:
-                lines = [l for l in f.readlines() if not l.startswith(f"{user_id}|")]
-        
-        # Добавляем новую
-        lines.append(f"{user_id}|{until}\n")
-        
-        with open(VERIFIED_DB, 'w') as f:
-            f.writelines(lines)
-    except Exception as e:
-        log.error(f"mark_verified error: {e}")
-
-
-USERS_DB = "/etc/UDPCustom/users.db"
-EXPIRE_DIR = "/etc/UDPCustom/expire_ts"
-LIMITS_DIR = "/etc/UDPCustom/limits"
-
-
-def get_users_stats():
-    """Возвращает список юзеров с инфой: (username, exp_ts, is_expired)"""
-    users = []
-    if not os.path.exists(USERS_DB): return users
-    now = int(time.time())
-    try:
-        with open(USERS_DB) as f:
-            for line in f:
-                u = line.strip()
-                if not u: continue
-                ts_file = f"{EXPIRE_DIR}/{u}"
-                exp_ts = 0
-                if os.path.exists(ts_file):
-                    try:
-                        exp_ts = int(open(ts_file).read().strip())
-                    except: pass
-                is_expired = exp_ts > 0 and exp_ts < now
-                users.append({'name': u, 'exp_ts': exp_ts, 'expired': is_expired})
-    except: pass
-    return users
-
-
-def show_users_menu(cfg, chat_id, user_id, msg_id=None):
-    """Главный экран управления юзерами"""
-    token = cfg['BOT_TOKEN']
-    if not is_admin(cfg, user_id):
-        send_message(token, chat_id, "🚫 Только для админа.")
-        return
-    try:
-        from bot_modules import db as _db
-    except Exception as e:
-        send_message(token, chat_id, f"Ошибка db: {e}")
-        return
-
-    now = int(time.time())
-    # TG-юзеры
-    tg_total = _db.query_one("SELECT COUNT(*) as n FROM users")['n']
-    # Тестовые
-    test_total = _db.query_one("SELECT COUNT(*) as n FROM test_keys")['n']
-    test_active = _db.query_one("SELECT COUNT(*) as n FROM test_keys WHERE expires_at=0 OR expires_at > ?", (now,))['n']
-    # VIP
-    vip_total = _db.query_one("SELECT COUNT(*) as n FROM vip_keys")['n']
-    vip_active = _db.query_one("SELECT COUNT(*) as n FROM vip_keys WHERE expires_at=0 OR expires_at > ?", (now,))['n']
-
-    NL = chr(10)
-    lines_txt = [
-        "👥 <b>УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ</b>",
-        "━━━━━━━━━━━━━━━━━━━━",
-        "",
-        f"👤 TG-юзеров: <b>{tg_total}</b>",
-        "",
-        f"🎁 Тестовые ключи: <b>{test_total}</b>",
-        f"     🟢 активных: <b>{test_active}</b>",
-        "",
-        f"💎 VIP-ключи: <b>{vip_total}</b>",
-        f"     🟢 активных: <b>{vip_active}</b>",
-        "",
-        "━━━━━━━━━━━━━━━━━━━━",
-        "Выбери раздел 👇"
-    ]
-    text = NL.join(lines_txt)
-
-    kb = {'inline_keyboard': [
-        [{'text': f'🎁 Тестовые ({test_total})', 'callback_data': 'adm_users_test:1'},
-         {'text': f'💎 VIP ({vip_total})', 'callback_data': 'adm_users_vip:1'}],
-        [{'text': f'👥 Клиенты', 'callback_data': 'adm_users_clients:1'}],
-        [{'text': '🗑️ Удалить истёкших', 'callback_data': 'admin_cleanup'}],
-        [{'text': '🚫 Бан-лист', 'callback_data': 'admin_banlist'}],
-        [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
-    ]}
-
-    if msg_id:
-        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
-    else:
-        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
-
-
-def _fmt_key_row(key, kind):
-    """Форматирует одну строку ключа."""
-    now = int(time.time())
-    exp = key.get('expires_at') or 0
-    if exp == 0:
-        t = "♾ бессрочно"
-    elif exp > now:
-        left = exp - now
-        h = left // 3600
-        if h < 24:
-            t = f"{h}ч"
-        else:
-            t = f"{h//24}д"
-    else:
-        t = "❌ истёк"
-    used = key.get('traffic_used') or 0
-    limit = key.get('traffic_limit') or 0
-    def human(b):
-        try: b = int(b)
-        except: return "0"
-        if b >= 1073741824: return f"{b/1073741824:.1f}G"
-        if b >= 1048576: return f"{b/1048576:.0f}M"
-        if b >= 1024: return f"{b/1024:.0f}K"
-        return f"{b}B"
-    traffic = f"{human(used)}/{human(limit)}" if limit > 0 else f"{human(used)}/∞"
-    icon = "💎" if kind == 'vip' else "🎁"
-    tg_id = key.get('tg_id') or 0
-    tg_name = ""
-    try:
-        from bot_modules import db as _db2
-        u = _db2.get_user(tg_id) or {}
-        un = (u.get('username') or '').strip()
-        fn = (u.get('first_name') or '').strip()
-        if un and fn: tg_name = f"{fn} (@{un})"
-        elif un: tg_name = f"@{un}"
-        elif fn: tg_name = fn
-    except Exception: pass
-    user_str = f"👤 {tg_name}" if tg_name else f"👤 <code>{tg_id}</code>"
-    lock_icon = ""
-    if kind == 'vip':
-        try:
-            _locked = key.get('hwid_locked')
-            _locked = True if _locked is None else bool(int(_locked))
-            lock_icon = " 🔒" if _locked else " 🔓"
-        except Exception: lock_icon = " 🔒"
-    head = f"{icon} <code>{key['login']}</code>{lock_icon}"
-    sub = f"⏰  {t} · 📊 {traffic} · {user_str}"
-    return head, sub
-
-
-def show_users_test(cfg, chat_id, user_id, page=1, msg_id=None, show_all=False):
-    """Список тестовых ключей"""
-    token = cfg['BOT_TOKEN']
-    if not is_admin(cfg, user_id):
-        return
-    try:
-        from bot_modules import db as _db
-    except: return
-
-    per_page = 5
-    now = int(time.time())
-    if show_all:
-        total = _db.query_one("SELECT COUNT(*) as n FROM test_keys")['n']
-    else:
-        total = _db.query_one("SELECT COUNT(*) as n FROM test_keys WHERE expires_at = 0 OR expires_at > ?", (now,))['n']
-    total_pages = max(1, (total + per_page - 1) // per_page)
-    if page < 1: page = 1
-    if page > total_pages: page = total_pages
-    offset = (page - 1) * per_page
-
-    if show_all:
-        keys = _db.query("SELECT * FROM test_keys ORDER BY created_at DESC LIMIT ? OFFSET ?", (per_page, offset))
-    else:
-        keys = _db.query("SELECT * FROM test_keys WHERE expires_at = 0 OR expires_at > ? ORDER BY created_at DESC LIMIT ? OFFSET ?", (now, per_page, offset))
-
-    NL = chr(10)
-    lines_txt = [
-        "🎁 <b>ТЕСТОВЫЕ КЛЮЧИ</b>",
-        "━━━━━━━━━━━━━━━━━━━━",
-        f"<i>Стр. {page}/{total_pages} · всего {total}</i>",
-        ""
-    ]
-    if not keys:
-        lines_txt.append("<i>Пусто</i>")
-    else:
-        for k in keys:
-            head, sub = _fmt_key_row(k, 'test')
-            lines_txt.append(head)
-            lines_txt.append(sub)
-            lines_txt.append("")
-    text = NL.join(lines_txt)
-
-    nav = []
-    suffix = ':all' if show_all else ''
-    if page > 1:
-        nav.append({'text': '◀', 'callback_data': f'adm_users_test:{page-1}{suffix}'})
-    nav.append({'text': f'{page}/{total_pages}', 'callback_data': 'noop'})
-    if page < total_pages:
-        nav.append({'text': '▶', 'callback_data': f'adm_users_test:{page+1}{suffix}'})
-    kb = {'inline_keyboard': []}
-    if nav: kb['inline_keyboard'].append(nav)
-    # Кнопка переключения режима
-    toggle_text = '📋 Только активные' if show_all else '📚 Показать все'
-    toggle_cb = f'adm_users_test:{page}' if show_all else f'adm_users_test:{page}:all'
-    kb['inline_keyboard'].append([{'text': toggle_text, 'callback_data': toggle_cb}])
-    kb['inline_keyboard'].append([
-        {'text': '🎁 Тестовые', 'callback_data': 'adm_users_test:1'}
-    ])
-    kb['inline_keyboard'].append([
-        {'text': '⬅️ К разделам', 'callback_data': 'adm_users_menu'}
-    ])
-    if msg_id:
-        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
-    else:
-        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
-
-
-def show_users_vip(cfg, chat_id, user_id, page=1, msg_id=None):
-    """Список VIP-ключей"""
-    token = cfg['BOT_TOKEN']
-    if not is_admin(cfg, user_id):
-        return
-    try:
-        from bot_modules import db as _db
-    except: return
-
-    per_page = 5
-    total = _db.query_one("SELECT COUNT(*) as n FROM vip_keys")['n']
-    total_pages = max(1, (total + per_page - 1) // per_page)
-    if page < 1: page = 1
-    if page > total_pages: page = total_pages
-    offset = (page - 1) * per_page
-
-    keys = _db.query("SELECT * FROM vip_keys ORDER BY created_at DESC LIMIT ? OFFSET ?", (per_page, offset))
-
-    NL = chr(10)
-    lines_txt = [
-        "💎 <b>VIP-КЛЮЧИ</b>",
-        "━━━━━━━━━━━━━━━━━━━━",
-        f"<i>Стр. {page}/{total_pages} · всего {total}</i>",
-        ""
-    ]
-    if not keys:
-        lines_txt.append("<i>Пусто</i>")
-    else:
-        for k in keys:
-            head, sub = _fmt_key_row(k, 'vip')
-            lines_txt.append(head)
-            lines_txt.append(sub)
-            if k.get('tariff'):
-                lines_txt.append(f"   📦 {k['tariff']} · {k.get('price_paid', 0):.2f} USDT")
-            lines_txt.append("")
-    text = NL.join(lines_txt)
-
-    nav = []
-    if page > 1:
-        nav.append({'text': '◀', 'callback_data': f'adm_users_vip:{page-1}'})
-    nav.append({'text': f'{page}/{total_pages}', 'callback_data': 'noop'})
-    if page < total_pages:
-        nav.append({'text': '▶', 'callback_data': f'adm_users_vip:{page+1}'})
-
-    kb = {'inline_keyboard': []}
-    key_btns = []
-    for k in keys:
-        try:
-            _locked = k.get('hwid_locked')
-            _locked = True if _locked is None else bool(int(_locked))
-            _icon = '\U0001F512' if _locked else '\U0001F513'
-        except Exception:
-            _icon = '\U0001F512'
-        short = k['login'][:18]
-        key_btns.append({'text': f'\U0001F48E {short} {_icon}', 'callback_data': f"adm_vip_key:{k['login']}"})
-    for i in range(0, len(key_btns), 2):
-        kb['inline_keyboard'].append(key_btns[i:i+2])
-    if nav: kb['inline_keyboard'].append(nav)
-    kb['inline_keyboard'].append([
-        {'text': '🎁 Тестовые', 'callback_data': 'adm_users_test:1'}
-    ])
-    kb['inline_keyboard'].append([
-        {'text': '⬅️ К разделам', 'callback_data': 'adm_users_menu'}
-    ])
-
-    if msg_id:
-        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
-    else:
-        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
-
-
-
-def show_adm_users_clients(cfg, chat_id, user_id, page=1, msg_id=None):
-    """Список клиентов (стабильный)"""
-    try:
-        from bot_modules import db as _db
-    except: return
-    per_page = 8
-    
-    vips = _db.query("SELECT DISTINCT tg_id FROM vip_keys WHERE tg_id > 0")
-    tests = _db.query("SELECT DISTINCT tg_id FROM test_keys WHERE tg_id > 0")
-    
-    vip_ids = {r['tg_id'] for r in vips}
-    test_ids = {r['tg_id'] for r in tests}
-    all_ids = list(vip_ids.union(test_ids))
-    
-    clients = []
-    for tg_id in all_ids:
-        u = _db.get_user(tg_id) or {}
-        name = u.get('first_name') or u.get('username') or f"ID: {tg_id}"
-        has_vip = tg_id in vip_ids
-        bal = _db.get_balance(tg_id)
-        clients.append({'tg_id': tg_id, 'name': name, 'has_vip': has_vip, 'bal': bal})
-        
-    clients.sort(key=lambda x: (not x['has_vip'], str(x['name']).lower()))
-    
-    total = len(clients)
-    total_pages = max(1, (total + per_page - 1) // per_page)
-    if page < 1: page = 1
-    if page > total_pages: page = total_pages
-    offset = (page - 1) * per_page
-    paginated = clients[offset:offset+per_page]
-    
-    NL = chr(10)
-    lines_txt = [
-        "👥 <b>КЛИЕНТЫ</b>",
-        "━━━━━━━━━━━━━━━━━━━━",
-        f"<i>Стр. {page}/{total_pages} · всего {total}</i>",
-        ""
-    ]
-    kb = {'inline_keyboard': []}
-    btn_row = []
-    if not paginated:
-        lines_txt.append("<i>Пусто</i>")
-    else:
-        for cl in paginated:
-            icon = "💎" if cl['has_vip'] else "🎁"
-            lines_txt.append(f"{icon} <b>{cl['name']}</b>")
-            lines_txt.append(f"🆔 <code>{cl['tg_id']}</code> | 💰 {cl['bal']:.2f} USDT")
-            lines_txt.append("")
-            btn_text = f"{icon} {cl['name'][:12]} ({cl['bal']:.1f}$)"
-            btn_row.append({'text': btn_text, 'callback_data': f"adm_client_view:{cl['tg_id']}"})
-    
-    for i in range(0, len(btn_row), 2):
-        kb['inline_keyboard'].append(btn_row[i:i+2])
-        
-    text = NL.join(lines_txt)
-    nav = []
-    if page > 1:
-        nav.append({'text': '◀', 'callback_data': f'adm_users_clients:{page-1}'})
-    nav.append({'text': f'{page}/{total_pages}', 'callback_data': 'noop'})
-    if page < total_pages:
-        nav.append({'text': '▶', 'callback_data': f'adm_users_clients:{page+1}'})
-        
-    if nav: kb['inline_keyboard'].append(nav)
-    
-    kb['inline_keyboard'].append([
-        {'text': '⬅️ К разделам', 'callback_data': 'adm_users_menu'}
-    ])
-    token = cfg['BOT_TOKEN']
-    if msg_id:
-        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
-    else:
-        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
-
-def show_admin_client_profile(cfg, chat_id, user_id, tg_id, msg_id=None):
-    """Карточка клиента (с балансом и списком ключей)"""
-    try:
-        from bot_modules import db as _db
-    except: return
-    token = cfg['BOT_TOKEN']
-    u = _db.get_user(tg_id) or {}
-    name = u.get('first_name', 'Без имени')
-    un = f"@{u.get('username')}" if u.get('username') else "нет"
-    bal = _db.get_balance(tg_id)
-    
-    vips = _db.get_vip_keys(tg_id) or []
-    tests = _db.get_test_keys(tg_id) or []
-    
-    NL = chr(10)
-    lines = [
-        f"👤 <b>КЛИЕНТ: {name}</b>",
-        "━━━━━━━━━━━━━━━━━━━━",
-        f"🆔 TG ID: <code>{tg_id}</code>",
-        f"🔗 Юзернейм: {un}",
-        f"💰 Баланс: <b>{bal:.2f} USDT</b>",
-        "",
-        f"💎 <b>VIP-ключи ({len(vips)}):</b>"
-    ]
-    if not vips:
-        lines.append("  <i>нет</i>")
-    for v in vips:
-        lines.append(f"  • <code>{v['login']}</code>")
-        
-    lines.append("")
-    lines.append(f"🎁 <b>Тестовые ({len(tests)}):</b>")
-    if not tests:
-        lines.append("  <i>нет</i>")
-    for t in tests:
-        lines.append(f"  • <code>{t['login']}</code>")
-        
-    text = NL.join(lines)
-    
-    kb = {'inline_keyboard': [
-        [{'text': '💰 Пополнить баланс', 'callback_data': f'adm_client_topup:{tg_id}'}],
-        [{'text': '⬅️ К клиентам', 'callback_data': 'adm_users_clients:1'}]
-    ]}
-    
-    if msg_id:
-        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
-    else:
-        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
-
-def show_admin_vip_key(cfg, chat_id, user_id, key_login, msg_id=None):
-    """Карточка VIP-ключа с управлением."""
-    token = cfg['BOT_TOKEN']
-    if not is_admin(cfg, user_id):
-        return
-    try:
-        from bot_modules import db as _db
-    except Exception as e:
-        tg_request(token, 'answerCallbackQuery', {'callback_query_id': msg_id, 'text': f'DB err: {e}', 'show_alert': True})
-        return
-    key = _db.get_vip_key(key_login)
-    if not key:
-        tg_request(token, 'sendMessage', {'chat_id': chat_id, 'text': '❌ Ключ не найден'})
-        return
-    now = int(time.time())
-    exp = key.get('expires_at') or 0
-    if exp == 0:
-        t_left = "♾ бессрочно"
-    elif exp > now:
-        left = exp - now
-        h = left // 3600
-        t_left = f"{h//24}д" if h >= 24 else f"{h}ч"
-    else:
-        t_left = "❌ истёк"
-    used = key.get('traffic_used') or 0
-    limit = key.get('traffic_limit') or 0
-    def human(b):
-        try: b = int(b)
-        except: return "0"
-        if b >= 1073741824: return f"{b/1073741824:.1f}G"
-        if b >= 1048576: return f"{b/1048576:.0f}M"
-        if b >= 1024: return f"{b/1024:.0f}K"
-        return f"{b}B"
-    traffic = f"{human(used)}/{human(limit)}" if limit else f"{human(used)}/∞"
-    # Имя ТГ
-    tg_id = key.get('tg_id') or 0
-    tg_name = ""
-    tg_un = ""
-    try:
-        u = _db.get_user(tg_id) or {}
-        tg_un = (u.get('username') or '').strip()
-        fn = (u.get('first_name') or '').strip()
-        if tg_un: tg_name = f"@{tg_un}"
-        elif fn: tg_name = fn
-    except Exception: pass
-    # Статус HWID
-    _hwid = key.get('hwid') or ''
-    _locked = key.get('hwid_locked')
-    _locked = True if _locked is None else bool(int(_locked))
-    if _locked:
-        lock_str = "🔒 закрытый (1 устройство)"
-    else:
-        lock_str = f"🔓 открытый ({key.get('devices',1)} устр.)"
-    hwid_display = (_hwid[:16] + '...') if _hwid else "❌ нет"
-    NL = chr(10)
-    txt = NL.join([
-        f"💎 <b>VIP-КЛЮЧ</b>",
-        "━━━━━━━━━━━━━━━━━━━━",
-        f"🔑 Логин: <code>{key['login']}</code>",
-        f"🔐 Пароль: <code>{key.get('password','?')}</code>",
-        "",
-        f"⏰  Срок: {t_left}",
-        f"📊 Трафик: {traffic}",
-        f"📱 Устройств: {key.get('devices',1)}",
-        "",
-        f"👤 Юзер: {tg_name or tg_id}",
-        f"🆔 TG ID: <code>{tg_id}</code>",
-        "",
-        f"🖥  HWID: <code>{hwid_display}</code>",
-        f"🔧 Конфиг: {lock_str}",
-        "",
-        f"📦 Тариф: {key.get('tariff','?')}",
-    ])
-    # Кнопки
-    kb = {'inline_keyboard': []}
-    if _locked:
-        kb['inline_keyboard'].append([
-            {'text': '🔓 Открыть конфиг', 'callback_data': f"adm_vip_unlock:{key_login}"}
-        ])
-    else:
-        kb['inline_keyboard'].append([
-            {'text': '🔒 Закрыть конфиг', 'callback_data': f"adm_vip_lock:{key_login}"}
-        ])
-    kb['inline_keyboard'].append([
-        {'text': '🗑 Удалить ключ', 'callback_data': f"adm_vip_del:{key_login}"}
-    ])
-    kb['inline_keyboard'].append([
-        {'text': '⬅️ К VIP-ключам', 'callback_data': 'adm_users_vip:1'}
-    ])
-    if msg_id:
-        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': txt, 'parse_mode': 'HTML', 'reply_markup': kb})
-    else:
-        smart_send(token, chat_id, txt, reply_markup=kb, parse_mode='HTML')
-
-def show_users_tg(cfg, chat_id, user_id, page=1, msg_id=None):
-    """Список TG-юзеров"""
-    token = cfg['BOT_TOKEN']
-    if not is_admin(cfg, user_id):
-        return
-    try:
-        from bot_modules import db as _db
-    except: return
-
-    per_page = 5
-    total = _db.query_one("SELECT COUNT(*) as n FROM users")['n']
-    total_pages = max(1, (total + per_page - 1) // per_page)
-    if page < 1: page = 1
-    if page > total_pages: page = total_pages
-    offset = (page - 1) * per_page
-
-    users_list = _db.query("SELECT * FROM users ORDER BY registered_at DESC LIMIT ? OFFSET ?", (per_page, offset))
-
-    NL = chr(10)
-    lines_txt = [
-        "👤 <b>TG-ЮЗЕРЫ</b>",
-        "━━━━━━━━━━━━━━━━━━━━",
-        f"<i>Стр. {page}/{total_pages} · всего {total}</i>",
-        ""
-    ]
-    if not users_list:
-        lines_txt.append("<i>Пусто</i>")
-    else:
-        from datetime import datetime as _dt
-        for u in users_list:
-            name = u.get('first_name') or '—'
-            uname = u.get('username') or ''
-            handle = f"@{uname}" if uname else f"id{u['tg_id']}"
-            balance = float(u.get('balance') or 0)
-            # Считаем ключи: активные/всего
-            _now = int(time.time())
-            test_all = _db.query_one("SELECT COUNT(*) as n FROM test_keys WHERE tg_id=?", (u['tg_id'],))['n']
-            test_act = _db.query_one("SELECT COUNT(*) as n FROM test_keys WHERE tg_id=? AND (expires_at=0 OR expires_at > ?)", (u['tg_id'], _now))['n']
-            vip_all = _db.query_one("SELECT COUNT(*) as n FROM vip_keys WHERE tg_id=?", (u['tg_id'],))['n']
-            vip_act = _db.query_one("SELECT COUNT(*) as n FROM vip_keys WHERE tg_id=? AND (expires_at=0 OR expires_at > ?)", (u['tg_id'], _now))['n']
-            dt = ''
-            if u.get('registered_at'):
-                dt = _dt.fromtimestamp(u['registered_at']).strftime('%d.%m.%y')
-            lines_txt.append(f"👤 <b>{name}</b> · {handle}")
-            lines_txt.append(f"   🆔 <code>{u['tg_id']}</code>")
-            lines_txt.append(f"   💰 {balance:.2f} USDT")
-            lines_txt.append(f"   🎁 {test_act}/{test_all}   💎 {vip_act}/{vip_all}")
-            if dt:
-                lines_txt.append(f"   📅 {dt}")
-            lines_txt.append("")
-    text = NL.join(lines_txt)
-
-    nav = []
-    if page > 1:
-        nav.append({'text': '◀', 'callback_data': f'adm_users_tg:{page-1}'})
-    nav.append({'text': f'{page}/{total_pages}', 'callback_data': 'noop'})
-    if page < total_pages:
-        nav.append({'text': '▶', 'callback_data': f'adm_users_tg:{page+1}'})
-
-    kb = {'inline_keyboard': []}
-    if nav: kb['inline_keyboard'].append(nav)
-    kb['inline_keyboard'].append([
-        {'text': '⬅️ К разделам', 'callback_data': 'adm_users_menu'}
-    ])
-
-    if msg_id:
-        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
-    else:
-        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
-
-
-def handle_users(cfg, chat_id, user_id, page=1, msg_id=None):
-    """Алиас для совместимости — ведёт на меню юзеров"""
-    show_users_menu(cfg, chat_id, user_id, msg_id)
-
-
-def handle_cleanup(cfg, chat_id, user_id):
-    """Удалить всех истёкших (из системы И из БД)"""
-    token = cfg['BOT_TOKEN']
-    if not is_admin(cfg, user_id):
-        send_message(token, chat_id, "🚫 Только для админа.")
-        return
-        
     import sqlite3
-    import time
-    now = int(time.time())
-    
-    db = sqlite3.connect('/etc/UDPCustom/vpn.db')
-    vip_exp = db.execute("SELECT login FROM vip_keys WHERE expires_at > 0 AND expires_at < ?", (now,)).fetchall()
-    test_exp = db.execute("SELECT login FROM test_keys WHERE expires_at > 0 AND expires_at < ?", (now,)).fetchall()
+    db = sqlite3.connect('/etc/UDPCustom/vpn.db', timeout=15.0)
+    db.execute('DELETE FROM whitedns_servers')
+    for s in servers:
+        db.execute('INSERT INTO whitedns_servers (name, conn) VALUES (?, ?)', (s['name'], s['conn']))
+    db.commit()
     db.close()
-    
-    all_expired = [r[0] for r in vip_exp] + [r[0] for r in test_exp]
-    
-    if not all_expired:
-        send_message(token, chat_id, "✅  Нет истёкших для удаления.")
-        return
-        
-    removed = 0
-    failed = 0
-    for name in all_expired:
-        try:
-            # 1. Удаляем системного юзера
-            subprocess.run(['userdel', '-f', name], capture_output=True, timeout=10)
-            
-            # 2. Удаляем файлы
-            for p in [f"/etc/UDPCustom/limits/{name}", f"/etc/UDPCustom/expire_ts/{name}",
-                      f"/etc/UDPCustom/traffic/{name}", f"/etc/UDPCustom/traffic_limits/{name}",
-                      f"/etc/UDPCustom/passwords/{name}"]:
-                try: os.remove(p)
-                except: pass
-                
-            # 3. Убираем из текстового файла users.db
-            subprocess.run(['sed', '-i', f'/^{name}$/d', USERS_DB], capture_output=True)
-            
-            # 4. Удаляем из БД SQLite
-            db2 = sqlite3.connect('/etc/UDPCustom/vpn.db')
-            db2.execute("DELETE FROM vip_keys WHERE login=?", (name,))
-            db2.execute("DELETE FROM test_keys WHERE login=?", (name,))
-            db2.commit()
-            db2.close()
-            
-            removed += 1
-        except Exception as e:
-            log.error(f"cleanup {name}: {e}")
-            failed += 1
-            
-    send_message(token, chat_id, f"✅  <b>Очистка завершена!</b>\n\n🗑 Удалено ключей (и из базы): <b>{removed}</b>\n" + (f"⚠️ Ошибок: {failed}" if failed else ""), parse_mode='HTML')
-    log.info(f"CLEANUP via bot: removed={removed}, failed={failed}")
-
-
-PROXIES_FILE = "/etc/UDPCustom/proxies.txt"
-DOMAIN_FILE = "/etc/vpn-domain"
-PAYLOAD_FILE = "/etc/UDPCustom/payload.txt"
-
-
-
-
-def _sync_proxies_to_db():
-    """Синхронизирует первый прокси из файла в БД (TLS_PROXY и WS_PROXY)"""
-    import sqlite3
-    try:
-        if not os.path.exists(PROXIES_FILE):
-            return
-        with open(PROXIES_FILE, 'r') as f:
-            ips = [l.strip() for l in f if l.strip() and not l.startswith('#')]
-        if not ips:
-            return
-        first_ip = ips[0].split(':')[0]
-        db_path = '/etc/UDPCustom/vpn.db'
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ('TLS_PROXY', f'{first_ip}:443'))
-        cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ('WS_PROXY', f'{first_ip}:80'))
-        conn.commit()
-        conn.close()
-        log.info(f"Synced proxy to DB: {first_ip}")
-    except Exception as e:
-        log.error(f"Failed to sync proxies to DB: {e}")
-
-def handle_addproxy(cfg, chat_id, user_id, args):
-    """Добавить прокси: /addproxy 1.2.3.4"""
-    token = cfg['BOT_TOKEN']
-    if not is_admin(cfg, user_id):
-        send_message(token, chat_id, "🚫 Только для админа."); return
-    args = args.strip()
-    if not args:
-        send_message(token, chat_id, "📖 Формат: <code>/addproxy 1.2.3.4</code>", parse_mode='HTML'); return
-    ip = args.split()[0]
-    if not ip.replace('.', '').isdigit() or ip.count('.') != 3:
-        send_message(token, chat_id, f"❌  Неверный IP: {ip}"); return
-    try:
-        with open(PROXIES_FILE, 'a') as f:
-            f.write(ip + chr(10))
-        ips = sorted(set(l.strip() for l in open(PROXIES_FILE) if l.strip()))
-        with open(PROXIES_FILE, 'w') as f:
-            f.write(chr(10).join(ips) + chr(10))
-            _sync_proxies_to_db()
-        send_message(token, chat_id, f"✅  Прокси добавлен: <code>{ip}</code>" + chr(10) + f"Всего: <b>{len(ips)}</b>", parse_mode='HTML')
-    except Exception as e:
-        send_message(token, chat_id, f"❌  Ошибка: {e}")
-
-
-def handle_delproxy(cfg, chat_id, user_id, args):
-    """Удалить прокси: /delproxy 2"""
-    token = cfg['BOT_TOKEN']
-    if not is_admin(cfg, user_id):
-        send_message(token, chat_id, "🚫 Только для админа."); return
-    args = args.strip()
-    if not args or not args.isdigit():
-        send_message(token, chat_id, "📖 Формат: <code>/delproxy 2</code>", parse_mode='HTML'); return
-    n = int(args)
-    try:
-        ips = [l.strip() for l in open(PROXIES_FILE) if l.strip()]
-        if n < 1 or n > len(ips):
-            send_message(token, chat_id, f"❌ Нет прокси №{n}"); return
-        removed = ips.pop(n-1)
-        with open(PROXIES_FILE, 'w') as f:
-            f.write("\n".join(ips) + "\n" if ips else "")
-            _sync_proxies_to_db()
-        send_message(token, chat_id, f"✅ Удалён: <code>{removed}</code>\nОсталось: <b>{len(ips)}</b>", parse_mode='HTML')
-    except Exception as e:
-        send_message(token, chat_id, f"❌ Ошибка: {e}")
-
-
-def handle_proxies(cfg, chat_id, user_id, msg_id=None):
-    """Список прокси + кнопка редактирования"""
-    token = cfg['BOT_TOKEN']
-    if not is_admin(cfg, user_id):
-        send_message(token, chat_id, "🚫 Только для админа."); return
-    try:
-        ips = [l.strip() for l in open(PROXIES_FILE) if l.strip()] if os.path.exists(PROXIES_FILE) else []
-    except Exception:
-        ips = []
-    NL = chr(10)
-    if ips:
-        lines = ['🔒 <b>ПРОКСИ (' + str(len(ips)) + ')</b>', '━━━━━━━━━━━━━━━━━━━━', '']
-        for i, ip in enumerate(ips, 1):
-            lines.append('<b>' + str(i) + '.</b> <code>' + ip + '</code>')
-    else:
-        lines = ['🔒 <b>ПРОКСИ</b>', '━━━━━━━━━━━━━━━━━━━━', '', '❌ Список пуст']
-    lines += ['', '━━━━━━━━━━━━━━━━━━━━', '<i>Отправка заменяет весь список</i>']
-    text = NL.join(lines)
-    kb = {'inline_keyboard': [
-        [{'text': '✏️ Редактировать список', 'callback_data': 'manage_proxies_edit'}],
-        [{'text': '⬅️ Назад', 'callback_data': 'manage_services'}]
-    ]}
-    if msg_id:
-        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
-    else:
-        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
-
-
-def show_proxies_edit(cfg, chat_id, user_id, msg_id=None):
-    """Экран редактирования прокси."""
-    token = cfg['BOT_TOKEN']
-    NL = chr(10)
-    text = NL.join([
-        '✏️ <b>РЕДАКТИРОВАНИЕ ПРОКСИ</b>',
-        '━━━━━━━━━━━━━━━━━━━━',
-        '',
-        'Отправь новый список прокси.',
-        '',
-        'Формат: один IP на строку:',
-        '<code>1.2.3.4</code>',
-        '<code>5.6.7.8</code>',
-        '',
-        'Или отправь <code>-</code> чтобы очистить.'
-    ])
-    kb = {'inline_keyboard': [
-        [{'text': '⬅️ Назад', 'callback_data': 'manage_proxies'}]
-    ]}
-    if msg_id:
-        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
-    else:
-        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
-
-
-def handle_setdomain(cfg, chat_id, user_id, args):
-    """Изменить домен: /setdomain de.example.com"""
-    token = cfg['BOT_TOKEN']
-    if not is_admin(cfg, user_id):
-        send_message(token, chat_id, "🚫 Только для админа."); return
-    d = args.strip().replace('https://', '').replace('http://', '').split('/')[0].split(':')[0]
-    if not d or '.' not in d:
-        send_message(token, chat_id, "📖 Формат: <code>/setdomain de.example.com</code>", parse_mode='HTML'); return
-    try:
-        with open(DOMAIN_FILE, 'w') as f:
-            f.write(d + "\n")
-        send_message(token, chat_id, f"✅ Домен изменён: <code>{d}</code>", parse_mode='HTML')
-    except Exception as e:
-        send_message(token, chat_id, f"❌ Ошибка: {e}")
-
-
-def handle_domain(cfg, chat_id, user_id):
-    """Показать текущий домен"""
-    token = cfg['BOT_TOKEN']
-    if not is_admin(cfg, user_id):
-        send_message(token, chat_id, "🚫 Только для админа."); return
-    try:
-        d = open(DOMAIN_FILE).read().strip() if os.path.exists(DOMAIN_FILE) else "не задан"
-        send_message(token, chat_id, f"🌐 <b>Домен:</b> <code>{d}</code>\n\n<i>Изменить: /setdomain new.domain.com</i>", parse_mode='HTML')
-    except Exception as e:
-        send_message(token, chat_id, f"❌ Ошибка: {e}")
-
-
-def handle_setpayload(cfg, chat_id, user_id, args):
-    """Изменить payload"""
-    token = cfg['BOT_TOKEN']
-    if not is_admin(cfg, user_id):
-        send_message(token, chat_id, "🚫 Только для админа."); return
-    pl = args.strip()
-    if not pl:
-        send_message(token, chat_id, "📖 Формат: <code>/setpayload CONNECT http://...</code>", parse_mode='HTML'); return
-    try:
-        with open(PAYLOAD_FILE, 'w') as f:
-            f.write(pl + "\n")
-        send_message(token, chat_id, f"✅ Payload изменён ({len(pl)} символов)")
-    except Exception as e:
-        send_message(token, chat_id, f"❌ Ошибка: {e}")
-
-
-def handle_payload(cfg, chat_id, user_id, msg_id=None):
-    """Показать payload + кнопка редактирования"""
-    token = cfg['BOT_TOKEN']
-    if not is_admin(cfg, user_id):
-        send_message(token, chat_id, "🚫 Только для админа."); return
-    try:
-        import sqlite3
-        _db = sqlite3.connect('/etc/UDPCustom/vpn.db')
-        _mode = _db.execute("SELECT value FROM settings WHERE key='MODE'").fetchone()
-        _mode = _mode[0] if _mode else 'WS'
-        _pk = 'TLS_PAYLOAD' if _mode == 'TLS' else 'WS_PAYLOAD'
-        _pl = _db.execute("SELECT value FROM settings WHERE key=?", (_pk,)).fetchone()
-        pl = _pl[0] if _pl else ''
-        _db.close()
-    except Exception:
-        pl = ''
-        _mode = 'WS'
-    NL = chr(10)
-    if pl:
-        _prev = pl[:500] + ('...' if len(pl) > 500 else '')
-        lines = [f'📦 <b>PAYLOAD {_mode} (' + str(len(pl)) + ' символов)</b>', '━━━━━━━━━━━━━━━━━━━━', '', '<pre>' + _prev + '</pre>']
-    else:
-        lines = ['📦 <b>PAYLOAD</b>', '━━━━━━━━━━━━━━━━━━━━', '', '❌ Не задан']
-    lines += ['', '━━━━━━━━━━━━━━━━━━━━', '<i>Отправка полностью заменяет payload</i>']
-    text = NL.join(lines)
-    kb = {'inline_keyboard': [
-        [{'text': '✏️ Редактировать', 'callback_data': 'manage_payload_edit'}],
-        [{'text': '⬅️ Назад', 'callback_data': 'manage_services'}]
-    ]}
-    if msg_id:
-        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
-    else:
-        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
-
-
-def show_payload_edit(cfg, chat_id, user_id, msg_id=None):
-    """Экран редактирования payload."""
-    token = cfg['BOT_TOKEN']
-    NL = chr(10)
-    text = NL.join([
-        '✏️ <b>РЕДАКТИРОВАНИЕ PAYLOAD</b>',
-        '━━━━━━━━━━━━━━━━━━━━',
-        '',
-        'Отправь новый payload сообщением.',
-        '',
-        'Или отправь <code>-</code> чтобы очистить.'
-    ])
-    kb = {'inline_keyboard': [
-        [{'text': '⬅️ Назад', 'callback_data': 'manage_payload'}]
-    ]}
-    if msg_id:
-        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
-    else:
-        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
-
-
-def _get_all_domains():
-    """Возвращает список (node_id, name, host, is_master). node_id=0 для мастера."""
-    result = []
-    try:
-        d = open(DOMAIN_FILE).read().strip() if os.path.exists(DOMAIN_FILE) else '—'
-    except Exception:
-        d = '—'
-    result.append((0, '👑 Мастер', d, 1))
-    try:
-        import sqlite3 as _sq
-        con = _sq.connect('/etc/UDPCustom/vpn.db')
-        rows = con.execute(
-            "SELECT id, name, host, is_master FROM nodes WHERE is_active=1 AND is_master=0 ORDER BY id"
-        ).fetchall()
-        con.close()
-        for r in rows:
-            result.append((r[0], r[1], r[2] or '—', 0))
-    except Exception as e:
-        log.error(f"_get_all_domains: {e}")
-    return result
 
 
 def _set_domain(node_id, new_domain):
@@ -4301,7 +2590,7 @@ def handle_services(cfg, chat_id, user_id, msg_id=None):
     except: proxy_cnt = 0
     try:
         import sqlite3
-        _db = sqlite3.connect('/etc/UDPCustom/vpn.db')
+        _db = sqlite3.connect('/etc/UDPCustom/vpn.db', timeout=15.0)
         _mode_row = _db.execute("SELECT value FROM settings WHERE key='MODE'").fetchone()
         _mode = _mode_row[0] if _mode_row else 'WS'
         _pk = 'TLS_PAYLOAD' if _mode == 'TLS' else 'WS_PAYLOAD'
@@ -4315,7 +2604,7 @@ def handle_services(cfg, chat_id, user_id, msg_id=None):
     text += f"\n<b>🌐 Домены ({_mode}):</b>\n"
     try:
         import sqlite3
-        _db_dom = sqlite3.connect('/etc/UDPCustom/vpn.db')
+        _db_dom = sqlite3.connect('/etc/UDPCustom/vpn.db', timeout=15.0)
         _col = 'tls_host' if _mode == 'TLS' else 'host'
         _dom_rows = _db_dom.execute(f"SELECT name, {_col} FROM nodes WHERE is_active=1 ORDER BY is_master DESC, id").fetchall()
         _db_dom.close()
@@ -4876,6 +3165,145 @@ def process_channel_post(cfg, msg):
         threading.Thread(target=_delayed_react, args=(cfg['BOT_TOKEN'], msg['chat']['id'], msg['message_id'], emoji), daemon=True).start()
 
 
+
+def show_admin_panel(cfg, chat_id, user_id, msg_id=None):
+    """Админ-панель"""
+    token = cfg['BOT_TOKEN']
+    admin_id = cfg.get('ADMIN_ID', '')
+    if not is_admin(cfg, user_id):
+        send_message(token, chat_id, '🚫 Только для админа.')
+        return
+    total_users = 0
+    try:
+        import sqlite3 as _sq
+        _c = _sq.connect('/etc/UDPCustom/vpn.db')
+        total_users = _c.execute('SELECT COUNT(*) FROM users').fetchone()[0]
+        _c.close()
+    except: pass
+    NLx = chr(10)
+    lines = ['⚙️ <b>АДМИН-ПАНЕЛЬ</b>', '━━━━━━━━━━━━━━━━━━━━', '', '👤 ID: <code>' + str(user_id) + '</code>', '📊 Юзеров: <b>' + str(total_users) + '</b>', '', '━━━━━━━━━━━━━━━━━━━━', 'Выбери раздел 👇']
+    text = NLx.join(lines)
+    keyboard = {'inline_keyboard': [
+        [{'text': '📊 Статистика', 'callback_data': 'admin_stats'},
+         {'text': '👥 Пользователи', 'callback_data': 'admin_users_1'},
+         {'text': '👑 Админы', 'callback_data': 'adm_admins'}],
+        [{'text': '💰 Баланс', 'callback_data': 'admin_addbalance'},
+         {'text': '🎫 Промокоды', 'callback_data': 'adm_promo_list'},
+         {'text': '📨 Рассылка', 'callback_data': 'adm_broadcast'}],
+        [{'text': '📢 Пост', 'callback_data': 'admin_post'},
+         {'text': '📢 Каналы', 'callback_data': 'admin_channels'},
+         {'text': '📝 Тексты', 'callback_data': 'adm_edit_texts'}],
+        [{'text': '⚙️ SSH WS', 'callback_data': 'manage_services'},
+         {'text': '⚙️ UDP Custom', 'callback_data': 'adm_udp_soon'},
+         {'text': '⚙️ WhiteDNS', 'callback_data': 'adm_whitedns'}]
+    ]}
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': keyboard})
+    else:
+        smart_send(token, chat_id, text, reply_markup=keyboard, parse_mode='HTML')
+
+
+
+
+
+
+def show_adm_whitedns(cfg, chat_id, user_id, msg_id=None):
+    token = cfg['BOT_TOKEN']
+    NL = chr(10)
+    issued = _wd_count_lines(WD_LOG)
+    servers = _wd_read_servers()
+    
+    res_count = len(_wd_read_resolvers(0))
+    set_count = _wd_count_lines('/etc/UDPCustom/whitedns_settings.txt')
+
+    lines = [
+        '📡 <b>WHITEDNS УПРАВЛЕНИЕ</b>',
+        '━━━━━━━━━━━━━━━━━━━━',
+        f'📊 Выдано конфигов: <b>{issued}</b>',
+        '',
+        '━━ ⚙️ Общие файлы ━━',
+        f'🔢 Резолверы — {"✅ (" + str(res_count) + " IP)" if res_count else "❌ пусто"}',
+        f'⚙️ Настройки — {"✅ (" + str(set_count) + " стр.)" if set_count else "❌ пусто"}',
+        '',
+        '━━ 🌐 Серверы (' + str(len(servers)) + ') ━━'
+    ]
+    for s in servers:
+        icon = '✅' if s.get('conn') else '⏳'
+        lines.append(f"{s['name']} — {icon}")
+        
+    lines.append('')
+    lines.append('━━━━━━━━━━━━━━━━━━━━')
+    text = NL.join(lines)
+    
+    kb = {'inline_keyboard': [
+        [{'text': '🔢 Ред. Резолверы', 'callback_data': 'wd_resolvers'}, 
+         {'text': '⚙️ Ред. Настройки', 'callback_data': 'wd_settings'}],
+        [{'text': '🌐 Управление серверами', 'callback_data': 'wd_manage_servers'}],
+        [{'text': '🏠 В админ-панель', 'callback_data': 'adm_main'}]
+    ]}
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
+
+
+def show_wd_manage_servers(cfg, chat_id, user_id, msg_id=None):
+    token = cfg['BOT_TOKEN']
+    NL = chr(10)
+    servers = _wd_read_servers()
+    txt = ['🌐 <b>УПРАВЛЕНИЕ СЕРВЕРАМИ</b>', '━━━━━━━━━━━━━━━━━━━━', '']
+    kb = []
+    if not servers:
+        txt.append('❌ Список пуст.')
+    else:
+        for s in servers:
+            icon = '✅' if s.get('conn') else '⏳'
+            txt.append(f"{s['name']} — {icon}")
+            kb.append([
+                {'text': f"✏️ {s['name']}", 'callback_data': f"wd_edit_srv:{s['name']}"},
+                {'text': f"🗑 Удалить", 'callback_data': f"wd_del_srv:{s['name']}"}
+            ])
+    txt.append('')
+    kb.append([{'text': '➕ Добавить сервер', 'callback_data': 'wd_add_srv'}])
+    kb.append([{'text': '⬅️ Назад', 'callback_data': 'adm_whitedns'}])
+    text = NL.join(txt)
+    kb = {'inline_keyboard': kb}
+    if msg_id:
+        tg_request(token, 'editMessageText', {'chat_id': chat_id, 'message_id': msg_id, 'text': text, 'parse_mode': 'HTML', 'reply_markup': kb})
+    else:
+        smart_send(token, chat_id, text, reply_markup=kb, parse_mode='HTML')
+
+
+
+
+
+def mark_verified(user_id, hours=8):
+    """Помечает юзера verified на N часов"""
+    try:
+        now = int(time.time())
+        until = int(now + (hours * 3600))
+        
+        # Убираем старые записи этого юзера
+        lines = []
+        if os.path.exists(VERIFIED_DB):
+            with open(VERIFIED_DB) as f:
+                lines = [l for l in f.readlines() if not l.startswith(f"{user_id}|")]
+        
+        # Добавляем новую
+        lines.append(f"{user_id}|{until}\n")
+        
+        with open(VERIFIED_DB, 'w') as f:
+            f.writelines(lines)
+    except Exception as e:
+        log.error(f"mark_verified error: {e}")
+
+
+USERS_DB = "/etc/UDPCustom/users.db"
+EXPIRE_DIR = "/etc/UDPCustom/expire_ts"
+LIMITS_DIR = "/etc/UDPCustom/limits"
+
+
+
 def main():
     cfg = load_config()
     if not cfg.get('BOT_TOKEN'):
@@ -5383,6 +3811,33 @@ def main():
                     elif cb_data == 'wd_stats':
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         show_wd_stats(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                    elif cb_data == 'wd_manage_servers':
+                        show_wd_manage_servers(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                        continue
+                    elif cb_data == 'wd_add_srv':
+                        PENDING_ACTIONS[cb_user_id] = 'wd_add_name'
+                        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {'chat_id': cb['message']['chat']['id'], 'text': 'Введи название нового сервера (например, 🇰🇿 Казахстан):', 'reply_markup': {'force_reply': True, 'selective': True}})
+                        continue
+                    elif cb_data.startswith('wd_edit_srv:'):
+                        srv_name = cb_data.split(':', 1)[1]
+                        PENDING_ACTIONS[cb_user_id] = f'wd_edit_name:{srv_name}'
+                        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {'chat_id': cb['message']['chat']['id'], 'text': 'Введи новое название сервера:', 'reply_markup': {'force_reply': True, 'selective': True}})
+                        continue
+                    elif cb_data.startswith('wd_del_srv:'):
+                        tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': '🗑 Удалено'})
+                        srv_name = cb_data.split(':', 1)[1]
+                        servers = _wd_read_servers()
+                        for i, s in enumerate(servers):
+                            if s['name'] == srv_name:
+                                servers.pop(i)
+                                break
+                        import sqlite3
+                        db = sqlite3.connect('/etc/UDPCustom/vpn.db', timeout=15.0)
+                        db.execute('DELETE FROM whitedns_servers WHERE name=?', (srv_name,))
+                        db.commit()
+                        db.close()
+                        show_wd_manage_servers(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
+                        continue
                     elif cb_data.startswith('wd_srv_edit_'):
                         tg_request(cfg['BOT_TOKEN'], 'answerCallbackQuery', {'callback_query_id': cb['id']})
                         try:
@@ -5605,7 +4060,7 @@ def main():
                         show_payload_edit(cfg, cb['message']['chat']['id'], cb_user_id, cb['message']['message_id'])
                     elif cb_data == 'toggle_mode':
                         import sqlite3
-                        _db_t = sqlite3.connect('/etc/UDPCustom/vpn.db')
+                        _db_t = sqlite3.connect('/etc/UDPCustom/vpn.db', timeout=15.0)
                         _cur_mode_row = _db_t.execute("SELECT value FROM settings WHERE key='MODE'").fetchone()
                         _cur_mode = _cur_mode_row[0] if _cur_mode_row else 'WS'
                         _new_mode = 'TLS' if _cur_mode == 'WS' else 'WS'
@@ -6743,6 +5198,60 @@ def main():
                         _do_newpromo(cfg, chat_id, text)
                     elif action == 'addbalance':
                         _do_addbalance(cfg, chat_id, text)
+                    elif action == 'wd_add_name':
+                        import sqlite3
+                        db = sqlite3.connect('/etc/UDPCustom/vpn.db', timeout=15.0)
+                        db.execute('INSERT INTO whitedns_servers (name, conn) VALUES (?, "")', (text,))
+                        db.commit()
+                        db.close()
+                        PENDING_ACTIONS[user_id] = f'wd_add_conn:{text}'
+                        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {'chat_id': chat_id, 'text': 'Теперь отправь Connection URL (ключ):', 'reply_markup': {'force_reply': True, 'selective': True}})
+                        continue
+                    elif action.startswith('wd_add_conn:'):
+                        srv_name = action.split(':', 1)[1]
+                        import sqlite3
+                        db = sqlite3.connect('/etc/UDPCustom/vpn.db', timeout=15.0)
+                        db.execute('UPDATE whitedns_servers SET conn=? WHERE name=?', (text, srv_name))
+                        db.commit()
+                        db.close()
+                        send_message(cfg['BOT_TOKEN'], chat_id, "✅ Сервер добавлен!")
+                        show_wd_manage_servers(cfg, chat_id, user_id)
+                        # Восстанавливаем нижнюю клавиатуру
+                        try:
+                            from bot_modules.cabinet import get_main_reply_kb
+                            _rkb = get_main_reply_kb(is_admin(cfg, user_id))
+                            tg_request(cfg['BOT_TOKEN'], 'sendMessage', {'chat_id': chat_id, 'text': '⚡️ <b>Быстрые кнопки к разделам 👇</b>', 'reply_markup': _rkb, 'parse_mode': 'HTML', 'disable_notification': True})
+                        except Exception as e:
+                            log.error(f"restore kb error: {e}")
+                        continue
+                    elif action.startswith('wd_edit_name:'):
+                        old_name = action.split(':', 1)[1]
+                        import sqlite3
+                        db = sqlite3.connect('/etc/UDPCustom/vpn.db', timeout=15.0)
+                        db.execute('UPDATE whitedns_servers SET name=? WHERE name=?', (text, old_name))
+                        db.commit()
+                        db.close()
+                        PENDING_ACTIONS[user_id] = f'wd_edit_conn:{text}'
+                        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {'chat_id': chat_id, 'text': 'Название обновлено. Отправь новый Connection URL (или "-" чтобы оставить старый):', 'reply_markup': {'force_reply': True, 'selective': True}})
+                        continue
+                    elif action.startswith('wd_edit_conn:'):
+                        srv_name = action.split(':', 1)[1]
+                        if text != '-':
+                            import sqlite3
+                            db = sqlite3.connect('/etc/UDPCustom/vpn.db', timeout=15.0)
+                            db.execute('UPDATE whitedns_servers SET conn=? WHERE name=?', (text, srv_name))
+                            db.commit()
+                            db.close()
+                        send_message(cfg['BOT_TOKEN'], chat_id, "✅ Сервер обновлён!")
+                        show_wd_manage_servers(cfg, chat_id, user_id)
+                        # Восстанавливаем нижнюю клавиатуру
+                        try:
+                            from bot_modules.cabinet import get_main_reply_kb
+                            _rkb = get_main_reply_kb(is_admin(cfg, user_id))
+                            tg_request(cfg['BOT_TOKEN'], 'sendMessage', {'chat_id': chat_id, 'text': '⚡️ <b>Быстрые кнопки к разделам 👇</b>', 'reply_markup': _rkb, 'parse_mode': 'HTML', 'disable_notification': True})
+                        except Exception as e:
+                            log.error(f"restore kb error: {e}")
+                        continue
                     elif action.startswith('broadcast_text'):
                         _tgt = action.split(':', 1)[1] if ':' in action else 'all'
                         _do_broadcast_preview(cfg, chat_id, text, _tgt)
@@ -6913,13 +5422,14 @@ def main():
                 elif text == '🤖 Админка' or text.startswith('/admin'):
                     try: tg_request(cfg['BOT_TOKEN'], 'deleteMessage', {'chat_id': chat_id, 'message_id': msg['message_id']})
                     except Exception: pass
-                    show_admin_panel(cfg, chat_id, user_id)
-                    continue
-
-                elif text == '⚙️ Админка' or text.startswith('/admin'):
-                    try: tg_request(cfg['BOT_TOKEN'], 'deleteMessage', {'chat_id': chat_id, 'message_id': msg['message_id']})
-                    except Exception: pass
-                    show_admin_panel(cfg, chat_id, user_id)
+                    try:
+                        show_admin_panel(cfg, chat_id, user_id)
+                        from bot_modules.cabinet import get_main_reply_kb
+                        _rkb = get_main_reply_kb(is_admin(cfg, user_id))
+                        tg_request(cfg['BOT_TOKEN'], 'sendMessage', {'chat_id': chat_id, 'text': '⚡️ <b>Быстрые кнопки к разделам 👇</b>', 'reply_markup': _rkb, 'parse_mode': 'HTML', 'disable_notification': True})
+                    except Exception as e:
+                        import traceback
+                        send_message(cfg['BOT_TOKEN'], chat_id, f'❌  Ошибка: {e}' + chr(10) + f'<pre>{traceback.format_exc()}</pre>')
                     continue
                 elif text == '💎 Купить VIP':
                     try: tg_request(cfg['BOT_TOKEN'], 'deleteMessage', {'chat_id': chat_id, 'message_id': msg['message_id']})
@@ -6940,13 +5450,28 @@ def main():
                     handle_start(cfg, chat_id, user_id, first_name)
                     continue
 
-                elif text == '\u2699\uFE0F Админка' or text.startswith('/admin'): show_admin_panel(cfg, chat_id, user_id)
+                elif text == '🤖 Админка' or text.startswith('/admin'):
+                    try:
+                        send_message(cfg['BOT_TOKEN'], chat_id, '🔄 Открываю админку...')
+                        show_admin_panel(cfg, chat_id, user_id)
+                    except Exception as e:
+                        import traceback
+                        send_message(cfg['BOT_TOKEN'], chat_id, f'❌ Ошибка: {e}\n<pre>{traceback.format_exc()}</pre>')
+                    continue
                 elif text == '\U0001F381 Помощь' or text.startswith('/help'): handle_help(cfg, chat_id)
         except KeyboardInterrupt: log.info("Остановка"); break
         except Exception as e:
             import time
+            import traceback
             log.error(f"Ошибка в main loop: {e}")
+            tb = traceback.format_exc()
+            try:
+                send_message(cfg['BOT_TOKEN'], user_id, f"❌ <b>ОШИБКА В БОТЕ:</b>\n<code>{e}</code>\n\n<pre>{tb[-500:]}</pre>", parse_mode='HTML')
+            except: pass
             time.sleep(5)
 
 if __name__ == '__main__':
     main()
+
+
+
