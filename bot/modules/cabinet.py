@@ -2394,302 +2394,20 @@ def show_help_back(cfg, chat_id, user_id, msg_id=None):
 
 
 def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
-    """Обработчик всех callback'ов кабинета.
-    Возвращает True если обработано, False если не наш callback."""
     token = cfg['BOT_TOKEN']
     chat_id = cb['message']['chat']['id']
     msg_id = cb['message']['message_id']
 
-    # Тосты для разных callback'ов
-    _toast = None
-    if cb_data.startswith('cab_key:'):
-        key_name = cb_data.split(':', 1)[1]
-        show_key_detail(cfg, chat_id, user_id, key_name, msg_id)
-        return True
-
-    if cb_data.startswith('cab_pcsub:'):
-        key_name = cb_data.split(':', 1)[1]
-        try: _smart_files_clear(token, chat_id)
+    if cb_data == 'cab_main' or cb_data == 'cab_exit':
+        try: _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg_id})
         except: pass
-            
-        _dom = "de.cdnstore.shop"
-        try:
-            import re as _re
-            _dom = _re.search(r'DOMAIN="([^"]+)"', open("/etc/UDPCustom/domain.conf").read()).group(1)
-        except: pass
-        
-        _sub_url = f"https://{_dom}/sub_dark/{key_name}"
-        _text = "💻 <b>Подписка для ПК (ArsenVPN)</b>" + chr(10) + chr(10) + \
-                "1. Скачай приложение: <a href='https://github.com/zotac85/ArsenVpn'>GitHub</a>" + chr(10) + \
-                "2. Открой приложение и нажми кнопку <b>«Подписка»</b> (внизу)." + chr(10) + \
-                "3. Вставь ссылку ниже в поле и нажми <b>«Загрузить»</b>." + chr(10) + \
-                "4. Закрой окно, выбери сервер и нажми <b>CONNECT</b>." + chr(10) + chr(10) + \
-                "🚀 <b>Также доступен Trojan (WS) для Happ, Nekoray и других клиентов.</b>" + chr(10) + chr(10) + \
-                "📥 <b>Скачать приложения:</b>" + chr(10) + \
-                "🖥 <b>ArsenVPN:</b> <a href='https://github.com/zotac85/ArsenVpn'>GitHub</a>" + chr(10) + \
-                "🌐 <b>Happ:</b> <a href='https://www.happ.su/main/ru'>Официальный сайт</a>" + chr(10) + \
-                "🐈 <b>Nekoray:</b> <a href='https://github.com/Matsuridayo/nekoray/releases'>GitHub</a>" + chr(10) + chr(10) + \
-                f"<code>{_sub_url}</code>"
-        _kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
-        
-        _send_instr(token, chat_id, _text, _kb)
-        return True
-    if cb_data.startswith('cab_gen_trojan:'):
-        key_name = cb_data.split(':', 1)[1]
-        try: _smart_files_clear(token, chat_id)
-        except: pass
-
-        # Проверка: только VIP
-        _vk = db.get_vip_key(key_name) if hasattr(db, 'get_vip_key') else None
-        if not _vk:
-            _text = "🚀 <b>Протокол Trojan (WebSocket)</b>" + chr(10) + chr(10) + \
-                    "🔒 <b>Внимание!</b> Trojan доступен только для VIP-ключей." + chr(10) + \
-                    "Оформите подписку, чтобы получить доступ к самым быстрым и защищенным серверам." + chr(10) + chr(10) + \
-                    "💡 <b>Как использовать:</b>" + chr(10) + \
-                    "1. Приобретите VIP-ключ." + chr(10) + \
-                    "2. Нажмите кнопку «Trojan» в меню ключа." + chr(10) + \
-                    "3. Вставьте ссылку-подписку в NekoBox или v2rayNG."
-            _kb = {'inline_keyboard': [
-                [{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'}],
-                [{'text': '👤 В кабинет', 'callback_data': 'cab_main'}]
-            ]}
-            _send_instr(token, chat_id, _text, _kb)
-            return True
-
-        # Определяем домен для подписки
-        sub_domain = "sub.ruzone27.shop"
-        try:
-            with open('/etc/UDPCustom/domain.conf') as _f:
-                for _l in _f:
-                    if 'DOMAIN=' in _l:
-                        sub_domain = _l.split('=', 1)[1].strip().strip('"').strip("'")
-                        break
-        except: pass
-        sub_url = f"https://{sub_domain}/trojan/{key_name}"
-
-        _text = "🚀 <b>Trojan (WebSocket) — для всех устройств</b>" + chr(10) + chr(10) + \
-                "Универсальный протокол для любых приложений, куда можно вставить ссылку на подписку (Happ, NekoBox, v2rayNG и др.)." + chr(10) + chr(10) + \
-                "💡 <b>Как использовать:</b>" + chr(10) + \
-                "1. Скопируй ссылку ниже." + chr(10) + \
-                "2. Открой приложение (например, Happ, NekoBox или v2rayNG)." + chr(10) + \
-                "3. Нажми «Добавить подписку» и вставь ссылку." + chr(10) + chr(10) + \
-                "• В списке появятся все доступные страны" + chr(10) + \
-                "• Обновление ключей — в один клик" + chr(10) + chr(10) + \
-                "📥 <b>Ссылка-подписка:</b>" + chr(10) + \
-                f"<code>{sub_url}</code>"
-        _kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
-        _send_instr(token, chat_id, _text, _kb)
-        return True
-
-    if cb_data.startswith('cab_darkfile:') or cb_data.startswith('cab_dt:'):
-        key_name = cb_data.split(':', 1)[1]
-
-        # МГНОВЕННО убираем крутилку с кнопки
-        _tg(token, 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': '⏳ Генерирую конфиги...'})
-
-        try: _smart_files_clear(token, chat_id)
-        except Exception as e: pass
-
-        _inst_text = "📱 <b>Ключи для Android (DarkTunnel)</b>" + chr(10) + chr(10) + \
-                     "1. Скачай приложение: <a href='https://play.google.com/store/apps/details?id=net.darktunnel.app'>Google Play</a>" + chr(10) + \
-                     "2. Нажми на файл ключа ниже" + chr(10) + \
-                     "3. Выбери <b>Открыть с помощью DarkTunnel</b>" + chr(10) + chr(10) + \
-                     "🚀 <b>Также доступен Trojan (WS) для NekoBox / v2rayNG — работает на любых устройствах.</b>"
-        _inst_kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
-
-        _send_instr(token, chat_id, _inst_text, _inst_kb)
-
-        # Генерируем файлы в фоне, чтобы не вешать бота
-        import threading
-        threading.Thread(target=send_dark_files_all_nodes, args=(cfg, chat_id, user_id, key_name), daemon=True).start()
-        return True
-    if cb_data.startswith('cab_npvt:'):
-        key_name = cb_data.split(':', 1)[1]
-        try: _smart_files_clear(token, chat_id)
-        except: pass
-        send_npvt_file(cfg, chat_id, user_id, key_name)
-        return True
-
-    if cb_data.startswith('cab_key_resethwid:'):
-        _toast = '🔄 Пароль обновлён'
-    elif cb_data.startswith('cab_key_reset:'):
-        _toast = '⚠️ Подтверди сброс'
-    elif cb_data.startswith('cab_key_del:'):
-        _toast = '⚠️ Подтверди удаление'
-    elif cb_data.startswith('cab_dt:'):
-        _toast = '📲 Генерирую конфиг...'
-    # Ответ на callback (убираем «крутилку»)
-    if _toast:
-        _tg(token, 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': _toast})
-    else:
-        _tg(token, 'answerCallbackQuery', {'callback_query_id': cb['id']})
-        
-    # Восстановленная логика
-    if cb_data.startswith('cab_key_resethwid:'):
-        key_name = cb_data.split(':', 1)[1]
-        ask_key_hwid(cfg, chat_id, user_id, key_name, msg_id)
-        return True
-    if cb_data.startswith('cab_key_reset:'):
-        show_key_reset_confirm(cfg, chat_id, user_id, cb_data.split(':', 1)[1], msg_id)
-        return True
-    if cb_data.startswith('cab_key_del:'):
-        show_key_delete_confirm(cfg, chat_id, user_id, cb_data.split(':', 1)[1], msg_id)
-        return True
-
-    if cb_data == 'cab_help_instruction':
-        show_help_instruction(cfg, chat_id, user_id, msg_id)
-        return True
-    if cb_data == 'cab_help_faq':
-        show_help_faq(cfg, chat_id, user_id, msg_id)
-        return True
-    if cb_data == 'cab_help_back':
-        try: _smart_files_clear(token, chat_id)
-        except: pass
-        show_help_back(cfg, chat_id, user_id, msg_id)
-        return True
-    if cb_data == 'cab_ad':
-        show_ad(cfg, chat_id, user_id, msg_id)
-        return True
-    if cb_data == 'cab_help':
-        try: _smart_files_clear(token, chat_id)
-        except: pass
-        show_help_back(cfg, chat_id, user_id, msg_id)
-        return True
-    if cb_data == 'cab_help_darktunnel':
-        show_help_darktunnel(cfg, chat_id, user_id, msg_id)
-        return True
-    if cb_data == 'cab_help_npv':
-        show_help_npv(cfg, chat_id, user_id, msg_id)
-        return True
-    if cb_data == 'cab_help_whitedns':
-        show_help_whitedns(cfg, chat_id, user_id, msg_id)
-        return True
-    if cb_data == 'cab_help_video':
-        show_help_video(cfg, chat_id, user_id, msg_id)
-        return True
-    if cb_data == 'cab_main':
-        # Удаляем сообщение, откуда нажали кнопку (чтобы не оставалось выше)
-        try:
-            _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg_id})
-        except Exception: pass
-        # Удаляем .dark файлы
-        try:
-            _smart_files_clear(token, chat_id)
-        except Exception: pass
-        # Отправляем кабинет НОВЫМ сообщением (внизу чата)
         show_cabinet(cfg, chat_id, user_id, first_name)
         return True
-    if cb_data == 'cab_keys':
-        try: _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg_id})
-        except Exception: pass
-        try: _smart_files_clear(token, chat_id)
-        except Exception: pass
-        show_my_keys(cfg, chat_id, user_id, 'all')
-        return True
-    if cb_data == 'cab_keys_test':
-        try: _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg_id})
-        except Exception: pass
-        try: _smart_files_clear(token, chat_id)
-        except Exception: pass
-        show_my_keys(cfg, chat_id, user_id, 'test')
-        return True
-    if cb_data == 'cab_keys_vip':
-        try: _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg_id})
-        except Exception: pass
-        try: _smart_files_clear(token, chat_id)
-        except Exception: pass
-        show_my_keys(cfg, chat_id, user_id, 'vip')
-        return True
-    if cb_data.startswith('cab_vip_buy:'):
-        try:
-            _t_idx = int(cb_data.split(':', 1)[1])
-            show_vip_confirm(cfg, chat_id, user_id, _t_idx, msg_id)
-        except Exception as _e:
-            cab_log.error(f"VIP buy error: {_e}")
-        return True
+
     if cb_data == 'cab_buy_vip':
-        try:
-            db.clear_pending(user_id)
-        except: pass
         show_buy_vip(cfg, chat_id, user_id, msg_id)
         return True
-    if cb_data == 'cab_whitedns':
-        _is_vip = False
-        try:
-            _vip_keys = db.get_vip_keys(user_id)
-            if _vip_keys:
-                _is_vip = True
-        except Exception as _e:
-            cab_log.error(f"VIP check error: {_e}")
-            
-        if _is_vip:
-            show_whitedns_menu(cfg, chat_id, user_id, msg_id)
-        else:
-            _wd_text = (
-                "🌐 <b>WhiteDNS (Резервный доступ)</b>" + chr(10) + chr(10) +
-                "🔒 <i>Раздел доступен только VIP клиентам.</i>" + chr(10) + chr(10) +
-                "Купите VIP ключ, чтобы получить доступ к резервному VPN для мобильного интернета и обхода жестких блокировок." + chr(10) + chr(10) +
-                "👉 <b>Как получить:</b>" + chr(10) +
-                "1️⃣ Выбери сервер" + chr(10) +
-                "2️⃣ Выбери профиль" + chr(10) +
-                "3️⃣ Подтверди и получи файлы" + chr(10) + chr(10) +
-                "🛡️ <i>Работает даже при полном локдауне сети!</i>" + chr(10) + chr(10) +
-                "📥 <b>Скачать приложения:</b>" + chr(10) +
-                "📱 <b>Android:</b> <a href='https://github.com/WhiteDNS/WhiteDNS-Android/releases'>GitHub</a>" + chr(10) +
-                "🍏 <b>iOS (CoreForge):</b> <a href='https://whitedns.online/tools/coreforge/'>Сайт</a>" + chr(10) +
-                "💻 <b>ПК (Windows):</b> <a href='https://github.com/WhiteDNS/WhiteDNS-Desktop'>GitHub</a>" + chr(10) + chr(10) +
-                "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
-            )
-            _wd_kb = {'inline_keyboard': [
-                [{'text': '💎 Купить VIP доступ (Все разделы)', 'callback_data': 'cab_buy_vip'}],
-                [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
-            ]}
-            _send_new(token, chat_id, _wd_text, _wd_kb)
-        return True
 
-    if cb_data == 'cab_wd_de':
-        show_whitedns_confirm(cfg, chat_id, user_id, 0, msg_id)
-        return True
-    if cb_data == 'cab_wd_fi':
-        show_whitedns_confirm(cfg, chat_id, user_id, 1, msg_id)
-        return True
-    if cb_data == 'cab_wd_se':
-        show_whitedns_confirm(cfg, chat_id, user_id, 2, msg_id)
-        return True
-    if cb_data == 'cab_wd_nl':
-        show_whitedns_confirm(cfg, chat_id, user_id, 3, msg_id)
-        return True
-
-    if cb_data.startswith('cab_wd_send:'):
-        _parts = cb_data.split(':')
-        send_whitedns_files(cfg, chat_id, user_id, int(_parts[1]))
-        return True
-    if cb_data == 'cab_balance':
-        show_balance(cfg, chat_id, user_id, msg_id)
-        return True
-    if cb_data == 'cab_promo':
-        show_promo(cfg, chat_id, user_id, msg_id)
-        return True
-    if cb_data == 'cab_promo_input':
-        NL = chr(10)
-        text = NL.join([
-            "✏️ <b>ВВОД ПРОМОКОДА</b>",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "",
-            "Отправь промокод следующим сообщением",
-            "(одним словом, без пробелов)",
-            "",
-            "Например: <code>NEWYEAR</code>"
-        ])
-        _edit(token, chat_id, msg_id, text, {'inline_keyboard': [
-            [{'text': '⬅️ Отмена', 'callback_data': 'cab_promo'}]
-        ]})
-        try:
-            from bot_modules import db as _db
-            _db.set_pending(user_id, 'promo_input')
-        except Exception as e:
-            cab_log.error(f"set_pending: {e}")
-        return True
     if cb_data == 'cab_topup':
         NL = chr(10)
         balance = db.get_balance(user_id)
@@ -2703,13 +2421,14 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
             "Выбери способ пополнения:"
         ])
         kb = {'inline_keyboard': [
-            [{'text': '⭐ Telegram Stars', 'callback_data': 'cab_topup_stars'}],
+            [{'text': '⭐  Telegram Stars', 'callback_data': 'cab_topup_stars'}],
             [{'text': '💳 Ручное (TMCELL)', 'callback_data': 'cab_topup_manual'}],
             [{'text': '🪙 CRYPTO USDT', 'callback_data': 'cab_topup_crypto'}],
             [{'text': '⬅️ К балансу', 'callback_data': 'cab_balance'}]
         ]}
         _edit(token, chat_id, msg_id, text, kb)
         return True
+
     if cb_data == 'cab_topup_stars':
         NL = chr(10)
         _rate = 0.015  # будет читаться из конфига
@@ -2744,6 +2463,7 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         # Запоминаем что ждём сумму для Stars
         db.set_pending(user_id, 'stars_amount')
         return True
+
     if cb_data == 'cab_topup_manual':
         NL = chr(10)
         rate = _get_rate()
@@ -2775,6 +2495,7 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         ]}
         _edit(token, chat_id, msg_id, text, kb)
         return True
+
     if cb_data == 'cab_topup_crypto':
         NL = chr(10)
         text = NL.join([
@@ -2794,29 +2515,6 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
             [{'text': '⬅️ Назад', 'callback_data': 'cab_topup'}],
         ]}
         _edit(token, chat_id, msg_id, text, kb)
-        return True
-    if cb_data.startswith('cab_crypto_'):
-        NL = chr(10)
-        _cur = cb_data.split('_', 2)[2]
-        _names = {'USDT_BSC': 'USDT BEP-20', 'USDT_TRX': 'USDT TRC-20', 'TON': 'TON'}
-        _mins = {'USDT_BSC': 1.0, 'USDT_TRX': 5.0, 'TON': 3.5}
-        _cur_name = _names.get(_cur, _cur)
-        _cur_min = _mins.get(_cur, 1.0)
-        text = NL.join([
-            "🤖 <b>ПОПОЛНЕНИЕ · " + _cur_name + "</b>",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "",
-            "Введи сумму в USD:",
-            "",
-            "📊 Минимум: <b>" + ("%.2f" % _cur_min) + "</b> USD",
-            "",
-            "Например: <code>5</code>",
-        ])
-        kb = {'inline_keyboard': [
-            [{'text': '⬅️ Отмена', 'callback_data': 'cab_topup_crypto'}],
-        ]}
-        _edit(token, chat_id, msg_id, text, kb)
-        db.set_pending(user_id, 'crypto_amount:' + _cur)
         return True
 
     if cb_data == 'cab_topup_photo':
@@ -2846,70 +2544,48 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         except Exception as e:
             cab_log.error(f"set_pending topup_check: {e}")
         return True
-    if cb_data.startswith('cab_hist:'):
-        try:
-            page = int(cb_data.split(':', 1)[1])
-        except:
-            page = 1
-        show_balance_history(cfg, chat_id, user_id, page, msg_id)
+
+    if cb_data.startswith('cab_crypto_'):
+        _cur = cb_data.replace('cab_crypto_', '')
+        _mins = {'USDT_BSC': 1.0, 'USDT_TRX': 5.0, 'TON': 3.5}
+        _mins_names = {'USDT_BSC': 'USDT BEP-20', 'USDT_TRX': 'USDT TRC-20', 'TON': 'TON'}
+        _cur_min = _mins.get(_cur, 1.0)
+        _cur_name = _mins_names.get(_cur, _cur)
+        
+        db.set_pending(user_id, f'crypto_amount:{_cur}')
+        
+        text = (
+            f"🤖 <b>ПОПОЛНЕНИЕ ЧЕРЕЗ КРИПТУ</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"Выбрана сеть: <b>{_cur_name}</b>\n"
+            f"Минимум: <b>{_cur_min} USD</b>\n\n"
+            f"Введи сумму в USD для пополнения:\n"
+            f"Например: <code>10</code>"
+        )
+        kb = {'inline_keyboard': [[{'text': '⬅️ Отмена', 'callback_data': 'cab_topup_crypto'}]]}
+        _edit(token, chat_id, msg_id, text, kb)
         return True
+
+    if cb_data == 'cab_balance':
+        show_balance(cfg, chat_id, user_id, msg_id)
+        return True
+
+    if cb_data == 'cab_promo':
+        show_promo(cfg, chat_id, user_id, msg_id)
+        return True
+
     if cb_data == 'cab_refs':
         show_referrals(cfg, chat_id, user_id, msg_id)
         return True
-    if cb_data == 'cab_ref_list':
-        show_ref_list(cfg, chat_id, user_id, msg_id)
-        return True
 
-    if cb_data == 'cab_share_ref':
-        # Отправляем сообщение с кнопкой — юзер должен forward-нуть
-        user = db.get_user(user_id)
-        ref_code = user['ref_code'] if user else ''
-        me = _tg(token, 'getMe')
-        bot_u = me['result'].get('username', 'ArsenVipKeysBot') if me and me.get('ok') else 'ArsenVipKeysBot'
-        ref_link = f"https://t.me/{bot_u}?start=ref_{ref_code}"
-        NL = chr(10)
-        share_msg = NL.join([
-            "📤 <b>ПОДЕЛИСЬ С ДРУЗЬЯМИ</b>",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "",
-            "👇 Перешли это сообщение друзьям",
-            "или в свой канал/группу",
-            "",
-            "🎁 За каждого друга — бонус 💰"
-        ])
-        _send(token, chat_id, share_msg)
-        # Само рекламное сообщение — из ref_post.txt
-        try:
-            with open('/etc/UDPCustom/ref_post.txt') as _rf:
-                ad_text = _rf.read().strip()
-            ad_text = _apply_placeholders(ad_text, cfg)
-        except Exception:
-            ad_text = '⚡  <b>' + cfg.get('CONFIG_NAME', 'VPN') + ' — VPN который работает!</b>'
-        ad_kb = {'inline_keyboard': [
-            [{'text': '🎁 Получить ключ', 'url': ref_link}]
-        ]}
-        _tg(token, 'sendMessage', {
-            'chat_id': chat_id,
-            'text': ad_text,
-            'parse_mode': 'HTML',
-            'reply_markup': ad_kb,
-            'disable_web_page_preview': True
-        })
-        return True
     if cb_data == 'cab_pc_soon':
-        # Удаляем сообщение кабинета, чтобы не засорять чат
-        if msg_id:
-            try: _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg_id})
-            except: pass
-            
         _is_vip = False
         try:
-            _vip_keys = db.get_vip_keys(user_id)
+            _vip_keys = db.get_vip_keys(user_id, active_only=True)
             if _vip_keys:
                 _is_vip = True
         except Exception as _e:
             cab_log.error(f"VIP check error: {_e}")
-            
         if _is_vip:
             _pc_text = (
                 "💻 <b>Приложение для ПК (ArsenVPN)</b>" + chr(10) + chr(10) +
@@ -2918,7 +2594,7 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
                 "1️⃣ Перейди в раздел <b>🔑 Мои ключи</b>." + chr(10) +
                 "2️⃣ Нажми на свой <b>VIP-ключ</b>." + chr(10) +
                 "3️⃣ Нажми кнопку <b>💻 ПК</b>." + chr(10) +
-                "4️⃣ Скопируй ссылку и вставь её в приложение." + chr(10) + chr(10) + \
+                "4️⃣ Скопируй ссылку и вставь её в приложение." + chr(10) + chr(10) +
                 "🚀 <b>Также доступен Trojan (WS) для Happ, Nekoray и других клиентов.</b>" + chr(10) + chr(10) +
                 "📥 <b>Скачать приложения:</b>" + chr(10) +
                 "🖥 <b>ArsenVPN:</b> <a href='https://github.com/zotac85/ArsenVpn'>GitHub</a> <i>(DarkTunnel)</i>" + chr(10) +
@@ -2931,34 +2607,33 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
             ]}
         else:
             _pc_text = (
-                            "💻 <b>Приложение для ПК (ArsenVPN)</b>" + chr(10) + chr(10) +
-                            "🔒 <i>Раздел доступен только VIP клиентам.</i>" + chr(10) + chr(10) +
-                            "Купите VIP ключ, чтобы получить доступ к быстрому и стабильному VPN для вашего компьютера (Windows, macOS, Linux)." + chr(10) + chr(10) +
-                            "✅  Высокая скорость и стабильность." + chr(10) +
-                            "✅  Поддержка всех ПК-платформ." + chr(10) + chr(10) +
-                            "🚀 <b>Также доступен Trojan (WS) для Happ, Nekoray и других клиентов.</b>" + chr(10) + chr(10) +
-                            "📥 <b>Скачать приложения:</b>" + chr(10) +
-                            "🖥 <b>ArsenVPN:</b> <a href='https://github.com/zotac85/ArsenVpn'>GitHub</a> <i>(DarkTunnel)</i>" + chr(10) +
-                            "🌐 <b>Happ:</b> <a href='https://www.happ.su/main/ru'>Сайт</a> <i>(Trojan)</i>" + chr(10) +
-                            "🐈 <b>Nekoray:</b> <a href='https://github.com/Matsuridayo/nekoray/releases'>GitHub</a> <i>(Trojan)</i>" + chr(10) + chr(10) +
-                            "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
-                        )
+                "💻 <b>Ключ для ПК (ArsenVPN)</b>" + chr(10) + chr(10) +
+                "🔒 <i>Раздел доступен только VIP клиентам.</i>" + chr(10) + chr(10) +
+                "Купите VIP ключ, чтобы получить доступ к быстрому и стабильному VPN для вашего компьютера (Windows, macOS, Linux)." + chr(10) + chr(10) +
+                "✅  Высокая скорость и стабильность." + chr(10) +
+                "✅  Поддержка всех ПК-платформ." + chr(10) + chr(10) +
+                "🚀 <b>Также доступен Trojan (WS) для Happ, Nekoray и других клиентов.</b>" + chr(10) + chr(10) +
+                "📥 <b>Скачать приложения:</b>" + chr(10) +
+                "🖥 <b>ArsenVPN:</b> <a href='https://github.com/zotac85/ArsenVpn'>GitHub</a> <i>(DarkTunnel)</i>" + chr(10) +
+                "🌐 <b>Happ:</b> <a href='https://www.happ.su/main/ru'>Сайт</a> <i>(Trojan)</i>" + chr(10) +
+                "🐈 <b>Nekoray:</b> <a href='https://github.com/Matsuridayo/nekoray/releases'>GitHub</a> <i>(Trojan)</i>" + chr(10) + chr(10) +
+                "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
+            )
             _pc_kb = {'inline_keyboard': [
                 [{'text': '💎 Купить VIP доступ (Все разделы)', 'callback_data': 'cab_buy_vip'}],
                 [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
             ]}
-        _send_new(token, chat_id, _pc_text, _pc_kb)
+        _send(token, chat_id, _pc_text, reply_markup=_pc_kb, parse_mode='HTML')
         return True
 
     if cb_data == 'cab_udp_soon':
         _is_vip = False
         try:
-            _vip_keys = db.get_vip_keys(user_id)
+            _vip_keys = db.get_vip_keys(user_id, active_only=True)
             if _vip_keys:
                 _is_vip = True
         except Exception as _e:
             cab_log.error(f"VIP check error: {_e}")
-            
         if _is_vip:
             _udp_text = (
                 "🍏 <b>NPV Tunnel (для iPhone)</b>" + chr(10) + chr(10) +
@@ -2980,29 +2655,175 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
             ]}
         else:
             _udp_text = (
-                            "🍏 <b>NPV Tunnel (для iPhone)</b>" + chr(10) + chr(10) +
-                            "🔒 <i>Раздел доступен только VIP клиентам.</i>" + chr(10) + chr(10) +
-                            "Купите VIP ключ, чтобы получить доступ к максимальной скорости и стабильности на вашем iPhone или iPad." + chr(10) + chr(10) +
-                            "✅  Технология UDP для игр и стриминга без лагов." + chr(10) +
-                            "✅  Экономия батареи и обход блокировок (DPI)." + chr(10) + chr(10) +
-                            "🚀 <b>Также доступен Trojan (WS) для Streisand, Happ и других клиентов.</b>" + chr(10) + chr(10) +
-                            "📥 <b>Скачать приложения:</b>" + chr(10) +
-                            "🍏 <b>NPV Tunnel:</b> <a href='https://apps.apple.com/us/app/npv-tunnel/id1629465476'>App Store</a> <i>(DarkTunnel)</i>" + chr(10) +
-                            "🍏 <b>Streisand:</b> <a href='https://apps.apple.com/us/app/streisand/id6450534064'>App Store</a> <i>(Trojan)</i>" + chr(10) +
-                            "🌐 <b>Happ:</b> <a href='https://www.happ.su/main/ru'>Сайт</a> <i>(Trojan)</i>" + chr(10) + chr(10) +
-                            "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
-                        )
+                "🍏 <b>Ключ для iPhone (NPV Tunnel)</b>" + chr(10) + chr(10) +
+                "🔒 <i>Раздел доступен только VIP клиентам.</i>" + chr(10) + chr(10) +
+                "Купите VIP ключ, чтобы получить доступ к максимальной скорости и стабильности на вашем iPhone или iPad." + chr(10) + chr(10) +
+                "✅  Технология UDP для игр и стриминга без лагов." + chr(10) +
+                "✅  Экономия батареи и обход блокировок (DPI)." + chr(10) + chr(10) +
+                "🚀 <b>Также доступен Trojan (WS) для Streisand, Happ и других клиентов.</b>" + chr(10) + chr(10) +
+                "📥 <b>Скачать приложения:</b>" + chr(10) +
+                "🍏 <b>NPV Tunnel:</b> <a href='https://apps.apple.com/us/app/npv-tunnel/id1629465476'>App Store</a> <i>(DarkTunnel)</i>" + chr(10) +
+                "🍏 <b>Streisand:</b> <a href='https://apps.apple.com/us/app/streisand/id6450534064'>App Store</a> <i>(Trojan)</i>" + chr(10) +
+                "🌐 <b>Happ:</b> <a href='https://www.happ.su/main/ru'>Сайт</a> <i>(Trojan)</i>" + chr(10) + chr(10) +
+                "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
+            )
             _udp_kb = {'inline_keyboard': [
                 [{'text': '💎 Купить VIP доступ (Все разделы)', 'callback_data': 'cab_buy_vip'}],
                 [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
             ]}
-            
-        _send_new(token, chat_id, _udp_text, _udp_kb)
-        return
-# === ВОССТАНОВЛЕННЫЕ ФУНКЦИИ WHITEDNS ===
+        _send(token, chat_id, _udp_text, reply_markup=_udp_kb, parse_mode='HTML')
+        return True
 
+    if cb_data == 'cab_whitedns':
+        show_whitedns_menu(cfg, chat_id, user_id, msg_id)
+        return True
 
-# === ФУНКЦИИ WHITEDNS (ВОССТАНОВЛЕНО) ===
+    if cb_data.startswith('cab_wd_srv:'):
+        idx = int(cb_data.split(':')[1])
+        show_whitedns_confirm(cfg, chat_id, user_id, idx, msg_id)
+        return True
+
+    if cb_data.startswith('cab_wd_send:'):
+        idx = int(cb_data.split(':')[1])
+        send_whitedns_files(cfg, chat_id, user_id, idx)
+        return True
+
+    if cb_data == 'cab_keys':
+        try: _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg_id})
+        except: pass
+        show_my_keys(cfg, chat_id, user_id)
+        return True
+
+    if cb_data == 'cab_keys_test':
+        try: _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg_id})
+        except: pass
+        show_my_keys(cfg, chat_id, user_id, kind='test')
+        return True
+
+    if cb_data == 'cab_keys_vip':
+        try: _tg(token, 'deleteMessage', {'chat_id': chat_id, 'message_id': msg_id})
+        except: pass
+        show_my_keys(cfg, chat_id, user_id, kind='vip')
+        return True
+
+    if cb_data.startswith('cab_key:'):
+        key_name = cb_data.split(':', 1)[1]
+        show_key_detail(cfg, chat_id, user_id, key_name, msg_id)
+        return True
+
+    if cb_data.startswith('cab_pcsub:'):
+        key_name = cb_data.split(':', 1)[1]
+        try: _smart_files_clear(token, chat_id)
+        except: pass
+        _dom = "de.cdnstore.shop"
+        try:
+            import re as _re
+            _dom = _re.search(r'DOMAIN="([^"]+)"', open("/etc/UDPCustom/domain.conf").read()).group(1)
+        except: pass
+        _sub_url = f"https://{_dom}/sub_dark/{key_name}"
+        _text = "💻 <b>Подписка для ПК (ArsenVPN)</b>\n\n1. Скачай приложение: <a href='https://github.com/zotac85/ArsenVpn'>GitHub</a>\n2. Открой приложение и нажми кнопку <b>«Подписка»</b>.\n3. Вставь ссылку ниже.\n\n🚀 <b>Также доступен Trojan (WS) для Happ, Nekoray и других клиентов.</b>\n\n📥 <b>Скачать приложения:</b>\n🖥 <b>ArsenVPN:</b> <a href='https://github.com/zotac85/ArsenVpn'>GitHub</a>\n🌐 <b>Happ:</b> <a href='https://www.happ.su/main/ru'>Официальный сайт</a>\n🐈 <b>Nekoray:</b> <a href='https://github.com/Matsuridayo/nekoray/releases'>GitHub</a>\n\n<code>" + _sub_url + "</code>"
+        _kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
+        _send_instr(token, chat_id, _text, _kb)
+        return True
+
+    if cb_data.startswith('cab_gen_trojan:'):
+        key_name = cb_data.split(':', 1)[1]
+        try: _smart_files_clear(token, chat_id)
+        except: pass
+        _vk = db.get_vip_key(key_name) if hasattr(db, 'get_vip_key') else None
+        if not _vk:
+            _text = "🚀 <b>Протокол Trojan (WebSocket)</b>\n\n🔒 <b>Внимание!</b> Trojan доступен только для VIP-ключей.\n\n💡 <b>Как использовать:</b>\n1. Приобретите VIP-ключ.\n2. Нажмите кнопку «Trojan» в меню ключа."
+            _kb = {'inline_keyboard': [[{'text': '🔑 Мои ключи', 'callback_data': 'cab_keys'}]]}
+            _send_instr(token, chat_id, _text, _kb)
+            return True
+        sub_domain = "sub.ruzone27.shop"
+        try:
+            with open('/etc/UDPCustom/domain.conf') as _f:
+                for _l in _f:
+                    if 'DOMAIN=' in _l:
+                        sub_domain = _l.split('=', 1)[1].strip().strip('"').strip("'")
+                        break
+        except: pass
+        sub_url = f"https://{sub_domain}/trojan/{key_name}"
+        _text = "🚀 <b>Trojan (WebSocket) — для всех устройств</b>\n\nУниверсальный протокол для любых приложений (Happ, NekoBox, v2rayNG).\n\n💡 <b>Как использовать:</b>\n1. Скопируй ссылку ниже.\n2. В приложении выбери «Добавить подписку».\n3. Вставь ссылку.\n\n📥 <b>Ссылка-подписка:</b>\n<code>" + sub_url + "</code>"
+        _kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
+        _send_instr(token, chat_id, _text, _kb)
+        return True
+
+    if cb_data.startswith('cab_darkfile:') or cb_data.startswith('cab_dt:'):
+        key_name = cb_data.split(':', 1)[1]
+        _tg(token, 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': '⏳ Генерирую конфиги...'})
+        try: _smart_files_clear(token, chat_id)
+        except: pass
+        _inst_text = "📱 <b>Ключи для Android (DarkTunnel)</b>\n\n1. Скачай приложение: <a href='https://play.google.com/store/apps/details?id=net.darktunnel.app'>Google Play</a>\n2. Нажми на файл ключа ниже\n3. Выбери <b>Открыть с помощью DarkTunnel</b>\n\n🚀 <b>Также доступен Trojan (WS) для NekoBox / v2rayNG.</b>"
+        _inst_kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
+        _send_instr(token, chat_id, _inst_text, _inst_kb)
+        import threading
+        threading.Thread(target=send_dark_files_all_nodes, args=(cfg, chat_id, user_id, key_name), daemon=True).start()
+        return True
+
+    if cb_data.startswith('cab_npvt:'):
+        key_name = cb_data.split(':', 1)[1]
+        try: _smart_files_clear(token, chat_id)
+        except: pass
+        send_npvt_file(cfg, chat_id, user_id, key_name)
+        return True
+
+    if cb_data.startswith('cab_key_resethwid:'):
+        key_name = cb_data.split(':', 1)[1]
+        ask_key_hwid(cfg, chat_id, user_id, key_name, msg_id)
+        return True
+
+    if cb_data.startswith('cab_key_reset:'):
+        show_key_reset_confirm(cfg, chat_id, user_id, cb_data.split(':', 1)[1], msg_id)
+        return True
+
+    if cb_data.startswith('cab_key_del:'):
+        show_key_delete_confirm(cfg, chat_id, user_id, cb_data.split(':', 1)[1], msg_id)
+        return True
+
+    if cb_data == 'cab_vip_buy' or cb_data.startswith('cab_vip_buy:'):
+        if ':' in cb_data:
+            idx = int(cb_data.split(':')[1])
+            show_vip_confirm(cfg, chat_id, user_id, idx, msg_id)
+        else:
+            show_buy_vip(cfg, chat_id, user_id, msg_id)
+        return True
+
+    if cb_data == 'cab_help' or cb_data == 'cab_help_back':
+        show_help_back(cfg, chat_id, user_id, msg_id)
+        return True
+
+    if cb_data == 'cab_help_darktunnel':
+        show_help_darktunnel(cfg, chat_id, user_id, msg_id)
+        return True
+
+    if cb_data == 'cab_help_npv':
+        show_help_npv(cfg, chat_id, user_id, msg_id)
+        return True
+
+    if cb_data == 'cab_help_whitedns':
+        show_help_whitedns(cfg, chat_id, user_id, msg_id)
+        return True
+
+    if cb_data == 'cab_help_video':
+        show_help_video(cfg, chat_id, user_id, msg_id)
+        return True
+
+    if cb_data == 'cab_help_instruction':
+        show_help_instruction(cfg, chat_id, user_id, msg_id)
+        return True
+
+    if cb_data == 'cab_help_faq':
+        show_help_faq(cfg, chat_id, user_id, msg_id)
+        return True
+
+    if cb_data == 'cab_ad':
+        show_ad(cfg, chat_id, user_id, msg_id)
+        return True
+
+    return True
+
 def show_whitedns_menu(cfg, chat_id, user_id, msg_id=None):
     """Меню WhiteDNS. Проверка VIP + выбор сервера."""
     token = cfg['BOT_TOKEN']
@@ -3011,70 +2832,51 @@ def show_whitedns_menu(cfg, chat_id, user_id, msg_id=None):
     NL = chr(10)
     if not has_vip:
         text = NL.join([
-            "📡 <b>WHITEDNS — БОНУС К VIP</b>",
+            "🌐 <b>WhiteDNS (Резервный доступ)</b>",
             "━━━━━━━━━━━━━━━━━━━━",
             "",
-            "🔒 Раздел откроется <b>автоматически</b>",
-            "после покупки <b>Vip ключа 💎 DarkTunnel</b>.",
+            "🔒 <i>Раздел доступен только VIP клиентам.</i>",
             "",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "🎁 <b>ЧТО ТЫ ПОЛУЧАЕШЬ:</b>",
-            "━━━━━━━━━━━━━━━━━━━━",
+            "Купите VIP ключ, чтобы получить доступ к резервному VPN для мобильного интернета и обхода жестких блокировок.",
             "",
-            "💎 <b>Купил 1 Vip ключ DarkTunnel → получаешь 2 входа:</b>",
+            "✅  <b>5+ серверов на выбор:</b> 🇩🇪 Германия · 🇫🇮 Финляндия · 🇳🇱 Нидерланды и др.",
+            "✅  <b>Единые настройки и резолверы</b> для всех серверов",
+            "🛡️ <b>Работает даже при полном локдауне сети!</b>",
             "",
-            "1️⃣ <b>Vip ключ 💎 DarkTunnel</b> — основной VPN",
-            "   (работает как обычно)",
+            "📥 <b>Скачать WhiteDNS:</b>",
+            "📱 <b>Android:</b> <a href='https://github.com/WhiteDNS/WhiteDNS-Android'>Скачать</a>",
+            "💻 <b>ПК (Windows):</b> <a href='https://github.com/WhiteDNS/WhiteDNS-Desktop'>Скачать</a>",
+            "🍏 <b>iOS (CoreForge):</b> <a href='https://whitedns.online/tools/coreforge/'>Скачать</a>",
             "",
-            "2️⃣ <b>WhiteDNS</b> — второй VPN",
-            "   🎁 <b>в подарок</b>, для мобильного",
-            "   интернета и обхода блокировок",
-            "",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "📦 <b>ЧТО ВНУТРИ WhiteDNS:</b>",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "",
-            "🌐 <b>3 сервера на выбор:</b>",
-            "   🇩🇪 Германия · 🇫🇮 Финляндия · 🇫🇷 Франция · 🇳🇱 Нидерланды",
-            "",
-            "⚙️ <b>3 профиля под твой интернет:</b>",
-            "   📱 3G — мобильная сеть (LTE/4G/5G)",
-            "   📶 WiFi — домашний роутер",
-            "   🖥 ADSL — проводной интернет",
-            "",
-            "📲 <b>Готовые конфиги — загрузил и работает</b>",
-            "",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "💡 <b>ЗАЧЕМ ЭТО НУЖНО:</b>",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "",
-            "✅ <b>Два VPN по цене одного</b>",
-            "   Платишь за Vip ключ 💎 DarkTunnel один раз —",
-            "   пользуешься двумя сервисами.",
-            "",
-            "✅ <b>Страховка</b>",
-            "   Если 💎 DarkTunnel не работает —",
-            "   переключаешься на WhiteDNS.",
-            "",
-            "✅ <b>Больше устройств</b>",
-            "   Разные протоколы — разные сети.",
-            "   Мобильный + домашний Wi-Fi без проблем.",
-            "",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "",
-            "💎 <b>Оформи Vip ключ DarkTunnel</b> — раздел откроется сам.",
-            "Купить: кнопка ниже 👇",
+            "👇 <b>Оформи VIP ключ</b>, чтобы получить доступ!"
         ])
         kb = {'inline_keyboard': [
-            [{'text': '💎 Vip ключ DarkTunnel', 'callback_data': 'cab_buy_vip'}],
+            [{'text': '💎 Купить VIP доступ (Все разделы)', 'callback_data': 'cab_buy_vip'}],
             [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
         ]}
     else:
-        _srv = _wd_c_read_servers()
         _srv_lines = []
-        for _i in range(4):
-            _ok = bool(_srv[_i]) and bool(_wd_c_read_file(WD_RES_PATHS[0]))
-            _srv_lines.append(WD_SRV_NAMES[_i] + (' — ✅ активен' if _ok else ' — ⏳ настройка'))
+        kb_rows = []
+        row = []
+        import sqlite3
+        try:
+            _db = sqlite3.connect('/etc/UDPCustom/vpn.db', timeout=15)
+            _srv_data = _db.execute('SELECT name, conn FROM whitedns_servers ORDER BY id').fetchall()
+            _db.close()
+            if not _srv_data:
+                _srv_lines.append("❌ Список серверов пуст")
+            for _idx, (_s_name, _s_conn) in enumerate(_srv_data):
+                _ok = bool(_s_conn) and bool(_wd_c_read_file(WD_RES_PATHS[0]))
+                _srv_lines.append(_s_name + (' — ✅  активен' if _ok else ' — ⏳  настройка'))
+                row.append({'text': _s_name, 'callback_data': f'cab_wd_srv:{_idx}'})
+                if len(row) == 2:
+                    kb_rows.append(row)
+                    row = []
+            if row:
+                kb_rows.append(row)
+        except Exception as e:
+            _srv_lines.append(f"❌ Ошибка: {e}")
+            
         text = NL.join([
             "🌐 <b>WhiteDNS (Резервный доступ)</b>",
             "━━━━━━━━━━━━━━━━━━━━",
@@ -3102,13 +2904,10 @@ def show_whitedns_menu(cfg, chat_id, user_id, msg_id=None):
             "━━━━━━━━━━━━━━━━━━━━",
             "👇 <b>Выбери сервер для получения ключа:</b>",
         ])
-        kb = {'inline_keyboard': [
-            [{'text': '🇩🇪 Германия', 'callback_data': 'cab_wd_de'},
-             {'text': '🇫🇮 Финляндия', 'callback_data': 'cab_wd_fi'}],
-            [{'text': '🇫🇷 Франция', 'callback_data': 'cab_wd_se'},
-             {'text': '🇳🇱 Нидерланды', 'callback_data': 'cab_wd_nl'}],
-            [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
-        ]}
+        
+        kb_rows.append([{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}])
+        kb = {'inline_keyboard': kb_rows}
+
     if msg_id:
         _edit(token, chat_id, msg_id, text, kb)
     else:
@@ -3118,6 +2917,7 @@ def show_whitedns_menu(cfg, chat_id, user_id, msg_id=None):
 # ──────────────────────────────────────────────────────────────
 # WHITEDNS — клиентские функции
 # ──────────────────────────────────────────────────────────────
+
 def _get_wd_srv_names():
     import sqlite3
     try:
@@ -3248,10 +3048,23 @@ def show_whitedns_profiles(cfg, chat_id, user_id, server_idx, msg_id=None):
     else:
         _send(token, chat_id, text, kb)
 
+
+def _get_srv_name_by_idx(idx):
+    import sqlite3
+    try:
+        db = sqlite3.connect('/etc/UDPCustom/vpn.db', timeout=15)
+        rows = db.execute('SELECT name FROM whitedns_servers ORDER BY id').fetchall()
+        db.close()
+        if 0 <= idx < len(rows):
+            return rows[idx][0]
+        return 'Неизвестно'
+    except:
+        return 'Ошибка БД'
+
 def show_whitedns_confirm(cfg, chat_id, user_id, server_idx, msg_id=None):
     token = cfg['BOT_TOKEN']
     NL = chr(10)
-    if server_idx < 0 or server_idx > 2:
+    if server_idx < 0:
         server_idx = 0
     res = _wd_c_read_file(WD_RES_PATHS[0])
     res_count = len([l for l in res.split(chr(10)) if l.strip()]) if res else 0
@@ -3261,7 +3074,7 @@ def show_whitedns_confirm(cfg, chat_id, user_id, server_idx, msg_id=None):
         '',
         '📌 <b>Ты выбрал:</b>',
         '',
-        '🌐 Сервер: ' + WD_SRV_NAMES[server_idx],
+        '🌐 Сервер: ' + _get_srv_name_by_idx(server_idx),
         '',
         '━━━━━━━━━━━━━━━━━━━━',
         '',
