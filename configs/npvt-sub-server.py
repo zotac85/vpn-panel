@@ -30,6 +30,44 @@ PORT = 8444
 
 def b64(s): return base64.b64encode(s.encode()).decode()
 
+import base64
+
+def _generate_sub_header(key_name, expires, used, limit):
+    """Генерирует правильную Base64-шапку для Happ/NekoBox"""
+    import time
+    
+    # 1. Убираем разделитель | в заголовке
+    title_text = f"ArsenKeys ⚡ {key_name}"
+    title_b64 = base64.b64encode(title_text.encode('utf-8')).decode('utf-8')
+    
+    # 2. Считаем оставшиеся дни
+    now = int(time.time())
+    if expires and expires > now:
+        days_left = (expires - now) // 86400
+        if days_left == 0:
+            time_left_str = "Осталось менее 24 часов"
+        else:
+            time_left_str = f"Осталось дней: {days_left}"
+    elif expires and expires <= now:
+        time_left_str = "Срок действия истек"
+    else:
+        time_left_str = "Бессрочный доступ"
+        
+    # 3. Формируем текст объявления
+    announce_text = f"🚀 Арсен VPN активен!\n⏳ {time_left_str}\n💬 Поддержка: @ArsenSupportBot"
+    announce_b64 = base64.b64encode(announce_text.encode('utf-8')).decode('utf-8')
+    
+    headers = [
+        "#providerid ArsenKeys",
+        f"#profile-title: base64:{title_b64}",
+        "#profile-update-interval: 1",
+        "#support-url: https://t.me/ArsenSupportBot",
+        "#profile-web-page-url: https://t.me/ArsenSupportBot",
+        f"#announce: base64:{announce_b64}",
+        f"#subscription-userinfo: upload=0; download={used}; total={limit}; expire={expires}"
+    ]
+    return "\n".join(headers) + "\n\n"
+
 def generate_npvt(username, password, host, remark, port=80, payload=None, sni="", proxy="104.18.0.1:80"):
     proto = "SSH-TLS-Proxy-Payload" if sni else "SSH-Proxy-Payload"
     if payload is None:
@@ -132,8 +170,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return
 
             # base64 от ссылки (одна строка — по спецификации V2Ray subscription)
-            body = base64.b64encode((link + "\n").encode()).decode()
-
             expires = 0
             used = 0
             limit = 0
@@ -142,6 +178,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 used = int(key.get('traffic_used') or 0)
                 limit = int(key.get('traffic_limit') or 0)
             except: pass
+
+            _meta = _generate_sub_header(key_name, expires, used, limit)
+            body = base64.b64encode((_meta + link + "\n").encode()).decode()
+
 
             self.send_response(200)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
@@ -202,7 +242,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 _link = generate_npvt(key['login'], key['password'], _host, _name, port, payload, sni, _p)
                 links.append(_link)
 
-            _data = "\n".join(links).encode('utf-8')
+            _meta = _generate_sub_header(key['login'], key.get('expires_at',0), key.get('traffic_used',0), key.get('traffic_limit',0))
+            _data = (_meta + "\n".join(links)).encode('utf-8')
             self.send_response(200)
             self.send_header('Content-type', 'text/plain; charset=utf-8')
             self.send_header('Content-Length', str(len(_data)))
