@@ -4040,6 +4040,8 @@ def handle_delproxy(cfg, chat_id, user_id, args):
         with open(PROXIES_FILE, 'w') as f:
             f.write("\n".join(ips) + "\n" if ips else "")
             _sync_proxies_to_db()
+            import subprocess
+            subprocess.Popen(['/usr/bin/python3', '/usr/local/bin/bot_modules/gdrive_update_all.py'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         send_message(token, chat_id, f"✅ Удалён: <code>{removed}</code>\nОсталось: <b>{len(ips)}</b>", parse_mode='HTML')
     except Exception as e:
         send_message(token, chat_id, f"❌ Ошибка: {e}")
@@ -6352,7 +6354,7 @@ def main():
                         _lines = []
                         for _ln in _txt.splitlines():
                             _ip = _ln.strip().split()[0] if _ln.strip() else ''
-                            if _ip and _ip.count('.') == 3 and _ip.replace('.', '').isdigit():
+                            if _ip and '.' in _ip and all(c.isalnum() or c in '.-:' for c in _ip):
                                 _lines.append(_ip)
                         _lines = sorted(set(_lines))
                         try:
