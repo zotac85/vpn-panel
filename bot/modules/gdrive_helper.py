@@ -17,7 +17,7 @@ def get_drive_link(key_name, sub_type="sub_dark"):
     # 1. Скачиваем конфиг с локального сервера
     try:
         req = urllib.request.Request(local_url)
-        with urllib.request.urlopen(req, timeout=10) as response:
+        with urllib.request.urlopen(req, timeout=20) as response:
             content = response.read()
     except Exception as e:
         print(f"[GDrive] Ошибка скачивания конфига {local_url}: {e}")
