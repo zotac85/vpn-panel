@@ -24,8 +24,28 @@ def _get_key():
 def _get(url):
     req = urllib.request.Request(url)
     req.add_header('User-Agent', UA)
-    with urllib.request.urlopen(req, timeout=20) as resp:
-        return json.loads(resp.read().decode())
+    
+    # Пытаемся взять прокси из файла, чтобы обойти блокировку провайдера
+    proxy_url = None
+    try:
+        with open('/etc/UDPCustom/proxies.txt') as f:
+            for line in f:
+                p = line.strip()
+                if p:
+                    if ':' not in p: p += ':80'
+                    proxy_url = f'http://{p}'
+                    break
+    except: pass
+
+    if proxy_url:
+        log.info(f'Plisio using proxy: {proxy_url}')
+        proxy_handler = urllib.request.ProxyHandler({'http': proxy_url, 'https': proxy_url})
+        opener = urllib.request.build_opener(proxy_handler)
+        with opener.open(req, timeout=20) as resp:
+            return json.loads(resp.read().decode())
+    else:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return json.loads(resp.read().decode())
 
 
 def create_invoice(amount_usd, order_id, currency='USDT_BSC',

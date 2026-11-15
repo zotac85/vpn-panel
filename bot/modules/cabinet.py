@@ -1307,7 +1307,13 @@ def send_npvt_file(cfg, chat_id, user_id, key_name):
         _dom = re.search(r'DOMAIN="([^"]+)"', open("/etc/UDPCustom/domain.conf").read()).group(1)
     except: pass
 
-    sub_url = f"https://{_dom}/sub/{key_name}"
+    try:
+        import sys, os
+        sys.path.append(os.path.dirname(__file__))
+        import gdrive_helper
+        sub_url = gdrive_helper.get_drive_link(key_name, "sub") or f"https://{_dom}/sub/{key_name}"
+    except Exception:
+        sub_url = f"https://{_dom}/sub/{key_name}"
     NL = chr(10)
     text = NL.join([
         "🍏 <b>Подписка для iPhone (NPV Tunnel)</b>",
@@ -2720,7 +2726,13 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
             import re as _re
             _dom = _re.search(r'DOMAIN="([^"]+)"', open("/etc/UDPCustom/domain.conf").read()).group(1)
         except: pass
-        _sub_url = f"https://{_dom}/sub_dark/{key_name}"
+        try:
+            import sys, os
+            sys.path.append(os.path.dirname(__file__))
+            import gdrive_helper
+            _sub_url = gdrive_helper.get_drive_link(key_name, "sub_dark") or f"https://{_dom}/sub_dark/{key_name}"
+        except Exception as e:
+            _sub_url = f"https://{_dom}/sub_dark/{key_name}"
         _text = "💻 <b>Подписка для ПК (ArsenVPN)</b>\n\n1. Скачай приложение: <a href='https://github.com/zotac85/ArsenVpn'>GitHub</a>\n2. Открой приложение и нажми кнопку <b>«Подписка»</b>.\n3. Вставь ссылку ниже.\n\n🚀 <b>Также доступен Trojan (WS) для Happ, Nekoray и других клиентов.</b>\n\n📥 <b>Скачать приложения:</b>\n🖥 <b>ArsenVPN:</b> <a href='https://github.com/zotac85/ArsenVpn'>GitHub</a>\n🌐 <b>Happ:</b> <a href='https://www.happ.su/main/ru'>Официальный сайт</a>\n🐈 <b>Nekoray:</b> <a href='https://github.com/Matsuridayo/nekoray/releases'>GitHub</a>\n\n<code>" + _sub_url + "</code>"
         _kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
         _send_instr(token, chat_id, _text, _kb)
@@ -2744,7 +2756,13 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
                         sub_domain = _l.split('=', 1)[1].strip().strip('"').strip("'")
                         break
         except: pass
-        sub_url = f"https://{sub_domain}/trojan/{key_name}"
+        try:
+            import sys, os
+            sys.path.append(os.path.dirname(__file__))
+            import gdrive_helper
+            sub_url = gdrive_helper.get_drive_link(key_name, "trojan") or f"https://{sub_domain}/trojan/{key_name}"
+        except Exception:
+            sub_url = f"https://{sub_domain}/trojan/{key_name}"
         _text = "🚀 <b>Trojan (WebSocket) — для всех устройств</b>\n\nУниверсальный протокол для любых приложений (Happ, NekoBox, v2rayNG).\n\n💡 <b>Как использовать:</b>\n1. Скопируй ссылку ниже.\n2. В приложении выбери «Добавить подписку».\n3. Вставь ссылку.\n\n📥 <b>Ссылка-подписка:</b>\n<code>" + sub_url + "</code>"
         _kb = {'inline_keyboard': [[{'text': '⬅️ Назад к ключу', 'callback_data': f'cab_key:{key_name}'}]]}
         _send_instr(token, chat_id, _text, _kb)
