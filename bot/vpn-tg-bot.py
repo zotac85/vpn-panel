@@ -4430,7 +4430,7 @@ def show_users_menu(cfg, chat_id, user_id, msg_id=None):
 
 
 def _sync_proxies_to_db():
-    """Синхронизирует первый прокси из файла в БД (TLS_PROXY и WS_PROXY)"""
+    """Синхронизирует ВСЕ прокси из файла в БД (TLS_PROXY и WS_PROXY)"""
     import sqlite3
     try:
         if not os.path.exists(PROXIES_FILE):
@@ -4439,15 +4439,19 @@ def _sync_proxies_to_db():
             ips = [l.strip() for l in f if l.strip() and not l.startswith('#')]
         if not ips:
             return
-        first_ip = ips[0].split(':')[0]
+
+        # Форматируем списки с портами (каждый с новой строки)
+        tls_list = "\n".join([f"{ip.split(':')[0]}:443" for ip in ips])
+        ws_list = "\n".join([f"{ip.split(':')[0]}:80" for ip in ips])
+
         db_path = '/etc/UDPCustom/vpn.db'
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ('TLS_PROXY', f'{first_ip}:443'))
-        cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ('WS_PROXY', f'{first_ip}:80'))
+        cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ('TLS_PROXY', tls_list))
+        cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ('WS_PROXY', ws_list))
         conn.commit()
         conn.close()
-        log.info(f"Synced proxy to DB: {first_ip}")
+        log.info(f"Synced {len(ips)} proxies to DB")
     except Exception as e:
         log.error(f"Failed to sync proxies to DB: {e}")
 

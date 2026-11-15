@@ -187,7 +187,20 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 proxy = _ws_proxy[0] if _ws_proxy and _ws_proxy[0] else "104.18.0.3:80"
             conn.close()
 
-            links = [generate_npvt(key['login'], key['password'], host, name, port, payload, sni, proxy) for name, host in nodes if host]
+            _proxies_raw = proxy
+            _proxies = [p.strip() for p in _proxies_raw.split(chr(10)) if p.strip()]
+            if not _proxies:
+                _proxies = ['104.18.0.3']
+
+            links = []
+            for _idx, (_name, _host) in enumerate(nodes):
+                if not _host: continue
+                # Берем прокси по кругу (round-robin)
+                _p = _proxies[_idx % len(_proxies)]
+                if ':' not in _p:
+                    _p = f'{_p}:{port}'
+                _link = generate_npvt(key['login'], key['password'], _host, _name, port, payload, sni, _p)
+                links.append(_link)
 
             _data = "\n".join(links).encode('utf-8')
             self.send_response(200)

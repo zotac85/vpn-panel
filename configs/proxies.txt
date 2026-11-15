@@ -1,3 +1,7 @@
 chatgpt.com
 chmk.ai
+copilot.microsoft.com
+grok.com
 leonardo.ai
+midjourney.com
+perplexity.ai
