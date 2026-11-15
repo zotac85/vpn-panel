@@ -2,13 +2,23 @@ import sqlite3
 import sys
 import os
 import time
+import fcntl
 
 sys.path.append("/usr/local/bin/bot_modules")
 import gdrive_helper
 
 DB_PATH = "/etc/UDPCustom/vpn.db"
+LOCK_FILE = "/tmp/gdrive_update.lock"
 
 def update_all():
+    # Защита от параллельного запуска
+    lock_fd = open(LOCK_FILE, "w")
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print("Другой процесс обновления уже запущен. Выход.")
+        return
+
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -27,13 +37,13 @@ def update_all():
 
     print(f"Начинаю обновление {len(logins)} ключей...")
     for login in logins:
-        # Обновляем все три типа подписок
-        gdrive_helper.get_drive_link(login, "sub")
-        gdrive_helper.get_drive_link(login, "sub_dark")
-        gdrive_helper.get_drive_link(login, "trojan")
-        print(f"✅ Обновлен: {login}")
-        
-        # Пауза 1.5 секунды между ключами, чтобы не превысить лимиты Google API
+        try:
+            gdrive_helper.get_drive_link(login, "sub")
+            gdrive_helper.get_drive_link(login, "sub_dark")
+            gdrive_helper.get_drive_link(login, "trojan")
+            print(f"✅ Обновлен: {login}")
+        except Exception as e:
+            print(f"❌ Ошибка для {login}: {e}")
         time.sleep(1.5)
 
 if __name__ == "__main__":
