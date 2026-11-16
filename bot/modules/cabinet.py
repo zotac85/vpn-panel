@@ -2429,7 +2429,7 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         kb = {'inline_keyboard': [
             [{'text': '⭐  Telegram Stars', 'callback_data': 'cab_topup_stars'}],
             [{'text': '💳 Ручное (TMCELL)', 'callback_data': 'cab_topup_manual'}],
-            [{'text': '🪙 CRYPTO USDT', 'callback_data': 'cab_topup_crypto'}],
+            [{'text': '🪙 CRYPTO USDT (x2 БОНУС)', 'callback_data': 'cab_topup_crypto'}],
             [{'text': '⬅️ К балансу', 'callback_data': 'cab_balance'}]
         ]}
         _edit(token, chat_id, msg_id, text, kb)
@@ -2500,6 +2500,140 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
             [{'text': '⬅️ Назад', 'callback_data': 'cab_topup'}]
         ]}
         _edit(token, chat_id, msg_id, text, kb)
+        return True
+
+    if cb_data.startswith('cab_hist:'):
+        _tg(token, 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': 'Загрузка...'})
+        page = int(cb_data.split(':')[1])
+        limit = 5
+        offset = (page - 1) * limit
+        import sqlite3
+        import time
+        conn = sqlite3.connect('/etc/UDPCustom/vpn.db')
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        c.execute("SELECT COUNT(*) FROM payments WHERE tg_id = ?", (user_id,))
+        total = c.fetchone()[0]
+        c.execute("SELECT * FROM payments WHERE tg_id = ? ORDER BY id DESC LIMIT ? OFFSET ?", (user_id, limit, offset))
+        rows = c.fetchall()
+        conn.close()
+        NL = chr(10)
+        lines_out = ["📜 <b>ИСТОРИЯ ОПЕРАЦИЙ</b>", "━━━━━━━━━━━━━━━━━━━━", ""]
+        if not rows:
+            lines_out.append("У вас пока нет операций.")
+        else:
+            for r in rows:
+                amt = r['amount']
+                stat = r['status']
+                meth = r['method']
+                ts = r['created_at']
+                dt = time.strftime('%d.%m.%Y %H:%M', time.localtime(ts)) if ts else ''
+                if stat == 'success':
+                    icon = "🟢"
+                    st_txt = "Успешно"
+                elif stat == 'pending':
+                    icon = "⏳"
+                    st_txt = "Ожидание"
+                else:
+                    icon = "🔴"
+                    st_txt = "Отклонено"
+                m_txt = "Крипто" if meth == 'crypto' else ("Промокод" if meth == 'promo' else meth)
+                lines_out.append(f"{icon} <b>+{amt:.2f} USDT</b> ({st_txt})")
+                lines_out.append(f"└ {m_txt} · {dt}")
+                lines_out.append("")
+        kb_buttons = []
+        nav = []
+        if page > 1:
+            nav.append({'text': '◀ Назад', 'callback_data': f'cab_hist:{page-1}'})
+        if offset + limit < total:
+            nav.append({'text': 'Вперед ▶', 'callback_data': f'cab_hist:{page+1}'})
+        if nav:
+            kb_buttons.append(nav)
+        kb_buttons.append([{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}])
+        text = NL.join(lines_out)
+        kb = {'inline_keyboard': kb_buttons}
+        _edit(token, chat_id, msg_id, text, kb)
+        return True
+
+    if cb_data == 'cab_ref':
+        _tg(token, 'answerCallbackQuery', {'callback_query_id': cb['id']})
+        ref_code = db.get_ref_code(user_id) or 'error'
+        ref_count = db.get_ref_count(user_id)
+        ref_bonus = db.get_ref_bonus_total(user_id)
+        NL = chr(10)
+        text = NL.join([
+            "👥 <b>РЕФЕРАЛЬНАЯ ПРОГРАММА</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "💎 <b>Награда за друга, купившего VIP:</b>",
+            "",
+            "💵 +1.00 USDT на баланс",
+            "⏰ +5 дней к твоему VIP-ключу",
+            "",
+            "━━━━━━━━━━━━━━━━━━━━",
+            f"🔗 <b>Твоя ссылка:</b>",
+            f"https://t.me/ArsenVipKeysBot?start=ref_{ref_code}",
+            "",
+            f"📊 Приглашено: <b>{ref_count}</b>",
+            f"💰 Заработано: <b>{ref_bonus:.2f} USDT</b>",
+            "",
+            "<i>Поделись ссылкой с друзьями 👇</i>"
+        ])
+        kb = {'inline_keyboard': [
+            [{'text': '📤 Поделиться', 'callback_data': 'cab_share_ref'}],
+            [{'text': '📋 Мои рефералы', 'callback_data': 'cab_ref_list'}],
+            [{'text': '⬅️ В кабинет', 'callback_data': 'cab_main'}]
+        ]}
+        _edit(token, chat_id, msg_id, text, kb)
+        return True
+
+    if cb_data == 'cab_share_ref':
+        _tg(token, 'answerCallbackQuery', {'callback_query_id': cb['id']})
+        ref_code = db.get_ref_code(user_id)
+        if not ref_code:
+            send_message(cfg['BOT_TOKEN'], chat_id, '❌ Ошибка: код не найден')
+            return True
+        bot_username = 'ArsenVipKeysBot'
+        ref_link = f'https://t.me/{bot_username}?start=ref_{ref_code}'
+        share_url = f'https://t.me/share/url?url={ref_link}&text=🔥 Присоединяйся к ArsenKeys VPN! Быстрый и безопасный интернет без блокировок.'
+        NL = chr(10)
+        text = NL.join([
+            '📤 <b>ПОДЕЛИТЬСЯ ССЫЛКОЙ</b>',
+            '━━━━━━━━━━━━━━━━━━━━',
+            '',
+            'Нажми на кнопку ниже, чтобы отправить ссылку друзьям.',
+            'За каждого друга, купившего VIP, ты получишь бонус!'
+        ])
+        kb = {'inline_keyboard': [
+            [{'text': '🚀 Отправить друзьям', 'url': share_url}],
+            [{'text': '⬅️ Назад', 'callback_data': 'cab_ref'}]
+        ]}
+        _edit(token, chat_id, msg_id, text, kb)
+        return True
+
+    if cb_data == 'cab_ref_list':
+        _tg(token, 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': 'Загрузка...'})
+        refs = db.get_ref_list(user_id)
+        NL = chr(10)
+        lines_out = ['📋 <b>МОИ РЕФЕРАЛЫ</b>', '━━━━━━━━━━━━━━━━━━━━', '']
+        if not refs:
+            lines_out.append('У тебя пока нет приглашенных друзей.')
+            lines_out.append('Нажми «Поделиться» и пригласи первого!')
+        else:
+            for idx, r in enumerate(refs, 1):
+                # Пытаемся достать имя (на случай разных ключей в БД)
+                _name = r.get('first_name') or r.get('name') or 'Пользователь'
+                _uname = r.get('username')
+                _u_txt = f' (@{_uname})' if _uname else ''
+                _paid = r.get('first_purchase')
+                _status = '✅ Купил VIP' if _paid else '⏳ Ожидание покупки'
+                lines_out.append(f'{idx}. <b>{_name}</b>{_u_txt}')
+                lines_out.append(f'   └ {_status}')
+                lines_out.append('')
+        kb = {'inline_keyboard': [
+            [{'text': '⬅️ Назад', 'callback_data': 'cab_ref'}]
+        ]}
+        _edit(token, chat_id, msg_id, NL.join(lines_out), kb)
         return True
 
     if cb_data == 'cab_promo_input':
