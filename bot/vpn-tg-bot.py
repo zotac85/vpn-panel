@@ -1960,7 +1960,7 @@ def _do_promo_publish(cfg, cb, code, channel_idx):
     # Ответ
     if ok == len(targets):
         tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': f'✅ Опубликовано в {ok} канал(ов)'})
-        result_text = f'✅ <b>ОПУБЛИКОВАНО</b>{NL2}📢 Каналов: <b>{ok}</b>'.replace('{NL2}', chr(10))
+        result_text = f'✅ ОПУБЛИКОВАНО{chr(10)}📢 Каналов: {ok}'
         tg_request(token, 'sendMessage', {'chat_id': chat_id, 'text': result_text, 'parse_mode': 'HTML'})
     else:
         tg_request(token, 'answerCallbackQuery', {'callback_query_id': cb_id, 'text': f'⚠️ Опубликовано {ok}/{len(targets)}'})
@@ -7037,6 +7037,25 @@ def main():
                                 send_message(cfg['BOT_TOKEN'], chat_id, '❌ Ошибка сохранения: ' + str(_e))
                     continue
                 if text.startswith('/start'):
+                    # --- DEEP LINK: PROMO CODE ---
+                    if 'promo' in text:
+                        try:
+                            from bot_modules import db as _db
+                            _db.upsert_user(user_id, first_name, msg['from'].get('username', ''))
+                            _db.set_pending(user_id, 'promo_input')
+                            NL_promo = chr(10)
+                            promo_text = NL_promo.join([
+                                "✏️ <b>ВВОД ПРОМОКОДА</b>",
+                                "━━━━━━━━━━━━━━━━━━━━",
+                                "",
+                                "Отправь промокод в чат.",
+                                "Например: <code>WELCOME10</code>"
+                            ])
+                            send_message(cfg['BOT_TOKEN'], chat_id, promo_text, parse_mode='HTML')
+                        except Exception as e:
+                            log.error(f"Promo deep link error: {e}")
+                        continue
+                    # -----------------------------
                     # Обработка реферальной ссылки
                     import re as _re
                     ref_match = _re.search(r'ref_([a-zA-Z0-9]+)', text)

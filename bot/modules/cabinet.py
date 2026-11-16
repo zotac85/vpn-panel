@@ -2502,6 +2502,23 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         _edit(token, chat_id, msg_id, text, kb)
         return True
 
+    if cb_data == 'cab_promo_input':
+        _tg(token, 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': 'Введи промокод в чат...'})
+        db.set_pending(user_id, 'promo_input')
+        NL_promo = chr(10)
+        text = NL_promo.join([
+            '✏️ <b>ВВОД ПРОМОКОДА</b>',
+            '━━━━━━━━━━━━━━━━━━━━',
+            '',
+            'Отправь промокод в чат.',
+            'Например: <code>WELCOME10</code>'
+        ])
+        kb = {'inline_keyboard': [
+            [{'text': '⬅️ Отмена', 'callback_data': 'cab_main'}]
+        ]}
+        _edit(token, chat_id, msg_id, text, kb)
+        return True
+
     if cb_data == 'cab_topup_crypto':
         NL = chr(10)
         text = NL.join([
