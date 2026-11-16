@@ -1252,17 +1252,50 @@ _nodes_del() {
     echo -e "${YELLOW}── Удаление ноды ──${NC}"
     echo ""
     local num=0
+    local -a node_ids
+    local -a node_names
+
+    # Читаем список и сохраняем реальные ID в массив
     while IFS='|' read -r _id _name _host _ip _sp _wp _im _ia _st; do
         [ -z "$_id" ] && continue
-        # [ "$_im" = "1" ] && continue
         num=$((num+1))
+        node_ids[$num]="$_id"
+        node_names[$num]="$_name"
         echo "  $num) $_name ($_ip) [$_st]"
     done < <(_nodes_py list)
+    
     echo ""
-    read -p "Введите ID ноды для удаления: " nid
-    [ -z "$nid" ] && return
-    _nodes_py del "$nid"
-    echo -e "${GREEN}✅ Удалено (мастер удалить нельзя)${NC}"
+    read -p "Введите номер ноды для удаления: " choice
+    [ -z "$choice" ] && return
+
+    local target_id="${node_ids[$choice]}"
+    local target_name="${node_names[$choice]}"
+
+    if [ -z "$target_id" ]; then
+        echo -e "${RED}❌ Нода с номером $choice не найдена.${NC}"
+        read -p "Нажмите Enter..."
+        return
+    fi
+
+    # Запрос подтверждения (защита от случайного удаления)
+    echo -e "${YELLOW}Вы выбрали: $target_name (ID в базе: $target_id)${NC}"
+    read -p "Вы уверены, что хотите удалить? (y/n): " confirm
+    if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+        echo -e "Отменено."
+        read -p "Нажмите Enter..."
+        return
+    fi
+
+    # Удаляем по реальному ID
+    _nodes_py del "$target_id" > /dev/null 2>&1
+    
+    # Проверяем, удалилась ли нода
+    check=$(_nodes_py get "$target_id")
+    if [ -z "$check" ]; then
+        echo -e "${GREEN}✅ Нода #$choice ($target_name) успешно удалена!${NC}"
+    else
+        echo -e "${RED}❌ Ошибка: Эту ноду нельзя удалить (мастер-нода).${NC}"
+    fi
     read -p "Нажмите Enter..."
 }
 
