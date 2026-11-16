@@ -354,8 +354,13 @@ def make_darktunnel_url(username, password, domain, ws_port, proxy, loc='VPN'):
                 domain = _tls_dom[0]
             sport = 443
             pport = 443
-            _tls_p = _db.execute("SELECT value FROM settings WHERE key='TLS_PROXY'").fetchone()
-            proxy_host = _tls_p[0].split(':')[0] if _tls_p and _tls_p[0] else "104.18.0.3"
+            if proxy and ':' in proxy:
+                proxy_host = proxy.split(':')[0]
+                try:
+                    pport = int(proxy.split(':')[1])
+                except: pass
+            else:
+                proxy_host = proxy or "104.18.0.3"
             _sni_row = _db.execute("SELECT value FROM settings WHERE key='TLS_SNI'").fetchone()
             sni = _sni_row[0] if _sni_row and _sni_row[0] else "ruzone27.shop"
             mode = "PROXY_SNI"
@@ -365,6 +370,14 @@ def make_darktunnel_url(username, password, domain, ws_port, proxy, loc='VPN'):
             sport = int(ws_port) if str(ws_port).isdigit() else 80
             pport = sport
             proxy_host = proxy if proxy else ""
+            # --- ИСПРАВЛЕНИЕ: Разделяем хост и порт прокси ---
+            if proxy and ':' in proxy:
+                proxy_host = proxy.split(':')[0]
+                try:
+                    pport = int(proxy.split(':')[1])
+                except:
+                    pass
+            # ------------------------------------------------
             sni = ""
             mode = "PROXY"
             _pl = _db.execute("SELECT value FROM settings WHERE key='WS_PAYLOAD'").fetchone()
@@ -1444,7 +1457,7 @@ def show_key_detail(cfg, chat_id, user_id, key_name, msg_id=None):
         except:
             pass
 
-def _build_dark_url_for_key(cfg, key_name, domain=None, ws_port=None, location_name=None):
+def _build_dark_url_for_key(cfg, key_name, domain=None, ws_port=None, location_name=None, proxy=None):
     key = db.get_test_key(key_name) or db.get_vip_key(key_name)
     if not key: return None, None
     password = key['password']
@@ -1462,7 +1475,7 @@ def _build_dark_url_for_key(cfg, key_name, domain=None, ws_port=None, location_n
     _loc = location_name if location_name else cfg.get("SERVER_LOCATION", "VPN")
     if domain is None: domain = get_domain()
 
-    proxy = get_random_proxy()
+    if not proxy: proxy = get_random_proxy()
     try: _hwid = key.get('hwid')
     except: _hwid = None
     
@@ -1484,12 +1497,18 @@ def _build_dark_url_for_key(cfg, key_name, domain=None, ws_port=None, location_n
             
             if mode == 'TLS':
                 _tls_dom = _db.execute("SELECT tls_host FROM nodes WHERE host=? OR name=?", (domain, _loc)).fetchone()
-                if _tls_dom and _tls_dom[0]: domain = _tls_dom[0]
+                if _tls_dom and _tls_dom[0]:
+                    domain = _tls_dom[0]
                 sport = 443
                 pport = 443
-                # Читаем актуальный прокси и SNI из БД
-                _tls_p = _db.execute("SELECT value FROM settings WHERE key='TLS_PROXY'").fetchone()
-                _proxyhost = _tls_p[0].split(':')[0] if _tls_p and _tls_p[0] else "104.18.0.3"
+                if proxy and ':' in proxy:
+                    _proxyhost = proxy.split(':')[0]
+                    try:
+                        pport = int(proxy.split(':')[1])
+                    except:
+                        pass
+                else:
+                    _proxyhost = proxy or "104.18.0.3"
                 _sni_row = _db.execute("SELECT value FROM settings WHERE key='TLS_SNI'").fetchone()
                 _sni = _sni_row[0] if _sni_row and _sni_row[0] else "ruzone27.shop"
                 _dt_mode = "PROXY_SNI"

@@ -32,12 +32,13 @@ def b64(s): return base64.b64encode(s.encode()).decode()
 
 import base64
 
-def _generate_sub_header(key_name, expires, used, limit):
+def _generate_sub_header(key_name, expires, used, limit, is_test=False):
     """Генерирует правильную Base64-шапку для Happ/NekoBox"""
     import time
     
     # 1. Убираем разделитель | в заголовке
-    title_text = f"ArsenKeys ⚡ {key_name}"
+    prefix = "[ТЕСТ] " if is_test else ""
+    title_text = f"ArsenKeys ⚡ {prefix}{key_name}"
     title_b64 = base64.b64encode(title_text.encode('utf-8')).decode('utf-8')
     
     # 2. Считаем оставшиеся дни
@@ -109,7 +110,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith('/sub_dark/'):
             key_name = self.path.split('/sub_dark/')[1].split('?')[0]
-            key = bdb.get_test_key(key_name) or bdb.get_vip_key(key_name)
+            test_key = bdb.get_test_key(key_name)
+            key = test_key or bdb.get_vip_key(key_name)
+            is_test = bool(test_key)
             if not key:
                 self.send_response(404)
                 self.end_headers()
@@ -118,13 +121,25 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             
             conn = sqlite3.connect('/etc/UDPCustom/vpn.db')
             nodes = conn.execute("SELECT name, host, ws_port FROM nodes WHERE is_active=1 AND (is_master=1 OR status='online') ORDER BY is_master DESC, id").fetchall()
-            conn.close()
             
+            _mode_row = conn.execute("SELECT value FROM settings WHERE key='MODE'").fetchone()
+            _mode = _mode_row[0] if _mode_row else "WS"
+            _pkey = 'TLS_PROXY' if _mode == 'TLS' else 'WS_PROXY'
+            _prow = conn.execute(f"SELECT value FROM settings WHERE key='{_pkey}'").fetchone()
+            _praw = _prow[0] if _prow else ""
+            _proxies = [p.strip() for p in _praw.split(chr(10)) if p.strip()]
+            if not _proxies: _proxies = ["104.18.0.3"]
+            conn.close()
+
             links = []
-            for name, host, ws_port in nodes:
+            for _idx, (name, host, ws_port) in enumerate(nodes):
+                _p = _proxies[_idx % len(_proxies)]
+                if ':' not in _p:
+                    _default_port = '443' if _mode == 'TLS' else '80'
+                    _p = f"{_p}:{_default_port}"
                 try:
                     dt_url, _cfg_name = cab._build_dark_url_for_key(
-                        load_cfg(), key_name, domain=host, ws_port=ws_port, location_name=name
+                        load_cfg(), key_name, domain=host, ws_port=ws_port, location_name=name, proxy=_p
                     )
                     if dt_url:
                         links.append(dt_url)
@@ -134,10 +149,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             if not links:
                 links.append("ERROR: No links generated.")
             
+            # Генерируем шапку с трафиком и сроком
+            _meta = _generate_sub_header(key_name, key.get('expires_at',0), key.get('traffic_used',0), key.get('traffic_limit',0), is_test=is_test)
+            _data = (_meta + chr(10).join(links)).encode('utf-8')
+
             self.send_response(200)
             self.send_header('Content-type', 'text/plain; charset=utf-8')
+            self.send_header('Content-Length', str(len(_data)))
             self.end_headers()
-            self.wfile.write("\n".join(links).encode('utf-8'))
+            self.wfile.write(_data)
+            return
             return
             
         if self.path.startswith('/trojan/'):
@@ -146,7 +167,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             qs = urllib.parse.parse_qs(parsed.query)
             node = qs.get('node', ['all'])[0]
 
-            key = bdb.get_test_key(key_name) or bdb.get_vip_key(key_name)
+            test_key = bdb.get_test_key(key_name)
+            key = test_key or bdb.get_vip_key(key_name)
+            is_test = bool(test_key)
             if not key:
                 self.send_response(404)
                 self.end_headers()
@@ -194,7 +217,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
         if self.path.startswith('/sub/'):
             key_name = self.path.split('/sub/')[1].split('?')[0]
-            key = bdb.get_test_key(key_name) or bdb.get_vip_key(key_name)
+            test_key = bdb.get_test_key(key_name)
+            key = test_key or bdb.get_vip_key(key_name)
+            is_test = bool(test_key)
             if not key:
                 self.send_response(404)
                 self.end_headers()
@@ -242,7 +267,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 _link = generate_npvt(key['login'], key['password'], _host, _name, port, payload, sni, _p)
                 links.append(_link)
 
-            _meta = _generate_sub_header(key['login'], key.get('expires_at',0), key.get('traffic_used',0), key.get('traffic_limit',0))
+            _meta = _generate_sub_header(key['login'], key.get('expires_at',0), key.get('traffic_used',0), key.get('traffic_limit',0), is_test=is_test)
             _data = (_meta + "\n".join(links)).encode('utf-8')
             self.send_response(200)
             self.send_header('Content-type', 'text/plain; charset=utf-8')
