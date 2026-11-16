@@ -6844,15 +6844,15 @@ def main():
                         send_message(cfg['BOT_TOKEN'], chat_id, '❌ Максимум 10000 USD')
                         continue
                     _db.clear_pending(user_id)
-                    from bot_modules import plisio as _pl
+                    from bot_modules import cryptocloud_pay as _pl
                     from bot_modules import db as _dbb
-                    _order = 'crypto_' + str(user_id) + '_' + str(int(__import__('time').time()))
-                    _inv = _pl.create_invoice(_amt, _order, _cur, description='VPN topup ' + _order)
-                    if not _inv:
-                        send_message(cfg['BOT_TOKEN'], chat_id, '❌ Ошибка создания счёта. Попробуй позже.')
+                    import time as _time
+                    _order = 'trybit_' + str(user_id) + '_' + str(int(_time.time()))
+                    _url = _pl.create_cryptocloud_invoice(_amt, _order)
+                    if not _url:
+                        send_message(cfg['BOT_TOKEN'], chat_id, '❌  Ошибка создания счёта. Попробуй позже.')
                         continue
-                    _txn = _inv.get('txn_id')
-                    _url = _inv.get('invoice_url')
+                    _txn = _order
                     _dbb.add_payment(user_id, _amt, method='crypto', status='pending', external_id=_txn, meta={'order': _order, 'currency': _cur, 'url': _url})
                     NLc = chr(10)
                     _cm = NLc.join([
@@ -6865,7 +6865,7 @@ def main():
                         '',
                         '━━━━━━━━━━━━━━━━━━━━',
                         'Нажми кнопку ниже — откроется',
-                        'страница оплаты Plisio.',
+                        'страница оплаты Trybit.',
                         '',
                         '<i>Баланс зачислится автоматически.</i>',
                     ])

@@ -2505,20 +2505,17 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
     if cb_data == 'cab_topup_crypto':
         NL = chr(10)
         text = NL.join([
-            "🤖 <b>КРИПТО-БОТ</b>",
+            "🤖 <b>КРИПТО-БОТ (USDT BEP-20)</b>",
             "━━━━━━━━━━━━━━━━━━━━",
             "",
-            "Выбери сеть для оплаты:",
+            "💵 Введи сумму в USD для пополнения:",
+            "Например: <code>5</code>",
             "",
-            "🟢 <b>USDT BEP-20</b> (BSC) — мин 1 USDT",
-            "🔴 <b>USDT TRC-20</b> (Tron) — мин 5 USDT",
-            "💎 <b>TON</b> — мин 3.5 TON",
+            "ℹ️ <i>Минимальная сумма: 1 USDT</i>"
         ])
+        db.set_pending(user_id, 'crypto_amount:USDT_BSC')
         kb = {'inline_keyboard': [
-            [{'text': '🟢 USDT BEP-20', 'callback_data': 'cab_crypto_USDT_BSC'}],
-            [{'text': '🔴 USDT TRC-20', 'callback_data': 'cab_crypto_USDT_TRX'}],
-            [{'text': '💎 TON', 'callback_data': 'cab_crypto_TON'}],
-            [{'text': '⬅️ Назад', 'callback_data': 'cab_topup'}],
+            [{'text': '⬅️ Отмена', 'callback_data': 'cab_topup'}]
         ]}
         _edit(token, chat_id, msg_id, text, kb)
         return True
