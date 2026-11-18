@@ -3660,7 +3660,7 @@ def handle_stats(cfg, chat_id, user_id, mode='main', msg_id=None):
                     _sp = subprocess.run(
                         ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=4', '-o', 'StrictHostKeyChecking=no',
                          '-p', str(_nr.get('ssh_port') or 22), f"root@{_nr.get('ip')}",
-                         "iptables -L VPN_TRAFFIC -v -x -n 2>/dev/null | awk '$1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ {s+=$2} END {print s+0}'"],
+                         "cat /sys/class/net/[!l]*/statistics/tx_bytes 2>/dev/null | awk '{s+=$1} END {print s+0}'"],
                         capture_output=True, text=True, timeout=8
                     )
                     _tbytes = int(_sp.stdout.strip() or 0)
@@ -3676,7 +3676,7 @@ def handle_stats(cfg, chat_id, user_id, mode='main', msg_id=None):
             else:
                 _ts = f"{_tbytes} B"
             _srv_lines.append(f"   {_ic} {_name} · <b>{_ts}</b>")
-        _srv_lines.append(f"   📡 SSH WS онлайн: <b>{_ws_online}</b>")
+        # _srv_lines.append(f"   📡 SSH WS онлайн: <b>{_ws_online}</b>")
         _srv_lines.append("")
 
         lines_txt = [
