@@ -720,7 +720,7 @@ _nodes_install_xray() {
         return
     fi
 
-    local XRAY_PASS=$(python3 -c "import json; print(json.load(open('/usr/local/etc/xray/config.json'))['inbounds'][0]['settings']['clients'][0]['password'])" 2>/dev/null)
+    local XRAY_PASS=$(python3 -c "import json; print(next(i['settings']['clients'][0]['password'] for i in json.load(open('/usr/local/etc/xray/config.json'))['inbounds'] if i.get('protocol')=='trojan'))" 2>/dev/null)
     if [ -z "$XRAY_PASS" ]; then
         echo -e "${RED}❌  Пароль Xray не найден на мастере${NC}"; read -p "Enter..."; return
     fi
@@ -1102,7 +1102,7 @@ if r: print('|'.join(str(x) for x in r))
 
     # --- ШАГ 8: Установка Xray (Trojan WS) ---
     echo -ne "${CYAN}[8/9] 🚀 Установка Xray (Trojan WS)... ${NC}"
-    XRAY_PASS=$(python3 -c "import json; print(json.load(open('/usr/local/etc/xray/config.json'))['inbounds'][0]['settings']['clients'][0]['password'])" 2>/dev/null)
+    XRAY_PASS=$(python3 -c "import json; print(next(i['settings']['clients'][0]['password'] for i in json.load(open('/usr/local/etc/xray/config.json'))['inbounds'] if i.get('protocol')=='trojan'))" 2>/dev/null)
     if [ -z "$XRAY_PASS" ]; then
         echo -e "${YELLOW}⚠️  Пароль Xray не найден на мастере — пропускаю шаг${NC}"
     elif [ ! -f /usr/local/share/vpn-panel/install-xray-node.sh ]; then
