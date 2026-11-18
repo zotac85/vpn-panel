@@ -1076,6 +1076,7 @@ if r: print('|'.join(str(x) for x in r))
     REMOTE_CMD+="ufw allow 22/tcp > /dev/null 2>&1; ufw allow 80/tcp > /dev/null 2>&1; ufw allow 443/tcp > /dev/null 2>&1; "
     REMOTE_CMD+="ufw allow 53/tcp > /dev/null 2>&1; ufw allow 53/udp > /dev/null 2>&1; ufw --force enable > /dev/null 2>&1; "
     REMOTE_CMD+="systemctl enable fail2ban > /dev/null 2>&1; systemctl restart fail2ban > /dev/null 2>&1; "
+    REMOTE_CMD+="sed -i 's/^\\(.*pam_systemd\\.so.*\\)$/#\\1/' /etc/pam.d/common-session > /dev/null 2>&1; systemctl stop 'user@*.service' > /dev/null 2>&1; "
     ssh -q -o LogLevel=QUIET -o BatchMode=yes -o StrictHostKeyChecking=no -p "$sport" root@"$ip" "$REMOTE_CMD"
     echo -e "${GREEN}✅ OK${NC}"
 
