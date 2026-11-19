@@ -6587,6 +6587,11 @@ def main():
                     handle_test(cfg, chat_id, user_id, first_name, hwid=_in)
                     continue
                 if pending and pending.startswith('cab_key_hwid:') and text and not text.startswith('/'):
+                    _menu_btns = {'🏠 Начать', '👤 Профиль', '🛟 Помощь', '🔑 Мои ключи', 'Начать', 'Профиль', 'Помощь', 'Мои ключи'}
+                    if text.strip() in _menu_btns:
+                        _db.clear_pending(user_id)
+                        pending = None
+                if pending and pending.startswith('cab_key_hwid:') and text and not text.startswith('/'):
                     _db.clear_pending(user_id)
                     _key_name = pending.split(':', 1)[1]
                     _in = text.strip()

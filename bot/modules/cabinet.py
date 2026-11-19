@@ -623,12 +623,8 @@ def show_key_reset_confirm(cfg, chat_id, user_id, key_name, msg_id=None):
         _send(token, chat_id, "\u274C  Ключ не найден")
         return
     # Открытый VIP-ключ — пароль меняется, HWID не запрашивается
-    _open_vip = False
-    if key_name.startswith('vip_'):
-        try:
-            _open_vip = not db.is_vip_hwid_locked(key_name)
-        except Exception:
-            _open_vip = False
+    # VIP-ключи обновляются без HWID, тестовые — строго через HWID
+    _open_vip = key_name.startswith('vip_')
     NL = chr(10)
     if _open_vip:
         text = NL.join([
@@ -800,8 +796,10 @@ echo "OK"
     except Exception as e:
         cab_log.error(f"Node sync rotate failed for {key_name}: {e}")
     try:
-        db.execute("UPDATE vip_keys SET password=? WHERE login=?", (new_password, key_name))
-        db.execute("UPDATE test_keys SET password=? WHERE login=?", (new_password, key_name))
+        new_trojan_pwd = ''.join(_sec.choice('0123456789abcdef') for _ in range(16))
+        db.execute("UPDATE vip_keys SET password=?, trojan_password=?, hwid='' WHERE login=?", (new_password, new_trojan_pwd, key_name))
+        db.execute("UPDATE test_keys SET password=?, hwid='' WHERE login=?", (new_password, key_name))
+        _sp.Popen(['python3', '/usr/local/bin/vpn-xray-sync.py'], stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
     except Exception as e:
         cab_log.error(f"rotate db update: {e}")
     return new_password
@@ -2880,6 +2878,8 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
         return True
 
     if cb_data.startswith('cab_key:'):
+        try: db.clear_pending(user_id)
+        except Exception: pass
         key_name = cb_data.split(':', 1)[1]
         show_key_detail(cfg, chat_id, user_id, key_name, msg_id)
         return True
@@ -2956,7 +2956,20 @@ def handle_cabinet_callback(cfg, cb_data, cb, user_id, first_name):
 
     if cb_data.startswith('cab_key_resethwid:'):
         key_name = cb_data.split(':', 1)[1]
-        ask_key_hwid(cfg, chat_id, user_id, key_name, msg_id)
+        if key_name.startswith('vip_'):
+            _tg(token, 'answerCallbackQuery', {'callback_query_id': cb['id'], 'text': '⏳ Обновляю пароль ключа...'})
+            new_pwd = rotate_key_password(key_name)
+            if new_pwd:
+                try:
+                    db.clear_pending(user_id)
+                except Exception:
+                    pass
+                show_key_detail(cfg, chat_id, user_id, key_name, msg_id)
+                _send(token, chat_id, f"✅ <b>Пароль ключа <code>{key_name}</code> обновлён!</b>\n\nСтарый конфиг больше не работает. Скачай новый конфиг или обнови подписку.")
+            else:
+                _send(token, chat_id, "❌ Ошибка при обновлении пароля ключа. Попробуй позже.")
+        else:
+            ask_key_hwid(cfg, chat_id, user_id, key_name, msg_id)
         return True
 
     if cb_data.startswith('cab_key_reset:'):
