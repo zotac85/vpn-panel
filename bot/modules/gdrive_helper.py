@@ -14,14 +14,22 @@ def get_drive_link(key_name, sub_type="sub_dark"):
     filename = f"{sub_type}_{key_name}.txt"
     local_url = f"{LOCAL_SERVER}/{sub_type}/{key_name}"
     
-    # 1. Скачиваем конфиг с локального сервера
-    try:
-        req = urllib.request.Request(local_url)
-        with urllib.request.urlopen(req, timeout=20) as response:
-            content = response.read()
-    except Exception as e:
-        print(f"[GDrive] Ошибка скачивания конфига {local_url}: {e}")
-        return None
+    # 1. Скачиваем конфиг с локального сервера (с авто-рестартом службы при 404/сбое)
+    content = None
+    for attempt in range(2):
+        try:
+            req = urllib.request.Request(local_url)
+            with urllib.request.urlopen(req, timeout=25) as response:
+                content = response.read()
+            break
+        except Exception as e:
+            print(f"[GDrive] Попытка {attempt+1} скачивания {local_url} не удалась: {e}")
+            if attempt == 0:
+                import subprocess, time
+                subprocess.run(["systemctl", "restart", "npvt-sub-server.service"], capture_output=True)
+                time.sleep(1.5)
+            else:
+                return None
 
     # Сохраняем во временный файл
     fd, tmp_path = tempfile.mkstemp(suffix=".txt")

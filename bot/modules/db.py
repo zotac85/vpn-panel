@@ -29,9 +29,9 @@ _write_lock = threading.Lock()
 
 def _conn():
     """Открывает соединение. check_same_thread=False — можно из разных потоков."""
-    conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False)
+    conn = sqlite3.connect(DB_PATH, timeout=30.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")   # параллельное чтение
+    conn.execute("PRAGMA busy_timeout=30000")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
 
